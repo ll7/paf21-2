@@ -46,4 +46,7 @@
   </node>
   
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find paf_starter)/config/paf_rviz.rviz" />
+  
+  <!--Steering-->
+  <include file="$(find paf_actor)/launch/paf_actor.launch" />
 </launch>
