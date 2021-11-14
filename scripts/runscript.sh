@@ -10,7 +10,11 @@ function carla_available() {
 function _close_ros() {
   wmctrl -c ".launch"
   wmctrl -c "rviz"
-  wmctrl -c ".py"
+  wmctrl -c "spawn_npc.py"
+}
+function exit_program(){
+  _close_ros
+  exit
 }
 function close_ros() {
   if carla_available; then
@@ -46,7 +50,7 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 }
 
 echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart)"
-trap close_ros SIGINT
+trap exit_program SIGINT
 
 CARLA_SKIP=0
 for VAR in "$@"; do
@@ -69,6 +73,7 @@ else
 fi
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch carla_ros_bridge carla_ros_bridge.launch" "carla_ros_bridge.launch"
+gnome-terminal -- rosrun rviz rviz -d /home/julin/paf21-2/view_only.cfg.rviz
 
 echo "spawning npcs..."
 gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py
@@ -81,4 +86,4 @@ echo "listening for error/exit of carla environment..."
 
 # exit all ros instances
 echo "closing all ros launchers"
-close_ros
+exit_program
