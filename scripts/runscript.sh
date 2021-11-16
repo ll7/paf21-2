@@ -29,8 +29,8 @@ function close_all() {
   fi
 }
 function carla_start() {
-  gnome-terminal -- ~/carla_0.9.10.1/CarlaUE4.sh --no-rendering
-  ./scripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
+  gnome-terminal -- ~/carla_0.9.10.1/CarlaUE4.sh
+  ./subscripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
 }
 function start_terminal() { # opt:name, cmd
   if (($# == 2)); then
@@ -48,8 +48,8 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
   done
 }
 
-cd scripts ||
-  echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build)"
+cd ~/paf21-2/scripts/ || exit
+echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
@@ -66,6 +66,7 @@ done
 if ((BUILD_ROS)); then
   close_ros
   ./build_ros.sh
+  cd ~/paf21-2/scripts/ || exit
 fi
 if ((CARLA_SKIP)); then
   close_ros
@@ -90,7 +91,7 @@ echo "done"
 echo ""
 echo "press ctrl+c to kill all ros terminals."
 echo "listening for error/exit of carla environment..."
-./scripts/wait_for_window.sh CarlaUE4 open >/dev/null
+./subscripts/wait_for_window.sh CarlaUE4 open >/dev/null
 
 # exit all ros instances
 echo "closing all ros launchers"
