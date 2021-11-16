@@ -5,8 +5,15 @@ from enum import IntEnum
 
 import cv2
 from carla_birdeye_view import RGB, BirdViewProducer, BirdViewCropType, BirdView, actors, rotate, SegregatedActors
-from carla_birdeye_view.mask import MAP_BOUNDARY_MARGIN, PixelDimensions, MapMaskGenerator, CroppingRect, \
-    RenderingWindow, Coord, COLOR_ON
+from carla_birdeye_view.mask import (
+    MAP_BOUNDARY_MARGIN,
+    PixelDimensions,
+    MapMaskGenerator,
+    CroppingRect,
+    RenderingWindow,
+    Coord,
+    COLOR_ON,
+)
 
 import carla
 import numpy as np
@@ -48,15 +55,21 @@ RGB_BY_MASK = {  # (red, green, blue)
     MaskPriority.LANES: RGB.WHITE,
     MaskPriority.ROAD: RGB.DIM_GRAY,
     MaskPriority.LOCAL_PATH: (255, 0, 0),
-    MaskPriority.GLOBAL_PATH: (0, 0, 255)
+    MaskPriority.GLOBAL_PATH: (0, 0, 255),
 }
 
 
 class TopDownView(BirdViewProducer):
-    def __init__(self, client: carla.Client, target_size: PixelDimensions = None, pixels_per_meter: int = 6,
-                 crop_type: BirdViewCropType = BirdViewCropType.FRONT_AND_REAR_AREA,
-                 north_is_up=True, show_whole_map=True, dark_mode=True
-                 ):
+    def __init__(
+        self,
+        client: carla.Client,
+        target_size: PixelDimensions = None,
+        pixels_per_meter: int = 6,
+        crop_type: BirdViewCropType = BirdViewCropType.FRONT_AND_REAR_AREA,
+        north_is_up=True,
+        show_whole_map=True,
+        dark_mode=True,
+    ):
         self.north_is_up = north_is_up
         self.dark_mode = dark_mode
         self.center_on_agent = not show_whole_map
@@ -66,14 +79,16 @@ class TopDownView(BirdViewProducer):
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
             target_size_ = gen._mask_size
-            target_size = PixelDimensions(width=int((target_size_.width + 2 * MAP_BOUNDARY_MARGIN) / 2),
-                                          height=int((target_size_.height + 2 * MAP_BOUNDARY_MARGIN) / 2))
+            target_size = PixelDimensions(
+                width=int((target_size_.width + 2 * MAP_BOUNDARY_MARGIN) / 2),
+                height=int((target_size_.height + 2 * MAP_BOUNDARY_MARGIN) / 2),
+            )
         super(TopDownView, self).__init__(client, target_size, pixels_per_meter, crop_type)
 
     def produce(self, agent_vehicle: carla.Actor) -> BirdView:
         all_actors = actors.query_all(world=self._world)
         segregated_actors = actors.segregate_by_type(actors=all_actors)
-        agent_vehicle_loc = agent_vehicle.get_location() if self.center_on_agent else Namespace(**{'x': 0, 'y': 0})
+        agent_vehicle_loc = agent_vehicle.get_location() if self.center_on_agent else Namespace(**{"x": 0, "y": 0})
 
         # same as super class below
         self.masks_generator.disable_local_rendering_mode()
@@ -81,9 +96,17 @@ class TopDownView(BirdViewProducer):
         cropping_rect = CroppingRect(
             x=int(agent_global_px_pos.x - self.rendering_area.width / 2),
             y=int(agent_global_px_pos.y - self.rendering_area.height / 2),
-            width=self.rendering_area.width, height=self.rendering_area.height)
-        masks = \
-            np.zeros(shape=(len(MaskPriority), self.rendering_area.height, self.rendering_area.width,), dtype=np.uint8)
+            width=self.rendering_area.width,
+            height=self.rendering_area.height,
+        )
+        masks = np.zeros(
+            shape=(
+                len(MaskPriority),
+                self.rendering_area.height,
+                self.rendering_area.width,
+            ),
+            dtype=np.uint8,
+        )
         masks[MaskPriority.ROAD.value] = self.full_road_cache[cropping_rect.vslice, cropping_rect.hslice]
         masks[MaskPriority.LANES.value] = self.full_lanes_cache[cropping_rect.vslice, cropping_rect.hslice]
         masks[MaskPriority.CENTERLINES.value] = self.full_centerlines_cache[cropping_rect.vslice, cropping_rect.hslice]
@@ -92,12 +115,17 @@ class TopDownView(BirdViewProducer):
         masks = self._render_actors_masks(agent_vehicle, segregated_actors, masks)
         masks[MaskPriority.GLOBAL_PATH] = self._create_path_mask(self.global_path)
         masks[MaskPriority.LOCAL_PATH] = self._create_path_mask(self.local_path)
-        cropped_masks = self.apply_agent_following_transformation_to_masks(agent_vehicle, masks, )
+        cropped_masks = self.apply_agent_following_transformation_to_masks(
+            agent_vehicle,
+            masks,
+        )
         ordered_indices = [mask.value for mask in MaskPriority.bottom_to_top()]
         return cropped_masks[ordered_indices]
 
     def apply_agent_following_transformation_to_masks(
-            self, agent_vehicle: carla.Actor, masks: np.ndarray,
+        self,
+        agent_vehicle: carla.Actor,
+        masks: np.ndarray,
     ) -> np.ndarray:
         agent_transform = agent_vehicle.get_transform()
         angle = (0 if self.north_is_up else agent_transform.rotation.yaw) + 90
@@ -118,8 +146,9 @@ class TopDownView(BirdViewProducer):
             vslice = slice(rotation_center.y - half_height, rotation_center.y + half_height)
         else:
             raise NotImplementedError
-        assert (vslice.start > 0 and hslice.start > 0), \
-            "Trying to access negative indexes is not allowed, check for calculation errors!"
+        assert (
+            vslice.start > 0 and hslice.start > 0
+        ), "Trying to access negative indexes is not allowed, check for calculation errors!"
         return rotated[:, vslice, hslice]
 
     def set_path(self, coordinate_list_global_path=None, coordinate_list_local_path=None, width_px=None):
@@ -140,40 +169,35 @@ class TopDownView(BirdViewProducer):
         mask = self.masks_generator.make_empty_mask()
         if path is None:
             return mask
-        points = [self.masks_generator.location_to_pixel(Namespace(**{'x': x, 'y': y})) for x, y in path]
+        points = [self.masks_generator.location_to_pixel(Namespace(**{"x": x, "y": y})) for x, y in path]
         points = np.array([[p.x, p.y] for p in points])
         mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
         return mask
 
     def _render_actors_masks(
-            self,
-            agent_vehicle: carla.Actor,
-            segregated_actors: SegregatedActors,
-            masks: np.ndarray,
+        self,
+        agent_vehicle: carla.Actor,
+        segregated_actors: SegregatedActors,
+        masks: np.ndarray,
     ) -> np.ndarray:
         # same as super class with new MaskPriorities
-        lights_masks = self.masks_generator.traffic_lights_masks(
-            segregated_actors.traffic_lights
-        )
+        lights_masks = self.masks_generator.traffic_lights_masks(segregated_actors.traffic_lights)
         red_lights_mask, yellow_lights_mask, green_lights_mask = lights_masks
         masks[MaskPriority.RED_LIGHTS.value] = red_lights_mask
         masks[MaskPriority.YELLOW_LIGHTS.value] = yellow_lights_mask
         masks[MaskPriority.GREEN_LIGHTS.value] = green_lights_mask
-        masks[MaskPriority.AGENT.value] = self.masks_generator.agent_vehicle_mask(
-            agent_vehicle
-        )
-        masks[MaskPriority.VEHICLES.value] = self.masks_generator.vehicles_mask(
-            segregated_actors.vehicles
-        )
-        masks[MaskPriority.PEDESTRIANS.value] = self.masks_generator.pedestrians_mask(
-            segregated_actors.pedestrians
-        )
+        masks[MaskPriority.AGENT.value] = self.masks_generator.agent_vehicle_mask(agent_vehicle)
+        masks[MaskPriority.VEHICLES.value] = self.masks_generator.vehicles_mask(segregated_actors.vehicles)
+        masks[MaskPriority.PEDESTRIANS.value] = self.masks_generator.pedestrians_mask(segregated_actors.pedestrians)
         return masks
 
     def as_rgb(self, birdview: BirdView):
         _, h, w = birdview.shape
         rgb_canvas = np.zeros(shape=(h, w, 3), dtype=np.uint8)
-        nonzero_indices = lambda arr: arr == COLOR_ON
+
+        def nonzero_indices(arr):
+            return arr == COLOR_ON
+
         if self.dark_mode:
             color_inversion = []
         else:
@@ -202,11 +226,12 @@ class TopDownRosNode(object):
         self.loop_rate = rospy.Rate(rate)
 
     def _init(self, vehicle_actor):
-        client = carla.Client('127.0.0.1', 2000)
+        client = carla.Client("127.0.0.1", 2000)
         self.producer = TopDownView(
             client,
-            target_size=PixelDimensions(width=self.params["img_size"]["width"],
-                                        height=self.params["img_size"]["height"]),
+            target_size=PixelDimensions(
+                width=self.params["img_size"]["width"], height=self.params["img_size"]["height"]
+            ),
             pixels_per_meter=self.params["pixels_per_meter"],
             show_whole_map=self.params["show_whole_map"],
             north_is_up=self.params["north_is_up"],
@@ -221,7 +246,7 @@ class TopDownRosNode(object):
                 if "vehicle." in actor.type_id:
                     vehicles.append(actor)
             if not len(vehicles):
-                raise RuntimeError(f"No random vehicle to track!")
+                raise RuntimeError("No random vehicle to track!")
             else:
                 self.actor = np.random.choice(vehicles)
         else:
@@ -234,11 +259,11 @@ class TopDownRosNode(object):
 
     def start(self):
         while not rospy.is_shutdown():
-            rospy.loginfo('publishing image')
+            rospy.loginfo("publishing image")
             rgb = self.produce_map()
-            self.pub.publish(self.br.cv2_to_imgmsg(rgb, 'rgb8'))
+            self.pub.publish(self.br.cv2_to_imgmsg(rgb, "rgb8"))
             self.loop_rate.sleep()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     TopDownRosNode().start()
