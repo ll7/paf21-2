@@ -1,0 +1,35 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: "v4.0.1"
+    hooks:
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: requirements-txt-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-xml
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+  - repo: https://github.com/ambv/black
+    rev: "21.10b0"
+    hooks:
+      - id: black
+        language_version: python3.8
+        args:
+          - "--line-length"
+          - "120"
+  - repo: https://github.com/pycqa/flake8
+    rev: "4.0.1"
+    hooks:
+      - id: flake8
+        exclude: Docs
+        args:
+          - "--max-line-length=120"
+          - "--ignore=W291,W503,W504"
+  - repo: local
+    hooks:
+      - id: build-test
+        name: build-test
+        entry: ./scripts/build_ros.sh
+        language: script

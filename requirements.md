@@ -7,6 +7,7 @@ Format: ```Paketname (Zweck)```
 ### Python ```pip install <paket>```
 ```
 carla_birdeye_view (top-down-ansicht)
+pre-commit (coding conventions)
 
 ```
 ### Paketmanager ```sudo apt install <paket>```
