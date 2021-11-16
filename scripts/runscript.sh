@@ -12,7 +12,7 @@ function _close_ros() {
   wmctrl -c "rviz"
   wmctrl -c "spawn_npc.py"
 }
-function exit_program(){
+function exit_program() {
   _close_ros
   exit
 }
@@ -41,24 +41,33 @@ function start_terminal() { # opt:name, cmd
   fi
 }
 function start_terminal_wait_until_it_stays_open() { # cmd, name
-  STATUS=$(./scripts/wait_for_window.sh "$2" open 3)
+  STATUS=$(./subscripts/wait_for_window.sh "$2" open 3)
   while [ "$STATUS" = "closed" ]; do
     start_terminal "$1"
     sleep 3
-    STATUS=$(./scripts/wait_for_window.sh "$2" open 3)
+    STATUS=$(./subscripts/wait_for_window.sh "$2" open 3)
   done
 }
 
-echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart)"
+cd scripts ||
+  echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
+BUILD_ROS=1
 for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
   fi
+  if [ "$VAR" = "--build" ]; then
+    BUILD_ROS=1
+  fi
 done
 
+if ((BUILD_ROS)); then
+  close_ros
+  ./build_ros.sh
+fi
 if ((CARLA_SKIP)); then
   close_ros
   if carla_available; then
