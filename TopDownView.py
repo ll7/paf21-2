@@ -143,12 +143,12 @@ class TopDownView(BirdViewProducer):
         points = np.array([[p.x, p.y] for p in points])
         mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
         return mask
-    
+
     def _render_actors_masks(
-        self,
-        agent_vehicle: carla.Actor,
-        segregated_actors: SegregatedActors,
-        masks: np.ndarray,
+            self,
+            agent_vehicle: carla.Actor,
+            segregated_actors: SegregatedActors,
+            masks: np.ndarray,
     ) -> np.ndarray:
         # same as super class with new MaskPriorities
         lights_masks = self.masks_generator.traffic_lights_masks(
@@ -168,7 +168,7 @@ class TopDownView(BirdViewProducer):
             segregated_actors.pedestrians
         )
         return masks
-    
+
     def as_rgb(self, birdview: BirdView):
         _, h, w = birdview.shape
         rgb_canvas = np.zeros(shape=(h, w, 3), dtype=np.uint8)
@@ -191,23 +191,24 @@ class TopDownView(BirdViewProducer):
 class TopDownRosNode(object):
     br = CvBridge()
 
-    def __init__(self, use_ros=True, topic=None):
-        self.init()
-        if use_ros:
-            rospy.init_node(topic, anonymous=True)
+    def __init__(self, node=None, topic=None, vehicle_actor=None, update_ms=1000):
+        self._init(vehicle_actor)
+        rate = 1000/update_ms
+        if node is not None and topic is not None:
+            rospy.init_node(node, anonymous=True)
             print(self.actor.type_id)
-            self.pub = rospy.Publisher('aaa', Image, queue_size=1)
-            self.loop_rate = rospy.Rate(1)
+            self.pub = rospy.Publisher(topic, Image, queue_size=1)
+            self.loop_rate = rospy.Rate(rate)
         else:
             while True:
                 self.produce_map()
-                time.sleep(1)
+                time.sleep(rate)
 
-    def init(self):
+    def _init(self, vehicle_actor):
         client = carla.Client('127.0.0.1', 2000)
         self.producer = TopDownView(
             client,
-            target_size=PixelDimensions(width=2000, height=1000),
+            target_size=PixelDimensions(width=3000, height=2000),
             pixels_per_meter=10,
             show_whole_map=False,
             north_is_up=True,
@@ -216,14 +217,17 @@ class TopDownRosNode(object):
         self.producer.set_path([[-500, -500], [500, 500]], [[500, -500], [-500, 500]])
         _actors = client.get_world().get_actors()
         vehicles = []
-        self.actor = None
-        for actor in _actors:
-            if "vehicle." in actor.type_id:
-                # if actor.type_id == "vehicle.tesla.model3":
-                vehicles.append(actor)
-        self.actor = np.random.choice(vehicles)
-        if self.actor is None:
-            raise RuntimeError("No vehicle to track!")
+        if vehicle_actor is None:
+            self.actor = None
+            for actor in _actors:
+                if "vehicle." in actor.type_id:
+                    vehicles.append(actor)
+            if not len(vehicles):
+                raise RuntimeError(f"No random vehicle to track!")
+            else:
+                self.actor = np.random.choice(vehicles)
+        else:
+            self.actor = vehicle_actor
 
     def produce_map(self):
         birdview = self.producer.produce(agent_vehicle=self.actor)
@@ -238,6 +242,4 @@ class TopDownRosNode(object):
 
 
 if __name__ == '__main__':
-    TopDownRosNode(topic="aaa").start()
-    # node = TopDownRosNode(False)
-
+    TopDownRosNode(node="TopDownView", topic="/paf/validation/top_down_map", update_ms=100).start()
