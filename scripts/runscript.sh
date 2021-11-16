@@ -53,7 +53,7 @@ echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
-BUILD_ROS=1
+BUILD_ROS=0
 for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
