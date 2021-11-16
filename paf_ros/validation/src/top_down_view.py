@@ -216,16 +216,17 @@ class TopDownView(BirdViewProducer):
 class TopDownRosNode(object):
     br = CvBridge()
 
-    def __init__(self):
+    def __init__(self, _actor):
         self.params = rospy.get_param("/top_down_view/")
-        self._init(vehicle_actor=None)
+        self.actor = _actor
+        self._init()
         rate = 1000 / self.params["update_ms"]
         rospy.init_node(self.params["node"], anonymous=True)
         print(self.actor.type_id)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         self.loop_rate = rospy.Rate(rate)
 
-    def _init(self, vehicle_actor):
+    def _init(self):
         client = carla.Client("127.0.0.1", 2000)
         self.producer = TopDownView(
             client,
@@ -238,19 +239,6 @@ class TopDownRosNode(object):
             dark_mode=self.params["dark_mode"],
         )
         self.producer.set_path([[-500, -500], [500, 500]], [[500, -500], [-500, 500]])
-        _actors = client.get_world().get_actors()
-        vehicles = []
-        if vehicle_actor is None:
-            self.actor = None
-            for actor in _actors:
-                if "vehicle." in actor.type_id:
-                    vehicles.append(actor)
-            if not len(vehicles):
-                raise RuntimeError("No random vehicle to track!")
-            else:
-                self.actor = np.random.choice(vehicles)
-        else:
-            self.actor = vehicle_actor
         print(f"top_down_view tracking {self.actor.type_id}")
 
     def produce_map(self):
@@ -266,4 +254,18 @@ class TopDownRosNode(object):
 
 
 if __name__ == "__main__":
-    TopDownRosNode().start()
+    client = carla.Client("127.0.0.1", 2000)
+    _actors = client.get_world().get_actors()
+    vehicles = []
+    for actor in _actors:
+        if "vehicle." in actor.type_id:
+            vehicles.append(actor)
+        if "role_name" in actor.attributes and actor.attributes["role_name"] == rospy.get_param(
+            "/top_down_view/role_name"
+        ):
+            break
+    else:
+        if not len(vehicles):
+            raise RuntimeError("No random vehicle to track!")
+        actor = np.random.choice(vehicles)
+    TopDownRosNode(actor).start()
