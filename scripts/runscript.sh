@@ -8,8 +8,7 @@ function carla_available() {
   fi
 }
 function _close_ros() {
-  wmctrl -c ".launch"
-  wmctrl -c "rviz"
+  rosnode kill -a
   wmctrl -c "spawn_npc.py"
 }
 function exit_program(){
@@ -59,6 +58,8 @@ for VAR in "$@"; do
   fi
 done
 
+cd ~/paf21-2/ || exit
+
 if ((CARLA_SKIP)); then
   close_ros
   if carla_available; then
@@ -73,7 +74,7 @@ else
 fi
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch carla_ros_bridge carla_ros_bridge.launch" "carla_ros_bridge.launch"
-gnome-terminal -- rosrun rviz rviz -d /home/julin/paf21-2/view_only.cfg.rviz
+gnome-terminal -- rosrun rviz rviz -d ~/paf21-2/paf.cfg.rviz
 
 echo "spawning npcs..."
 gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py

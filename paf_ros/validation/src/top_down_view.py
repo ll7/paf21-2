@@ -1,4 +1,5 @@
-import time
+#!/usr/bin/env python
+
 from argparse import Namespace
 from enum import IntEnum
 
@@ -191,28 +192,25 @@ class TopDownView(BirdViewProducer):
 class TopDownRosNode(object):
     br = CvBridge()
 
-    def __init__(self, node=None, topic=None, vehicle_actor=None, update_ms=1000):
-        self._init(vehicle_actor)
-        rate = 1000/update_ms
-        if node is not None and topic is not None:
-            rospy.init_node(node, anonymous=True)
-            print(self.actor.type_id)
-            self.pub = rospy.Publisher(topic, Image, queue_size=1)
-            self.loop_rate = rospy.Rate(rate)
-        else:
-            while True:
-                self.produce_map()
-                time.sleep(rate)
+    def __init__(self):
+        self.params = rospy.get_param("/top_down_view/")
+        self._init(vehicle_actor=None)
+        rate = 1000 / self.params["update_ms"]
+        rospy.init_node(self.params["node"], anonymous=True)
+        print(self.actor.type_id)
+        self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
+        self.loop_rate = rospy.Rate(rate)
 
     def _init(self, vehicle_actor):
         client = carla.Client('127.0.0.1', 2000)
         self.producer = TopDownView(
             client,
-            target_size=PixelDimensions(width=3000, height=2000),
-            pixels_per_meter=10,
-            show_whole_map=False,
-            north_is_up=True,
-            dark_mode=False,
+            target_size=PixelDimensions(width=self.params["img_size"]["width"],
+                                        height=self.params["img_size"]["height"]),
+            pixels_per_meter=self.params["pixels_per_meter"],
+            show_whole_map=self.params["show_whole_map"],
+            north_is_up=self.params["north_is_up"],
+            dark_mode=self.params["dark_mode"],
         )
         self.producer.set_path([[-500, -500], [500, 500]], [[500, -500], [-500, 500]])
         _actors = client.get_world().get_actors()
@@ -228,6 +226,7 @@ class TopDownRosNode(object):
                 self.actor = np.random.choice(vehicles)
         else:
             self.actor = vehicle_actor
+        print(f"top_down_view tracking {self.actor.type_id}")
 
     def produce_map(self):
         birdview = self.producer.produce(agent_vehicle=self.actor)
@@ -242,4 +241,4 @@ class TopDownRosNode(object):
 
 
 if __name__ == '__main__':
-    TopDownRosNode(node="TopDownView", topic="/paf/validation/top_down_map", update_ms=100).start()
+    TopDownRosNode().start()

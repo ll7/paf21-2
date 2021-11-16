@@ -1,0 +1,13 @@
+top_down_view: {
+  topic: "/paf/validation/top_down_view",
+  node: "top_down_view",
+  update_ms: 1000,
+  img_size: {
+    width: 3000,
+    height: 2000
+  },
+  pixels_per_meter: 10,
+  north_is_up: true,
+  dark_mode: false,
+  show_whole_map: false,
+}
