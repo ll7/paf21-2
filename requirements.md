@@ -13,6 +13,6 @@ carla_birdeye_view (top-down-ansicht)
 ```
 python-is-python3 (alle Befehle mit python3 und pip3 ausführen)
 wmctrl (Fenster mit Befehl öffnen und schließen)
-sudo apt-get install ros-noetic-cv-bridge (convert numpy img to ros img)
+ros-noetic-cv-bridge (convert numpy img to ros img)
 
 ```
