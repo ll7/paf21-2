@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import time
 from argparse import Namespace
 from enum import IntEnum
 
@@ -220,11 +220,9 @@ class TopDownRosNode(object):
         self.params = rospy.get_param("/top_down_view/")
         self.actor = _actor
         self._init()
-        rate = 1000 / self.params["update_ms"]
         rospy.init_node(self.params["node"], anonymous=True)
         print(self.actor.type_id)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
-        self.loop_rate = rospy.Rate(rate)
 
     def _init(self):
         client = carla.Client("127.0.0.1", 2000)
@@ -238,6 +236,7 @@ class TopDownRosNode(object):
             north_is_up=self.params["north_is_up"],
             dark_mode=self.params["dark_mode"],
         )
+        # todo temporary
         self.producer.set_path([[-500, -500], [500, 500]], [[500, -500], [-500, 500]])
         print(f"top_down_view tracking {self.actor.type_id}")
 
@@ -246,11 +245,16 @@ class TopDownRosNode(object):
         return self.producer.as_rgb(birdview)
 
     def start(self):
+        rate = rospy.Rate(self.params["update_hz"])
+        first_run = True
         while not rospy.is_shutdown():
-            rospy.loginfo("publishing image")
+            t0 = time.perf_counter()
             rgb = self.produce_map()
             self.pub.publish(self.br.cv2_to_imgmsg(rgb, "rgb8"))
-            self.loop_rate.sleep()
+            if not first_run:
+                rospy.logwarn_once(f"[top_down_view] calc_time={time.perf_counter() - t0}s")
+            rate.sleep()
+            first_run = False
 
 
 if __name__ == "__main__":
