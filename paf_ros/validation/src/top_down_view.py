@@ -272,4 +272,5 @@ if __name__ == "__main__":
         if not len(vehicles):
             raise RuntimeError("No random vehicle to track!")
         actor = np.random.choice(vehicles)
+        rospy.logwarn(f"Tracking random {actor.type_id}")
     TopDownRosNode(actor).start()
