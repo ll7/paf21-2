@@ -49,7 +49,7 @@ repos:
         stages: [ "commit", "manual" ]
       - id: build-switch-branch
         name: build-switch-branch
-        entry: /bin/bash scripts/build_ros.sh --clean
+        entry: /bin/bash scripts/build_ros.sh --clean --no-build
         language: script
         pass_filenames: false
         always_run: true
