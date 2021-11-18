@@ -1,3 +1,5 @@
+exclude: '^$'
+fail_fast: true
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks  # general
     rev: "v4.0.1"
@@ -10,6 +12,8 @@ repos:
       - id: check-json
       - id: check-xml
       - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [ --fix=lf ]
       - id: check-shebang-scripts-are-executable
   - repo: https://github.com/pocc/pre-commit-hooks # cpp code
     rev: "v1.3.4"
