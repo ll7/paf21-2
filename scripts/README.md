@@ -43,9 +43,13 @@ bash scripts/subscripts/_setup_paf.sh
 
 # optional run over all files
 pre-commit run --all-files
+# or
+pre-commit run -a
 
 # commit without pre-commit checks
 git commit --no-verify -m "commit message"
+# or
+git commit -n -m "commit message"
 ```
 
 Committing always fails on automatically modified files, therefore try again if this happens.
