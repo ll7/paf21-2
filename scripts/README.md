@@ -10,10 +10,10 @@ bash scripts/runscript.sh [--build] [--skip-carla-restart]
 
 ### Build Script
 
-Builds the whole project
+Builds the whole project (optional rosdep update and clean build)
 
 ```
-bash scripts/build_ros.sh
+bash scripts/build_ros.sh [--rosdep] [--clean] [--no-build]
 ```
 
 ### Install Script
@@ -43,9 +43,13 @@ bash scripts/subscripts/_setup_paf.sh
 
 # optional run over all files
 pre-commit run --all-files
+# or
+pre-commit run -a
 
 # commit without pre-commit checks
 git commit --no-verify -m "commit message"
+# or
+git commit -n -m "commit message"
 ```
 
 Committing always fails on automatically modified files, therefore try again if this happens.
