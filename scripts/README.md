@@ -35,7 +35,9 @@ bash scripts/subscripts/_setup_paf.sh     # dependency install
 ### Pre-Commit
 
 For commiting, pre-commit is installed. Python, C++ and other Code is formatted and verified automatically before each
-commit and the project is build. The following commands are available.
+commit and the project is build. After checkout, a ```cmake clean``` command is executed automatically.
+
+The following commands are available:
 
 ```
 # install pre-commit with the install script
