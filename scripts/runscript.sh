@@ -1,5 +1,8 @@
 #!/bin/bash
 
+main_launch_package="carla_ros_bridge"
+main_launch_script="carla_ros_bridge.launch"
+
 function carla_available() {
   if [[ "$(wmctrl -l)" =~ "CarlaUE4" ]]; then
     return 0
@@ -53,7 +56,7 @@ echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
-BUILD_ROS=1
+BUILD_ROS=0
 for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
@@ -81,7 +84,7 @@ else
   carla_start
 fi
 echo "starting main launcher..."
-start_terminal_wait_until_it_stays_open "roslaunch carla_ros_bridge carla_ros_bridge.launch" "carla_ros_bridge.launch"
+start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script" "$main_launch_script"
 gnome-terminal -- rosrun rviz rviz -d ~/paf21-2/paf.cfg.rviz
 
 echo "spawning npcs..."
