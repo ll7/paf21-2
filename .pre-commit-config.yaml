@@ -1,5 +1,4 @@
 exclude: '^$'
-fail_fast: true
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks  # general
     rev: "v4.0.1"
@@ -39,8 +38,20 @@ repos:
           - "--max-line-length=120"
           - "--ignore=W291,W503,W504"
   - repo: local
-    hooks: # build
-      - id: build-test
-        name: build-test
-        entry: ./scripts/build_ros.sh
+    hooks:
+      - id: build
+        name: build
+        entry: /bin/bash scripts/build_ros.sh
         language: script
+        pass_filenames: false
+        always_run: true
+        types: []
+        stages: [ "commit", "manual" ]
+      - id: build-switch-branch
+        name: build-switch-branch
+        entry: /bin/bash scripts/build_ros.sh --clean
+        language: script
+        pass_filenames: false
+        always_run: true
+        types: []
+        stages: [ "post-checkout" ]

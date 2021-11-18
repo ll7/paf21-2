@@ -14,5 +14,5 @@ pre-commit (coding conventions)
 ```
 python-is-python3 (alle Befehle mit python3 und pip3 ausführen)
 wmctrl (Fenster mit Befehl öffnen und schließen)
-
+python3-catkin-tools (catkin command)
 ```

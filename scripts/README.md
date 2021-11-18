@@ -10,10 +10,10 @@ bash scripts/runscript.sh [--build] [--skip-carla-restart]
 
 ### Build Script
 
-Builds the whole project
+Builds the whole project (optional rosdep update and clean build)
 
 ```
-bash scripts/build_ros.sh
+bash scripts/build_ros.sh [--rosdep] [--clean]
 ```
 
 ### Install Script
