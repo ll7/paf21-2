@@ -12,7 +12,6 @@ for VAR in "$@"; do
   fi
   if [ "$VAR" = "--no-build" ]; then
     build=0
-    exit 1
   fi
 done
 
