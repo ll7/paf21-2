@@ -19,7 +19,7 @@ cd ~/carla-ros-bridge/catkin_ws/ || exit 1
 source /opt/ros/noetic/setup.bash
 source ~/.bashrc
 if ((clean)); then
-  catkin clean -d -y
+  catkin clean -y
 fi
 if ((rosdep)); then
   rosdep update
