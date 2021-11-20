@@ -1,0 +1,1 @@
+helperFunctions for mathematic calculations
