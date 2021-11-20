@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="paf_actor" type="vehicle_control.py" name="paf_actor" output="screen" />
+
+</launch>
