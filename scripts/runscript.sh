@@ -1,7 +1,8 @@
 #!/bin/bash
 
-main_launch_package="carla_ros_bridge"
-main_launch_script="carla_ros_bridge.launch"
+main_launch_package="paf_starter"
+main_launch_script="paf_starter.launch"
+ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,0"
 
 function carla_available() {
   if [[ "$(wmctrl -l)" =~ "CarlaUE4" ]]; then
@@ -84,11 +85,11 @@ else
   carla_start
 fi
 echo "starting main launcher..."
-start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script" "$main_launch_script"
-gnome-terminal -- rosrun rviz rviz -d ~/paf21-2/paf.cfg.rviz
+start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
+# gnome-terminal -- rosrun rviz rviz -d ~/paf21-2/paf.cfg.rviz
 
-echo "spawning npcs..."
-gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py
+echo "spawning npcs... (CURRENTLY DEACTIVATED)"
+#gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py
 
 echo "done"
 echo ""
