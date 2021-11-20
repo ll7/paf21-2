@@ -15,13 +15,7 @@ class StanleyLateralController:
     StanleyLateral Controller implements Lateral control using a stanley controller
     """
 
-    def __init__(self,
-                 k: float = .5,
-                 Kp: float = 1.0,
-                 L: float = 2.9,
-                 max_steer: float = 30.0,
-                 min_speed: float = 10
-                 ):
+    def __init__(self, k: float = 0.5, Kp: float = 1.0, L: float = 2.9, max_steer: float = 30.0, min_speed: float = 10):
         """
         Constructor of the stanley lateral controller.
 
@@ -30,7 +24,8 @@ class StanleyLateralController:
             Kp (float, optional): Speed proportional gain. Defaults to 1.0.
             L (float, optional): [m] Wheel base of vehicle. Defaults to 2.9.
             max_steer (float, optional): Maximum steering angle (degrees). Defaults to 30.0.
-            min_speed (float, optional): Minimum speed used for calculation, to avoid infinite values when standing still. Defaults to 10.
+            min_speed (float, optional): Minimum speed used for calculation, to avoid infinite values
+            when standing still. Defaults to 10.
         """
         self.k: float = k
         self.Kp: float = Kp
@@ -50,11 +45,9 @@ class StanleyLateralController:
         Returns:
            float: Steering angle
         """
-        current_target_idx, error_front_axle = self.calc_target_index(
-            path, pose)
+        current_target_idx, error_front_axle = self.calc_target_index(path, pose)
         # compute heading error correction
-        theta_e = normalize_angle(calc_path_yaw(
-            path, current_target_idx) - calc_egocar_yaw(pose))
+        theta_e = normalize_angle(calc_path_yaw(path, current_target_idx) - calc_egocar_yaw(pose))
         if speed < self.min_speed:
             speed = self.min_speed
         # compute cross track error correction
@@ -93,9 +86,7 @@ class StanleyLateralController:
         target_idx = np.argmin(d)
 
         # Project RMS error onto front axle vector
-        front_axle_vec = [-np.cos(yaw + np.pi / 2),
-                          -np.sin(yaw + np.pi / 2)]
-        error_front_axle = np.dot(
-            [dx[target_idx], dy[target_idx]], front_axle_vec)
+        front_axle_vec = [-np.cos(yaw + np.pi / 2), -np.sin(yaw + np.pi / 2)]
+        error_front_axle = np.dot([dx[target_idx], dy[target_idx]], front_axle_vec)
 
         return target_idx, error_front_axle

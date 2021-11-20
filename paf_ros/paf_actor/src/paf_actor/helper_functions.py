@@ -21,9 +21,8 @@ def calc_path_yaw(path: Path, idx: int) -> float:
         return 0.0
 
     point_current = path.poses[idx].pose.position
-    point_next = path.poses[idx+1].pose.position
-    angle = math.atan2(point_next.y - point_current.y,
-                       point_next.x - point_current.x)
+    point_next = path.poses[idx + 1].pose.position
+    angle = math.atan2(point_next.y - point_current.y, point_next.x - point_current.x)
     return normalize_angle(angle)
 
 
@@ -56,11 +55,6 @@ def calc_egocar_yaw(pose: PoseStamped) -> float:
     Returns:
         float: The normalized yaw
     """
-    quaternion = (
-        pose.orientation.x,
-        pose.orientation.y,
-        pose.orientation.z,
-        pose.orientation.w
-    )
+    quaternion = (pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w)
     _, _, yaw = euler_from_quaternion(quaternion)
     return normalize_angle(yaw)

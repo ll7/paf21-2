@@ -33,7 +33,7 @@ class PIDLongitudinalController(object):  # pylint: disable=too-few-public-metho
         Returns:
             float: Throttle control in the range [0, 1]
         """
-        _e = (target_speed - current_speed)
+        _e = target_speed - current_speed
         self._e_buffer.append(_e)
 
         if len(self._e_buffer) >= 2:

@@ -37,25 +37,23 @@ class VehicleController:
         self._target_distance: float = 10
 
         # speed controller parameters
-        args_longitudinal = {'K_P': 0.25, 'K_D': 0.0, 'K_I': 0.1}
+        args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
         # distance control parameters
-        args_dist = {'K_P': 0.2, 'K_D': 0.0, 'K_I': 0.01}
+        args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
         # Stanley control parameters
-        args_lateral = {'k': 2.5, 'Kp': 1.0, 'L': 2.9,
-                        'max_steer': 30.0, 'min_speed': 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2.9, "max_steer": 30.0, "min_speed": 0.1}
 
-        self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(
-            **args_longitudinal)
-        self._lat_controller: StanleyLateralController = StanleyLateralController(
-            **args_lateral)
-        self._dist_controller: PIDLongitudinalController = PIDLongitudinalController(
-            **args_dist)
+        self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
+        self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
+        self._dist_controller: PIDLongitudinalController = PIDLongitudinalController(**args_dist)
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
-            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated)
+            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated
+        )
         self.vehicle_control_publisher: rospy.Publisher = rospy.Publisher(
-            f"/carla/{role_name}/vehicle_control_cmd", CarlaEgoVehicleControl, queue_size=1)
+            f"/carla/{role_name}/vehicle_control_cmd", CarlaEgoVehicleControl, queue_size=1
+        )
 
     def __run_step(self):
         """
@@ -74,8 +72,7 @@ class VehicleController:
 
         throttle: float = self.__calculate_throttle(dt)
         steering: float = self.__calculate_steering()
-        control: CarlaEgoVehicleControl = self.__generate_control_message(
-            throttle, steering)
+        control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
 
         return control
 
@@ -112,7 +109,7 @@ class VehicleController:
         """
         min_dist: float = 4
         if self._current_speed > min_dist * 2:
-            self._target_distance = self._current_speed * .55
+            self._target_distance = self._current_speed * 0.55
         else:
             self._target_distance = min_dist
 
@@ -127,11 +124,8 @@ class VehicleController:
             float: the throttle to use
         """
         # perform pid control step with distance and speed controllers
-        lon: float = self._lon_controller.run_step(
-            self._target_speed, self._current_speed, dt)
-        dist: float = - \
-            self._dist_controller.run_step(
-                self._target_distance, self._current_distance, dt)
+        lon: float = self._lon_controller.run_step(self._target_speed, self._current_speed, dt)
+        dist: float = -self._dist_controller.run_step(self._target_distance, self._current_distance, dt)
 
         # use whichever controller yields the lowest throttle
         return lon if lon < dist else dist
@@ -144,8 +138,7 @@ class VehicleController:
             float: The steering angle to steer
         """
         # calculate steer
-        return self._lat_controller.run_step(
-            self._route, self._current_pose, 0.0)  # self._current_speed)
+        return self._lat_controller.run_step(self._route, self._current_pose, 0.0)  # self._current_speed)
 
     def __init_test_szenario(self) -> Path:
         """
@@ -183,7 +176,7 @@ class VehicleController:
         """
         # allow for variable stepsize
         current_time: float = rospy.get_time()
-        dt: float = current_time-self._last_control_time
+        dt: float = current_time - self._last_control_time
         if dt == 0.0:
             dt = 0.000001
         return current_time, dt
@@ -196,9 +189,10 @@ class VehicleController:
             odo (Odometry): The Odometry
         """
         # calculate current speed (km/h) from twist
-        self._current_speed = math.sqrt(odo.twist.twist.linear.x ** 2 +
-                                        odo.twist.twist.linear.y ** 2 +
-                                        odo.twist.twist.linear.z ** 2) * 3.6
+        self._current_speed = (
+            math.sqrt(odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2)
+            * 3.6
+        )
         self._current_pose = odo.pose.pose
 
     def run(self):
@@ -220,7 +214,7 @@ class VehicleController:
 
 
 def main():
-    rospy.init_node('vehicle_control', anonymous=True)
+    rospy.init_node("vehicle_control", anonymous=True)
     role_name = rospy.get_param("~role_name", "ego_vehicle")
     target_speed = rospy.get_param("~target_speed", 0)
     controller = VehicleController(role_name, target_speed)
