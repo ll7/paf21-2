@@ -103,7 +103,7 @@ class VehicleController(object):
             self._dist_controller.run_step(
                 self._target_distance, self._current_distance, dt)
 
-        rospy.loginfo(f"SPPED: {lon}, {dist}, ")  # {self._route}")
+        # rospy.loginfo(f"SPPED: {lon}, {dist}, ")  # {self._route}")
 
         # use whichever controller yields the lowest throttle
         if lon < dist:

@@ -1,7 +1,0 @@
-<launch>
-    <arg name='host' default='localhost'/>
-    <arg name='port' default='2000'/>
-    <arg name='timeout' default='10'/>
-    <rosparam file="$(find validation)/parameters.yaml" command="load"/>
-    <node pkg="validation" type="top_down_view.py" name="top_down_view"/>
-</launch>

@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>validation</name>
+  <name>paf_validation</name>
   <version>0.0.1</version>
   <description>The validation package serves testing validation purposes only and is not required at runtime</description>
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
