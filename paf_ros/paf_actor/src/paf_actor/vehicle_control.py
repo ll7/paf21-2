@@ -100,9 +100,10 @@ class VehicleController:
         else:
             control.brake = -np.clip(throttle, -1.0, 0.0)
             control.throttle = 0.0
-        control.steer = steering
+        control.steer = steering * -1
         control.hand_brake = False
         control.manual_gear_shift = False
+        control.reverse = True
         return control
 
     def __calculate_target_distance(self):
