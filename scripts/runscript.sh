@@ -55,6 +55,7 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 cd ~/paf21-2/scripts/ || exit
 echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --map --npcs)"
 trap exit_program SIGINT
+eval "$(cat ~/.bashrc | tail -n +10)"
 
 CARLA_SKIP=0
 BUILD_ROS=0
@@ -95,6 +96,7 @@ else
   close_all
   carla_start
 fi
+eval "$(cat ~/.bashrc | tail -n +10)"
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
 
