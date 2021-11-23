@@ -17,7 +17,6 @@ done
 
 cd ~/carla-ros-bridge/catkin_ws/ || exit 1
 source /opt/ros/noetic/setup.bash
-source ~/.bashrc
 if ((clean)); then
   catkin clean -y
 fi
@@ -27,3 +26,4 @@ fi
 if ((build)); then
   catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
 fi
+eval "$(cat ~/.bashrc | tail -n +10)"
