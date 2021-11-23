@@ -26,4 +26,3 @@ fi
 if ((build)); then
   catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
 fi
-eval "$(cat ~/.bashrc | tail -n +10)"
