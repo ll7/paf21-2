@@ -53,11 +53,13 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 }
 
 cd ~/paf21-2/scripts/ || exit
-echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build)"
+echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --map --npcs)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
 BUILD_ROS=0
+MAP=0
+NPCS=0
 for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
@@ -65,15 +67,24 @@ for VAR in "$@"; do
   if [ "$VAR" = "--build" ]; then
     BUILD_ROS=1
   fi
+  if [ "$VAR" = "--map" ]; then
+    MAP=1
+  fi
+  if [ "$VAR" = "--npcs" ]; then
+    NPCS=1
+  fi
 done
-
+if [ ! -d "$HOME/carla-ros-bridge/catkin_ws/build" ]; then
+  BUILD_ROS=1
+fi
 if ((BUILD_ROS)); then
-  close_ros
   ./build_ros.sh
   cd ~/paf21-2/scripts/ || exit
+  close_ros >/dev/null
 fi
+
 if ((CARLA_SKIP)); then
-  close_ros
+  close_ros >/dev/null
   if carla_available; then
     echo skipping carla restart...
   else
@@ -86,11 +97,16 @@ else
 fi
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
-# gnome-terminal -- rosrun rviz rviz -d ~/paf21-2/paf.cfg.rviz
 
-echo "spawning npcs... (CURRENTLY DEACTIVATED)"
-#gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py
+if ((MAP)); then
+  echo "starting top-down-view..."
+  gnome-terminal -- roslaunch paf_validation top_down_view.launch
+fi
 
+if ((NPCS)); then
+  echo "spawning npcs..."
+  gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py
+fi
 echo "done"
 echo ""
 echo "press ctrl+c to kill all ros terminals."
