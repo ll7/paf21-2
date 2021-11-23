@@ -44,6 +44,7 @@ function start_terminal() { # opt:name, cmd
   fi
 }
 function start_terminal_wait_until_it_stays_open() { # cmd, name
+  echo $1
   STATUS=$(./subscripts/wait_for_window.sh "$2" open 3)
   while [ "$STATUS" = "closed" ]; do
     start_terminal "$1"
@@ -53,12 +54,11 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 }
 
 cd ~/paf21-2/scripts/ || exit
-echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --map --npcs)"
+echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
 BUILD_ROS=0
-MAP=0
 NPCS=0
 for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
@@ -66,9 +66,6 @@ for VAR in "$@"; do
   fi
   if [ "$VAR" = "--build" ]; then
     BUILD_ROS=1
-  fi
-  if [ "$VAR" = "--map" ]; then
-    MAP=1
   fi
   if [ "$VAR" = "--npcs" ]; then
     NPCS=1
@@ -99,18 +96,22 @@ close_ros >/dev/null
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
 
-if ((MAP)); then
-  echo "starting top-down-view..."
-  gnome-terminal -- roslaunch paf_validation top_down_view.launch
-fi
-
 if ((NPCS)); then
   echo "spawning npcs..."
   gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py
 fi
-echo "done"
+
+if (rosnode list | grep ERROR); then
+  echo ERROR!!
+  exit_program
+  exit
+fi
+
+echo "loaded the following nodes successfully:"
+rosnode list
 echo ""
 echo "press ctrl+c to kill all ros terminals."
+
 echo "listening for error/exit of carla environment..."
 ./subscripts/wait_for_window.sh CarlaUE4 open >/dev/null
 
