@@ -1,4 +1,4 @@
-class SegmentedLidarNode(object):
+class SematicLidarNode(object):
     def __init__(self):
         ...
 
@@ -7,5 +7,5 @@ class SegmentedLidarNode(object):
 
 
 if __name__ == "__main__":
-    node = SegmentedLidarNode()
+    node = SematicLidarNode()
     node.start()
