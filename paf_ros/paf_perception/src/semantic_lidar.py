@@ -34,6 +34,8 @@ class SemanticLidarNode(object):
         22: "Terrain",
     }
 
+    MIN_DIST = 2.4
+
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
         topic1 = "/carla/ego_vehicle/semantic_lidar/lidar1/point_cloud"
@@ -44,7 +46,7 @@ class SemanticLidarNode(object):
         self.position = None
 
     def process_odometry(self, msg: Odometry):
-        self.position = np.array(msg.pose.pose.position.x, msg.pose.pose.position.y)
+        self.position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
 
     def process_lidar_semantic(self, msg: PointCloud2):
         if self.position is None:
@@ -52,7 +54,7 @@ class SemanticLidarNode(object):
         points = pc2.read_points(msg, skip_nans=True)
         point_count = 0
         objects = {}
-        static_objects = {}
+        # static_objects = {}
         for point in points:
             x, y, z, cos_inc_angle, object_idx, object_tag = point
             point_count += 1
@@ -60,22 +62,26 @@ class SemanticLidarNode(object):
                 continue
             object_tag = self.TAGS[object_tag]
             if object_idx == 0:
-                if object_tag not in static_objects:
-                    static_objects[object_tag] = []
-                static_objects[object_tag].append((x, y, z))
+                continue
+                # if object_tag not in static_objects:
+                #     static_objects[object_tag] = []
+                # static_objects[object_tag].append((x, y, z))
             else:
+                d = np.sqrt(x ** 2 + y ** 2)
+                if d < self.MIN_DIST:
+                    continue
                 if object_idx not in objects:
                     objects[object_idx] = {"x": [], "y": [], "d": [], "tag": object_tag}
                 objects[object_idx]["x"].append(x)
                 objects[object_idx]["y"].append(y)
-                objects[object_idx]["d"].append(np.sqrt(x ** 2 + y ** 2))
+                objects[object_idx]["d"].append(d)
         objects_min_max = {}
         for k, obj in objects.items():
             a_max_x, a_max_y = np.argmax(obj["x"]), np.argmax(obj["y"])
             a_min_x, a_min_y = np.argmin(obj["x"]), np.argmin(obj["y"])
             a_min_d = np.argmin(obj["d"])
             d_min = obj["d"][a_min_d]
-
+            # rospy.logwarn(np.max(obj["d"]))
             poi = [
                 (obj["x"][a_max_x], obj["y"][a_max_x], obj["d"][a_max_x]),
                 (obj["x"][a_min_x], obj["y"][a_min_x], obj["d"][a_min_x]),
@@ -94,6 +100,8 @@ class SemanticLidarNode(object):
         self.publish_dynamic_object_information(objects_min_max)
 
     def publish_dynamic_object_information(self, objects_min_max):
+        for k, v in objects_min_max.items():
+            rospy.logwarn(f"{k}: {v}")
         pass  # todo
 
     def start(self):
