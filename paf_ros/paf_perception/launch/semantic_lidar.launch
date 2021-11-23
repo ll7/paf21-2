@@ -1,4 +1,4 @@
 <launch>
     <rosparam file="$(find paf_perception)/parameters.yaml" command="load"/>
-    <node pkg="paf_validation" type="segmented_lidar.py" name="segmented_lidar"/>
+    <node pkg="paf_validation" type="semantic_lidar.py" name="semantic_lidar"/>
 </launch>
