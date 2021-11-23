@@ -50,7 +50,7 @@
         <param name="port" value="$(arg port)"/>
     </node>
 
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find paf_starter)/config/lidar_only.rviz"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find paf_starter)/config/validation.rviz"/>
 
     <!--Steering-->
 <!--    <include file="$(find paf_actor)/launch/paf_actor.launch"/>-->

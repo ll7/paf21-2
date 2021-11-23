@@ -1,10 +1,14 @@
 #!/usr/bin/env python
-from nav_msgs.msg import Odometry
 
-import rospy
-from sensor_msgs.msg import PointCloud2
+
 import sensor_msgs.point_cloud2 as pc2
 import numpy as np
+import rospy
+
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import PointCloud2
+from std_msgs.msg import Header
+from paf_perception.msg import PafObstacleList, PafObstacle
 
 
 class SemanticLidarNode(object):
@@ -40,8 +44,10 @@ class SemanticLidarNode(object):
         rospy.init_node("semantic_lidar", anonymous=True)
         topic1 = "/carla/ego_vehicle/semantic_lidar/lidar1/point_cloud"
         topic2 = "/carla/ego_vehicle/odometry"
+        topic3 = "/paf/paf_perception/obstacles"
         self._lidar_subscriber = rospy.Subscriber(topic1, PointCloud2, self.process_lidar_semantic)
         self._odometry_subcriber = rospy.Subscriber(topic2, Odometry, self.process_odometry)
+        self._obstacle_publisher = rospy.Publisher(topic3, PafObstacleList, queue_size=1)
         self.ignored_indices = [0, 6, 7] + list(range(13, 23))
         self.position = None
 
@@ -91,23 +97,39 @@ class SemanticLidarNode(object):
 
             poi = sorted(poi, key=lambda _x: np.sqrt(_x[0] ** 2 + _x[1] ** 2), reverse=True)
             bound_1, bound_2 = poi[:2]
+
             bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min + self.position
             bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min + self.position
+            # bound_2 = np.array(bound_2[:2]) + self.position
+            # bound_1 = np.array(bound_1[:2]) + self.position
             closest = np.array((obj["x"][a_min_d], obj["y"][a_min_d])) + self.position
             poi = (tuple(bound_1), tuple(bound_2), tuple(closest))
-            objects_min_max[f"{obj['tag']}_{k}"] = poi
+            if obj["tag"] not in objects_min_max:
+                objects_min_max[obj["tag"]] = {}
+            objects_min_max[obj["tag"]][k] = poi
 
         self.publish_dynamic_object_information(objects_min_max)
 
     def publish_dynamic_object_information(self, objects_min_max):
-        for k, v in objects_min_max.items():
-            rospy.logwarn(f"{k}: {v}")
-        pass  # todo
+        header = Header()
+        header.stamp = rospy.Time.now()
+        for tag, values in objects_min_max.items():
+            obstacles = PafObstacleList()
+            obstacles.type = tag
+            obstacles.header = header
+            obstacles.obstacles = []
+            for i, (bound_1, bound_2, closest) in values.items():
+                obstacle = PafObstacle()
+                obstacle.bound_1 = bound_1
+                obstacle.bound_2 = bound_2
+                obstacle.closest = closest
+                obstacles.obstacles.append(obstacle)
+            self._obstacle_publisher.publish(obstacles)
 
-    def start(self):
-        rate = rospy.Rate(1)
+    @staticmethod
+    def start(rate=20):
+        rate = rospy.Rate(rate)
         while not rospy.is_shutdown():
-            rospy.logwarn("testetse")
             rate.sleep()
 
 
