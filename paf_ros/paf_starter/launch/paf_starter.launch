@@ -50,11 +50,11 @@
         <param name="port" value="$(arg port)"/>
     </node>
 
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find paf_starter)/config/paf.cfg.rviz"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find paf_starter)/config/lidar_only.rviz"/>
 
     <!--Steering-->
-    <include file="$(find paf_actor)/launch/paf_actor.launch"/>
-    <!--Validation (done with runscript.sh) -->
+<!--    <include file="$(find paf_actor)/launch/paf_actor.launch"/>-->
+    <!--Validation -->
 <!--    <include file="$(find paf_validation)/launch/top_down_view.launch"/>-->
 <!--    <include file="$(find paf_perception)/launch/segmented_lidar.launch"/>-->
 </launch>
