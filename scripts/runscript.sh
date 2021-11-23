@@ -3,7 +3,7 @@
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
 ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,0"
-
+eval "$(cat ~/.bashrc | tail -n +10)" >/dev/null
 function carla_available() {
   if [[ "$(wmctrl -l)" =~ "CarlaUE4" ]]; then
     return 0
@@ -55,7 +55,6 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 cd ~/paf21-2/scripts/ || exit
 echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --map --npcs)"
 trap exit_program SIGINT
-eval "$(cat ~/.bashrc | tail -n +10)"
 
 CARLA_SKIP=0
 BUILD_ROS=0
@@ -75,17 +74,15 @@ for VAR in "$@"; do
     NPCS=1
   fi
 done
-if [ ! -d "$HOME/carla-ros-bridge/catkin_ws/build" ]; then
+if [ ! -d "$HOME/carla-ros-bridge/catkin_ws/devel" ]; then
   BUILD_ROS=1
 fi
 if ((BUILD_ROS)); then
-  ./build_ros.sh
+  echo building ros
+  ./build_ros.sh --clean
   cd ~/paf21-2/scripts/ || exit
-  close_ros >/dev/null
 fi
-
 if ((CARLA_SKIP)); then
-  close_ros >/dev/null
   if carla_available; then
     echo skipping carla restart...
   else
@@ -93,10 +90,12 @@ if ((CARLA_SKIP)); then
     carla_start
   fi
 else
+  echo starting carla
   close_all
   carla_start
 fi
 eval "$(cat ~/.bashrc | tail -n +10)"
+close_ros >/dev/null
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
 
