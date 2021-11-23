@@ -122,10 +122,13 @@ class TopDownView(BirdViewProducer):
         if self.local_path is not None:
             masks[MaskPriority.LOCAL_PATH] = self._create_path_mask(self.local_path)
 
-        if self.obstacles_pedestrians is not None:
-            mask_temp = self._create_obstacle_mask(self.obstacles_vehicles)
-            masks[MaskPriority.KNOWN_OBSTACLES] = self._create_obstacle_mask(self.obstacles_pedestrians, mask_temp)
-
+        mask_obstacles = None
+        # if self.obstacles_pedestrians is not None:
+        #     mask_obstacles = self._create_obstacle_mask(self.obstacles_pedestrians, mask_obstacles)
+        if self.obstacles_vehicles is not None:
+            mask_obstacles = self._create_obstacle_mask(self.obstacles_vehicles, mask_obstacles)
+        if mask_obstacles is not None:
+            masks[MaskPriority.KNOWN_OBSTACLES] = mask_obstacles
         cropped_masks = self.apply_agent_following_transformation_to_masks(
             agent_vehicle,
             masks,
@@ -203,6 +206,7 @@ class TopDownView(BirdViewProducer):
             for point in obs:
                 pixel = self.masks_generator.location_to_pixel(point)
                 corner_pixels.append([pixel.x, pixel.y])
+            mask = cv2.circle(mask, tuple(corner_pixels[-1]), 4, COLOR_ON, -1)
             mask = cv2.polylines(mask, [np.array(corner_pixels).reshape((-1, 1, 2))], True, COLOR_ON, 1)
         return mask
 
@@ -306,11 +310,11 @@ if __name__ == "__main__":
         if "vehicle." in actor.type_id:
             vehicles.append(actor)
         if "role_name" in actor.attributes and actor.attributes["role_name"] == rospy.get_param("role_name"):
-            rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']})")
+            rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {actor.get_location()}")
             break
     else:
         if not len(vehicles):
             raise RuntimeError("No random vehicle to track!")
         actor = np.random.choice(vehicles)
-        rospy.logwarn(f"Tracking random {actor.type_id}")
+        rospy.logwarn(f"Tracking random {actor.type_id} at {actor.get_location()}")
     TopDownRosNode(client, actor).start()

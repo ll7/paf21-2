@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from time import perf_counter
 
 import sensor_msgs.point_cloud2 as pc2
 import numpy as np
@@ -49,14 +49,15 @@ class SemanticLidarNode(object):
         self._odometry_subcriber = rospy.Subscriber(topic2, Odometry, self.process_odometry)
         self._obstacle_publisher = rospy.Publisher(topic3, PafObstacleList, queue_size=1)
         self.ignored_indices = [0, 6, 7] + list(range(13, 23))
-        self.position = None
+        self.xy_position = None
 
     def process_odometry(self, msg: Odometry):
-        self.position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        self.xy_position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
 
     def process_lidar_semantic(self, msg: PointCloud2):
-        if self.position is None:
+        if self.xy_position is None:
             return
+        t0 = perf_counter()
         points = pc2.read_points(msg, skip_nans=True)
         point_count = 0
         objects = {}
@@ -77,17 +78,22 @@ class SemanticLidarNode(object):
                 if d < self.MIN_DIST:
                     continue
                 if object_idx not in objects:
-                    objects[object_idx] = {"x": [], "y": [], "d": [], "tag": object_tag}
-                objects[object_idx]["x"].append(x)
-                objects[object_idx]["y"].append(y)
-                objects[object_idx]["d"].append(d)
+                    objects[object_idx] = {"xyd": [], "x": [], "y": [], "d": [], "tag": object_tag}
+                for _x, _y, _ in objects[object_idx]["xyd"]:
+                    _d = np.sqrt((x - _x) ** 2 + (y - _y) ** 2)
+                    if _d > 3:
+                        break
+                else:
+                    # objects[object_idx]["xyd"].append((x, y, d))
+                    objects[object_idx]["x"].append(x)
+                    objects[object_idx]["y"].append(y)
+                    objects[object_idx]["d"].append(d)
         objects_min_max = {}
         for k, obj in objects.items():
             a_max_x, a_max_y = np.argmax(obj["x"]), np.argmax(obj["y"])
             a_min_x, a_min_y = np.argmin(obj["x"]), np.argmin(obj["y"])
             a_min_d = np.argmin(obj["d"])
             d_min = obj["d"][a_min_d]
-            # rospy.logwarn(np.max(obj["d"]))
             poi = [
                 (obj["x"][a_max_x], obj["y"][a_max_x], obj["d"][a_max_x]),
                 (obj["x"][a_min_x], obj["y"][a_min_x], obj["d"][a_min_x]),
@@ -98,16 +104,27 @@ class SemanticLidarNode(object):
             poi = sorted(poi, key=lambda _x: np.sqrt(_x[0] ** 2 + _x[1] ** 2), reverse=True)
             bound_1, bound_2 = poi[:2]
 
-            bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min + self.position
-            bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min + self.position
-            # bound_2 = np.array(bound_2[:2]) + self.position
-            # bound_1 = np.array(bound_1[:2]) + self.position
-            closest = np.array((obj["x"][a_min_d], obj["y"][a_min_d])) + self.position
-            poi = (tuple(bound_1), tuple(bound_2), tuple(closest))
+            bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min + self.xy_position
+            bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min + self.xy_position
+            # bound_2 = np.array(bound_2[:2]) + self.xy_position
+            # bound_1 = np.array(bound_1[:2]) + self.xy_position
+
+            # sorted_obj = sorted(obj["xyd"], key=lambda _x: _x[2])
+            # bounds = []
+            # for point in sorted_obj[:3]:
+            #     x, y, d = point
+            #     bounds.append(np.array([x, y]) + self.xy_position)
+            # while len(bounds) < 3:
+            #     bounds.append(bounds[0])
+
+            closest = np.array((obj["x"][a_min_d], obj["y"][a_min_d])) + self.xy_position
+            bounds = [bound_1, bound_2, closest]
+
+            poi = [x for x in bounds]
             if obj["tag"] not in objects_min_max:
                 objects_min_max[obj["tag"]] = {}
             objects_min_max[obj["tag"]][k] = poi
-
+        rospy.logwarn_throttle(10, f"fps={1/(perf_counter() - t0)}")
         self.publish_dynamic_object_information(objects_min_max)
 
     def publish_dynamic_object_information(self, objects_min_max):
@@ -127,7 +144,7 @@ class SemanticLidarNode(object):
             self._obstacle_publisher.publish(obstacles)
 
     @staticmethod
-    def start(rate=20):
+    def start(rate=100):
         rate = rospy.Rate(rate)
         while not rospy.is_shutdown():
             rate.sleep()
