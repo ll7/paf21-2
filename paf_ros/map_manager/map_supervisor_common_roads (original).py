@@ -23,8 +23,8 @@ from commonroad.visualization.draw_dispatch_cr import draw_object
 from io import BytesIO
 from lxml import etree
 from carla_msgs.msg import CarlaWorldInfo
-from crdesigner.map_conversion.opendrive.opendrive_parser.parser import parse_opendrive
-from crdesigner.map_conversion.opendrive.opendrive_conversion.network import Network
+from opendrive2lanelet.opendriveparser.parser import parse_opendrive
+from opendrive2lanelet.network import Network
 from commonroad.scenario.scenario import Scenario, ScenarioID
 
 
@@ -128,7 +128,8 @@ class MapSupervisorCommonRoads(MapProvider):
             roadNetwork = Network()
             roadNetwork.load_opendrive(opendrive)
             scenario_id = ScenarioID(country_id="DEU", map_name="psaf")
-            lanelet = roadNetwork.export_commonroad_scenario()
+            lanelet = roadNetwork.export_commonroad_scenario(
+                benchmark_id=scenario_id)
         return lanelet
 
     def _get_all_fitting_neighbour_lanelets(self, lanelet_id: int) -> list:

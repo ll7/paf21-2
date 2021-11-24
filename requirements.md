@@ -7,8 +7,7 @@ Format: ```Paketname (Zweck)```
 ### Python ```pip install <paket>```
 ```
 carla_birdeye_view (top-down-ansicht)
-commonroad-io==2020.3 (Commonroad Szenarios)
-opendrive2lanelet (Konvertierung von OpenDrive zu Commonroad)
+commonroad-io==2021.3 (Commonroad Szenarios)
 
 ```
 ### Paketmanager ```sudo apt install <paket>```

@@ -6,16 +6,9 @@ import os
 from io import BytesIO
 from lxml import etree
 from carla_msgs.msg import CarlaWorldInfo
-
-"""
 from opendrive2lanelet.opendriveparser.parser import parse_opendrive
 from opendrive2lanelet.network import Network
 from opendrive2lanelet.osm.lanelet2osm import L2OSMConverter
-"""
-
-from crdesigner.map_conversion.opendrive.opendrive_parser.parser import parse_opendrive
-from crdesigner.map_conversion.opendrive.opendrive_conversion.network import Network
-
 from commonroad.common.file_writer import CommonRoadFileWriter, OverwriteExistingFile
 from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad.scenario.scenario import Tag
@@ -61,6 +54,27 @@ class MapProvider:
             self.map_ready = True
             rospy.loginfo("MapProvider: Received: " + self.map_name)
 
+    def convert_to_osm(self) -> str:
+        """
+        Create a temporary OpenStreetMap file that can be used to generate a lanelet2 LaneletMap
+        """
+        lanelet = self.convert_od_to_lanelet()
+        if lanelet is not None:
+            l2osm = L2OSMConverter(
+                "+proj=omerc +lat_0=0 +lonc=0 +alpha=0 +k=1 +x_0=0 +y_0=0 +gamma=0 +ellps=WGS84 +towgs84=0,0,0,0,0,0,0")
+            openstreetmap = etree.tostring(l2osm(lanelet), xml_declaration=True, encoding="UTF-8", pretty_print=True)
+            self.osm_file.write(openstreetmap)
+            rospy.loginfo("MapProvider: Temporary file created:" + os.path.abspath(self.osm_file.name))
+            return os.path.abspath(self.osm_file.name)
+        else:
+            rospy.logerr("MapProvider: lanelet not available")
+            rospy.logerr("MapProvider: Couldn't create temporary file")
+            return ""
+
+    """
+    Currently not in use since CommonRoad lanelets are not compatible with lanelet2
+    """
+
     def convert_od_to_lanelet(self) -> Scenario:
         """
         Create a CommonRoad scenario from the OpenDrive received OpenDrive map
@@ -73,13 +87,28 @@ class MapProvider:
             roadNetwork = Network()
             roadNetwork.load_opendrive(opendrive)
             scenario_id = ScenarioID(country_id="DEU", map_name="psaf")
-            lanelet = roadNetwork.export_commonroad_scenario()
+            lanelet = roadNetwork.export_commonroad_scenario(benchmark_id=scenario_id)
             rospy.loginfo("MapProvider: Conversion done!")
         return lanelet
 
     """
     The generate methods are just for debugging purposes 
     """
+
+    def generate_osm_file(self):
+        lanelet = self.convert_od_to_lanelet()
+        if lanelet is not None:
+            l2osm = L2OSMConverter(
+                "+proj=omerc +lat_0=0 +lonc=0 +alpha=0 +k=1 +x_0=0 +y_0=0 +gamma=0 +ellps=WGS84 +towgs84=0,0,0,0,0,0,0")
+            openstreetmap = etree.tostring(l2osm(lanelet), xml_declaration=True, encoding="UTF-8", pretty_print=True)
+
+            # write osm file
+            with open(self.map_name + ".osm", "wb") as file_out:
+                file_out.write(openstreetmap)
+            rospy.loginfo("MapProvider: Wrote file" + self.map_name + ".osm")
+        else:
+            rospy.logerr("MapProvider: lanelet not available")
+            rospy.logerr("MapProvider: No file generated")
 
     def generate_com_road_file(self):
         lanelet = self.convert_od_to_lanelet()

@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./commonroad-scenario-designer"
+    ]
+}
