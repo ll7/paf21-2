@@ -18,12 +18,14 @@ from carla_birdeye_view.mask import (
 import carla
 import numpy as np
 import rospy
+from paf_perception.msg import PafObstacleList, PafObstacle
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 
 class MaskPriority(IntEnum):
-    PEDESTRIANS = 10
+    PEDESTRIANS = 11
+    KNOWN_OBSTACLES = 10
     RED_LIGHTS = 9
     YELLOW_LIGHTS = 8
     GREEN_LIGHTS = 7
@@ -56,6 +58,7 @@ RGB_BY_MASK = {  # (red, green, blue)
     MaskPriority.ROAD: RGB.DIM_GRAY,
     MaskPriority.LOCAL_PATH: (255, 0, 0),
     MaskPriority.GLOBAL_PATH: (0, 0, 255),
+    MaskPriority.KNOWN_OBSTACLES: (255, 0, 0),
 }
 
 
@@ -74,6 +77,7 @@ class TopDownView(BirdViewProducer):
         self.dark_mode = dark_mode
         self.center_on_agent = not show_whole_map
         self.global_path, self.local_path = None, None
+        self.obstacles_pedestrians, self.obstacles_vehicles = None, None
         self.path_width_px = 10
         if show_whole_map:
             self.north_is_up = True
@@ -113,8 +117,15 @@ class TopDownView(BirdViewProducer):
         rendering_window = RenderingWindow(origin=agent_vehicle_loc, area=self.rendering_area)
         self.masks_generator.enable_local_rendering_mode(rendering_window)
         masks = self._render_actors_masks(agent_vehicle, segregated_actors, masks)
-        masks[MaskPriority.GLOBAL_PATH] = self._create_path_mask(self.global_path)
-        masks[MaskPriority.LOCAL_PATH] = self._create_path_mask(self.local_path)
+        if self.global_path is not None:
+            masks[MaskPriority.GLOBAL_PATH] = self._create_path_mask(self.global_path)
+        if self.local_path is not None:
+            masks[MaskPriority.LOCAL_PATH] = self._create_path_mask(self.local_path)
+
+        if self.obstacles_pedestrians is not None:
+            mask_temp = self._create_obstacle_mask(self.obstacles_vehicles)
+            masks[MaskPriority.KNOWN_OBSTACLES] = self._create_obstacle_mask(self.obstacles_pedestrians, mask_temp)
+
         cropped_masks = self.apply_agent_following_transformation_to_masks(
             agent_vehicle,
             masks,
@@ -165,7 +176,37 @@ class TopDownView(BirdViewProducer):
         if clear_global_path:
             self.global_path = None
 
-    def _create_path_mask(self, path):
+    def update_obstacles(self, msg: PafObstacleList):
+        if msg.type == "Pedestrians":
+            self.obstacles_pedestrians = self._update_obstacles(msg)
+        elif msg.type == "Vehicles":
+            self.obstacles_vehicles = self._update_obstacles(msg)
+        else:
+            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+
+    @staticmethod
+    def _update_obstacles(msg: PafObstacleList):
+        obs: PafObstacle
+        ret = []
+        for obs in msg.obstacles:
+            obs_pts = []
+            for x, y in [obs.bound_1, obs.bound_2, obs.closest]:
+                obs_pts.append(Namespace(**{"x": x, "y": y}))
+            ret.append(obs_pts)
+        return ret
+
+    def _create_obstacle_mask(self, objects, mask=None):
+        if mask is None:
+            mask = self.masks_generator.make_empty_mask()
+        for obs in objects:
+            corner_pixels = []
+            for point in obs:
+                pixel = self.masks_generator.location_to_pixel(point)
+                corner_pixels.append([pixel.x, pixel.y])
+            mask = cv2.polylines(mask, [np.array(corner_pixels).reshape((-1, 1, 2))], True, COLOR_ON, 1)
+        return mask
+
+    def _create_path_mask(self, path=None):
         mask = self.masks_generator.make_empty_mask()
         if path is None:
             return mask
@@ -195,9 +236,6 @@ class TopDownView(BirdViewProducer):
         _, h, w = birdview.shape
         rgb_canvas = np.zeros(shape=(h, w, 3), dtype=np.uint8)
 
-        def nonzero_indices(arr):
-            return arr == COLOR_ON
-
         if self.dark_mode:
             color_inversion = []
         else:
@@ -207,24 +245,28 @@ class TopDownView(BirdViewProducer):
             if mask_type in color_inversion:
                 r, g, b = rgb_color
                 rgb_color = 255 - r, 255 - g, 255 - b
-            rgb_canvas[nonzero_indices(birdview[mask_type])] = rgb_color
+            rgb_canvas[self.nonzero_indices(birdview[mask_type])] = rgb_color
         if not self.dark_mode:
             rgb_canvas = np.where(rgb_canvas.any(-1, keepdims=True), rgb_canvas, 255)
         return rgb_canvas
+
+    @staticmethod
+    def nonzero_indices(arr):
+        return arr == COLOR_ON
 
 
 class TopDownRosNode(object):
     br = CvBridge()
 
-    def __init__(self, _actor):
+    def __init__(self, _client, _actor):
         self.params = rospy.get_param("/top_down_view/")
         self.actor = _actor
-        self._init()
+        self._init(_client)
         rospy.init_node(self.params["node"], anonymous=True)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
+        rospy.Subscriber("/paf/paf_perception/obstacles", PafObstacleList, self.producer.update_obstacles)
 
-    def _init(self):
-        client = carla.Client("127.0.0.1", 2000)
+    def _init(self, client):
         self.producer = TopDownView(
             client,
             target_size=PixelDimensions(
@@ -271,4 +313,4 @@ if __name__ == "__main__":
             raise RuntimeError("No random vehicle to track!")
         actor = np.random.choice(vehicles)
         rospy.logwarn(f"Tracking random {actor.type_id}")
-    TopDownRosNode(actor).start()
+    TopDownRosNode(client, actor).start()
