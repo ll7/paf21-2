@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from time import perf_counter
 
+import message_filters
 import sensor_msgs.point_cloud2 as pc2
 import numpy as np
 import rospy
@@ -16,7 +17,10 @@ class SemanticLidarNode(object):
     TAGS = {int(k): v for k, v in rospy.get_param("semantic_tags").items()}
     MIN_DIST_IS_SELF = 0  # not needed if z >= 2.4
     MIN_OBJ_DIFF_DIST = 5
-    MAGIC_X_OFFSET = 4
+    MAGIC_FORWARD_OFFSET = 0
+    MAGIC_RIGHT_OFFSET = 0
+    MAGIC_NORTH_OFFSET = 0
+    MAGIC_WEST_OFFSET = 4
 
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
@@ -24,13 +28,23 @@ class SemanticLidarNode(object):
         topic1 = f"/carla/{role_name}/semantic_lidar/lidar1/point_cloud"
         topic2 = f"/carla/{role_name}/odometry"
         topic3 = rospy.get_param("obstacles_topic")
-        rospy.Subscriber(topic1, PointCloud2, self.process_lidar_semantic)
-        rospy.Subscriber(topic2, Odometry, self.process_odometry)
-        rospy.Publisher(topic3, PafObstacleList, queue_size=1)
+        lidar_sub = message_filters.Subscriber(topic1, PointCloud2)
+        odo_sub = message_filters.Subscriber(topic2, Odometry)
+        sync = message_filters.TimeSynchronizer([odo_sub, lidar_sub], 1)
+        sync.registerCallback(self._incoming_change)
+        self._obstacle_publisher = rospy.Publisher(topic3, PafObstacleList, queue_size=1)
         self.ignored_indices = [0, 6, 7] + list(range(13, 23))
         self.xy_position = None
         self.z_orientation = None
         self.sin, self.cos = None, None
+        self.frame_time = perf_counter()
+
+    def _incoming_change(self, msg_1: Odometry, msg_2: PointCloud2):
+        self.process_odometry(msg_1)
+        self.process_lidar_semantic(msg_2)
+        time = perf_counter()
+        rospy.logwarn_throttle(10, f"[semantic lidar] current fps={1 / (time - self.frame_time)}")
+        self.frame_time = time
 
     def process_odometry(self, msg: Odometry):
         self.xy_position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
@@ -43,15 +57,15 @@ class SemanticLidarNode(object):
         )
         _, _, yaw = euler_from_quaternion(quaternion)
         self.z_orientation = yaw
+        # rotation of result in opposite direction to get world coords
         self.cos = np.cos(-self.z_orientation)
         self.sin = np.sin(-self.z_orientation)
-        rospy.logwarn_throttle(10, f"yaw={np.rad2deg(yaw)}°")
 
     def transform_to_relative_world_pos(self, leftwards, backwards):
-        x = leftwards - self.MAGIC_X_OFFSET
-        y = -backwards
+        x = leftwards - self.MAGIC_RIGHT_OFFSET
+        y = -backwards - self.MAGIC_FORWARD_OFFSET
         x, y = x * self.cos - y * self.sin, y * self.cos + x * self.sin
-        return x, y
+        return x + self.MAGIC_NORTH_OFFSET, y + self.MAGIC_WEST_OFFSET
 
     def process_lidar_semantic(self, msg: PointCloud2):
         if self.xy_position is None:
@@ -120,7 +134,7 @@ class SemanticLidarNode(object):
                 if tag not in objects_min_max:
                     objects_min_max[tag] = {}
                 objects_min_max[tag][f"{obj_idx}_{i}"] = poi
-        rospy.logwarn_throttle(10, f"fps={1 / (perf_counter() - t0)}")
+        rospy.logwarn_throttle(30, f"[semantic lidar] max fps={1 / (perf_counter() - t0)}")
         self.publish_dynamic_object_information(objects_min_max)
 
     def publish_dynamic_object_information(self, objects_min_max):
