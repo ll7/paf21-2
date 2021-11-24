@@ -123,8 +123,8 @@ class TopDownView(BirdViewProducer):
             masks[MaskPriority.LOCAL_PATH] = self._create_path_mask(self.local_path)
 
         mask_obstacles = None
-        # if self.obstacles_pedestrians is not None:
-        #     mask_obstacles = self._create_obstacle_mask(self.obstacles_pedestrians, mask_obstacles)
+        if self.obstacles_pedestrians is not None:
+            mask_obstacles = self._create_obstacle_mask(self.obstacles_pedestrians, mask_obstacles)
         if self.obstacles_vehicles is not None:
             mask_obstacles = self._create_obstacle_mask(self.obstacles_vehicles, mask_obstacles)
         if mask_obstacles is not None:
@@ -268,7 +268,7 @@ class TopDownRosNode(object):
         self._init(_client)
         rospy.init_node(self.params["node"], anonymous=True)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
-        rospy.Subscriber("/paf/paf_perception/obstacles", PafObstacleList, self.producer.update_obstacles)
+        rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.producer.update_obstacles)
 
     def _init(self, client):
         self.producer = TopDownView(
@@ -291,20 +291,17 @@ class TopDownRosNode(object):
 
     def start(self):
         rate = rospy.Rate(self.params["update_hz"])
-        first_run = True
         while not rospy.is_shutdown():
             t0 = time.perf_counter()
             rgb = self.produce_map()
             self.pub.publish(self.br.cv2_to_imgmsg(rgb, "rgb8"))
-            if not first_run:
-                rospy.logwarn_once(f"[top_down_view] calc_time={time.perf_counter() - t0}s")
+            rospy.logwarn_throttle(30, f"[top_down_view] fps={1 / (time.perf_counter() - t0)}")
             rate.sleep()
-            first_run = False
 
 
 if __name__ == "__main__":
-    client = carla.Client("127.0.0.1", 2000)
-    _actors = client.get_world().get_actors()
+    _client = carla.Client("127.0.0.1", 2000)
+    _actors = _client.get_world().get_actors()
     vehicles = []
     for actor in _actors:
         if "vehicle." in actor.type_id:
@@ -317,4 +314,4 @@ if __name__ == "__main__":
             raise RuntimeError("No random vehicle to track!")
         actor = np.random.choice(vehicles)
         rospy.logwarn(f"Tracking random {actor.type_id} at {actor.get_location()}")
-    TopDownRosNode(client, actor).start()
+    TopDownRosNode(_client, actor).start()
