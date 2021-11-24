@@ -8,7 +8,7 @@ for VAR in "$@"; do
     clean=1
   fi
   if [ "$VAR" = "--rosdep" ]; then
-    clean=1
+    rosdep=1
   fi
   if [ "$VAR" = "--no-build" ]; then
     build=0
