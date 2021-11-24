@@ -1,0 +1,14 @@
+top_down_view: {
+  topic: "/paf/paf_validation/top_down_view",
+  node: "top_down_view",
+  role_name: "ego_vehicle",
+  update_hz: 5,
+  img_size: {
+    width: 900,
+    height: 500
+  },
+  pixels_per_meter: 3,
+  north_is_up: true,
+  dark_mode: false,
+  show_whole_map: false,
+}
