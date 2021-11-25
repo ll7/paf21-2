@@ -261,6 +261,7 @@ class TopDownView(BirdViewProducer):
 
 class TopDownRosNode(object):
     br = CvBridge()
+    LOG_FPS_SECS = 60
 
     def __init__(self, _client, _actor):
         self.params = rospy.get_param("/top_down_view/")
@@ -295,7 +296,7 @@ class TopDownRosNode(object):
             t0 = time.perf_counter()
             rgb = self.produce_map()
             self.pub.publish(self.br.cv2_to_imgmsg(rgb, "rgb8"))
-            rospy.logwarn_throttle(30, f"[top_down_view] fps={1 / (time.perf_counter() - t0)}")
+            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / (time.perf_counter() - t0)}")
             rate.sleep()
 
 
