@@ -5,7 +5,7 @@ PSAF 2: WS 20/21 (perception package)
 ## Launch Command
 
 Reads obstacles from segmented lidar sensor ```lidar1``` and publishes a ```PafObstacleList```. Each ```PafObstacle```
-has to outer bounding box points and the closest point as attributes
+has the two outermost (north-aligned) bounding box points and the closest point as attributes.
 
 ```
 Subscribed Topics:
