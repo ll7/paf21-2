@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-import time
-from argparse import Namespace
-from enum import IntEnum
-
 import cv2
+import carla
+import numpy as np
+import rospy
+
 from carla_birdeye_view import RGB, BirdViewProducer, BirdViewCropType, BirdView, actors, rotate, SegregatedActors
 from carla_birdeye_view.mask import (
     MAP_BOUNDARY_MARGIN,
@@ -15,9 +15,9 @@ from carla_birdeye_view.mask import (
     COLOR_ON,
 )
 
-import carla
-import numpy as np
-import rospy
+from time import perf_counter, sleep
+from argparse import Namespace
+from enum import IntEnum
 from paf_perception.msg import PafObstacleList, PafObstacle
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -293,26 +293,29 @@ class TopDownRosNode(object):
     def start(self):
         rate = rospy.Rate(self.params["update_hz"])
         while not rospy.is_shutdown():
-            t0 = time.perf_counter()
+            t0 = perf_counter()
             rgb = self.produce_map()
             self.pub.publish(self.br.cv2_to_imgmsg(rgb, "rgb8"))
-            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / (time.perf_counter() - t0)}")
+            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / (perf_counter() - t0)}")
             rate.sleep()
+
+
+def find_ego_vehicle_actor(_client):
+    while True:
+        _actors = _client.get_world().get_actors()
+        vehicles = []
+        for actor in _actors:
+            if "vehicle." in actor.type_id:
+                vehicles.append(actor)
+            if "role_name" in actor.attributes and actor.attributes["role_name"] == rospy.get_param("role_name"):
+                rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {actor.get_location()}")
+                return actor
+        else:
+            rospy.logwarn("ego vehicle not found, retrying")
+            sleep(1)
 
 
 if __name__ == "__main__":
     _client = carla.Client("127.0.0.1", 2000)
-    _actors = _client.get_world().get_actors()
-    vehicles = []
-    for actor in _actors:
-        if "vehicle." in actor.type_id:
-            vehicles.append(actor)
-        if "role_name" in actor.attributes and actor.attributes["role_name"] == rospy.get_param("role_name"):
-            rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {actor.get_location()}")
-            break
-    else:
-        if not len(vehicles):
-            raise RuntimeError("No random vehicle to track!")
-        actor = np.random.choice(vehicles)
-        rospy.logwarn(f"Tracking random {actor.type_id} at {actor.get_location()}")
+    actor = find_ego_vehicle_actor(_client)
     TopDownRosNode(_client, actor).start()
