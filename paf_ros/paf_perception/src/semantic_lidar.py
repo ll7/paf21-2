@@ -17,10 +17,6 @@ class SemanticLidarNode(object):
     TAGS = {int(k): v for k, v in rospy.get_param("semantic_tags").items()}
     MIN_DIST_IS_SELF = 0  # not needed if z >= 2.4
     MIN_OBJ_DIFF_DIST = 5
-    MAGIC_FORWARD_OFFSET = 0
-    MAGIC_RIGHT_OFFSET = 0
-    MAGIC_NORTH_OFFSET = 0
-    MAGIC_WEST_OFFSET = 4
 
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
@@ -40,14 +36,16 @@ class SemanticLidarNode(object):
         self.frame_time = perf_counter()
 
     def _incoming_change(self, msg_1: Odometry, msg_2: PointCloud2):
+        t0 = perf_counter()
         self.process_odometry(msg_1)
         self.process_lidar_semantic(msg_2)
         time = perf_counter()
+        rospy.logwarn_throttle(10, f"[semantic lidar] max fps={1 / (time - t0)}")
         rospy.logwarn_throttle(10, f"[semantic lidar] current fps={1 / (time - self.frame_time)}")
         self.frame_time = time
 
     def process_odometry(self, msg: Odometry):
-        self.xy_position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        self.xy_position = np.array([msg.pose.pose.position.x, -msg.pose.pose.position.y])
         current_pose = msg.pose.pose
         quaternion = (
             current_pose.orientation.x,
@@ -62,19 +60,17 @@ class SemanticLidarNode(object):
         self.sin = np.sin(-self.z_orientation)
 
     def transform_to_relative_world_pos(self, leftwards, backwards):
-        x = leftwards - self.MAGIC_RIGHT_OFFSET
-        y = -backwards - self.MAGIC_FORWARD_OFFSET
+        x = leftwards
+        y = -backwards
         x, y = x * self.cos - y * self.sin, y * self.cos + x * self.sin
-        return x + self.MAGIC_NORTH_OFFSET, y + self.MAGIC_WEST_OFFSET
+        return x, y
 
     def process_lidar_semantic(self, msg: PointCloud2):
         if self.xy_position is None:
             return
-        t0 = perf_counter()
         points = pc2.read_points(msg, skip_nans=True)
         point_count = 0
         objects = {}
-        # static_objects = {}
         for point in points:
             leftwards, backwards, downwards, cos_inc_angle, object_idx, object_tag = point
             x, y = self.transform_to_relative_world_pos(leftwards, backwards)
@@ -84,9 +80,6 @@ class SemanticLidarNode(object):
             object_tag = self.TAGS[object_tag]
             if object_idx == 0:
                 continue
-                # if object_tag not in static_objects:
-                #     static_objects[object_tag] = []
-                # static_objects[object_tag].append((x, y, z))
             else:
                 object_idx = str(object_idx)
                 d = np.sqrt(x ** 2 + y ** 2)
@@ -94,37 +87,27 @@ class SemanticLidarNode(object):
                     continue
                 if object_idx not in objects:
                     objects[object_idx] = {"objects": [], "tag": object_tag}
-                    # objects[object_idx] = {"xyd": [], "x": [], "y": [], "d": [], "tag": object_tag}
                 for idx, objects_with_idx in enumerate(objects[object_idx]["objects"]):
-                    rand_idx = 0
-                    _x, _y = objects_with_idx["x"][rand_idx], objects_with_idx["y"][rand_idx]
+                    _x, _y, _ = objects_with_idx[0]
                     _d = np.sqrt((x - _x) ** 2 + (y - _y) ** 2)
                     if _d < self.MIN_OBJ_DIFF_DIST:
-                        objects[object_idx]["objects"][idx]["x"].append(x)
-                        objects[object_idx]["objects"][idx]["y"].append(y)
-                        objects[object_idx]["objects"][idx]["d"].append(d)
+                        objects[object_idx]["objects"][idx].append([x, y, d])
                         break
                 else:
-                    objects[object_idx]["objects"].append({"x": [x], "y": [y], "d": [d]})
+                    objects[object_idx]["objects"].append([[x, y, d]])
         objects_min_max = {}
         for obj_idx, obj_and_tag in objects.items():
             tag = obj_and_tag["tag"]
             obj: dict
-            for i, obj in enumerate(obj_and_tag["objects"]):
-                a_max_x, a_max_y = np.argmax(obj["x"]), np.argmax(obj["y"])
-                a_min_x, a_min_y = np.argmin(obj["x"]), np.argmin(obj["y"])
-                a_min_d = np.argmin(obj["d"])
-                d_min = obj["d"][a_min_d]
-                poi = [
-                    (obj["x"][a_max_x], obj["y"][a_max_x], obj["d"][a_max_x]),
-                    (obj["x"][a_min_x], obj["y"][a_min_x], obj["d"][a_min_x]),
-                    (obj["x"][a_max_y], obj["y"][a_max_y], obj["d"][a_max_y]),
-                    (obj["x"][a_min_y], obj["y"][a_min_y], obj["d"][a_min_y]),
-                ]
+            for i, pts in enumerate(obj_and_tag["objects"]):
+                a_max_x, a_max_y, a_max_d = np.argmax(pts, axis=0)
+                a_min_x, a_min_y, a_min_d = np.argmin(pts, axis=0)
+                d_min = pts[a_min_d][-1]
+                poi = [pts[a_max_x], pts[a_min_x], pts[a_max_y], pts[a_min_y]]
 
                 poi = sorted(poi, key=lambda _x: np.sqrt(_x[0] ** 2 + _x[1] ** 2), reverse=True)
                 bound_1, bound_2 = poi[:2]
-                closest = np.array((obj["x"][a_min_d], obj["y"][a_min_d]))
+                closest = np.array((pts[a_min_d][:2]))
                 bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min + self.xy_position
                 bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min + self.xy_position
                 # bound_2 = np.array(bound_2[:2]) + self.xy_position
@@ -133,8 +116,7 @@ class SemanticLidarNode(object):
                 poi = [bound_1, bound_2, closest]
                 if tag not in objects_min_max:
                     objects_min_max[tag] = {}
-                objects_min_max[tag][f"{obj_idx}_{i}"] = poi
-        rospy.logwarn_throttle(30, f"[semantic lidar] max fps={1 / (perf_counter() - t0)}")
+                objects_min_max[tag][obj_idx] = poi
         self.publish_dynamic_object_information(objects_min_max)
 
     def publish_dynamic_object_information(self, objects_min_max):
