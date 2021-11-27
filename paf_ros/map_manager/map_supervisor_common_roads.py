@@ -18,7 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from commonroad.planning.planning_problem import PlanningProblem
-from commonroad.visualization.draw_dispatch_cr import draw_object
+from commonroad.visualization.mp_renderer import draw_object
 
 from io import BytesIO
 from lxml import etree
