@@ -1,0 +1,5 @@
+<launch>
+  <node pkg="paf_perception" type="semantic_lidar.py" name="semantic_lidar" output="screen">
+    <rosparam file="$(find paf_perception)/parameters.yaml" command="load"/>
+  </node>
+</launch>
