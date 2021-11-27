@@ -1,10 +1,12 @@
 # !/usr/bin/env python
 
+import os
 import rospy
 from commonroad.scenario.trajectory import State
 from commonroad.planning.goal import GoalRegion
 from commonroad.common.util import Interval
 from commonroad.geometry.shape import Circle
+from commonroad.common.file_writer import CommonRoadFileWriter, OverwriteExistingFile
 
 from landmark_provider import LandMarkProvider, LandMarkPoint
 from map_provider import MapProvider
@@ -18,7 +20,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from commonroad.planning.planning_problem import PlanningProblem
-from commonroad.visualization.mp_renderer import draw_object
+from commonroad.planning.planning_problem import PlanningProblemSet
+from commonroad.visualization.mp_renderer import MPRenderer
 
 from io import BytesIO
 from lxml import etree
@@ -41,6 +44,7 @@ class MapSupervisorCommonRoads(MapProvider):
         self.planning_problem = None
         self.debug = debug
         self.opendrive_loaded = False
+        self.create_file = True
 
         # orientation difference between traffic light and lanelet in degree,
         # up to which the a lanelet and a traffic light is considered a match
@@ -80,8 +84,8 @@ class MapSupervisorCommonRoads(MapProvider):
             rospy.loginfo("MapSupervisorCommonRoads: Detecting intersections")
             self._detect_intersections()
             rospy.loginfo("MapSupervisorCommonRoads: Adding traffic lights")
-            self._traffic_lights_to_scenario(
-                self.landmark_provider.get_marks_by_category('Signal_3Light_Post01'))
+            #self._traffic_lights_to_scenario(
+            #    self.landmark_provider.get_marks_by_category('Signal_3Light_Post01'))
             for key in self.landmark_provider.available_categories():
                 if 'Speed' in key:
                     rospy.loginfo(
@@ -91,15 +95,26 @@ class MapSupervisorCommonRoads(MapProvider):
                 elif 'stencil_stop' in key.lower():
                     rospy.loginfo(
                         "MapSupervisorCommonRoads: Adding stop marks")
-                    self._stop_signs_to_scenario(
-                        self.landmark_provider.get_marks_by_category(key), neighbouring=False)
+                    #self._stop_signs_to_scenario(
+                    #    self.landmark_provider.get_marks_by_category(key), neighbouring=False)
                 elif 'sign_stop' in key.lower():
                     rospy.loginfo(
                         "MapSupervisorCommonRoads: Adding stop signs")
-                    self._stop_signs_to_scenario(
-                        self.landmark_provider.get_marks_by_category(key), neighbouring=True)
+                    #self._stop_signs_to_scenario(
+                    #    self.landmark_provider.get_marks_by_category(key), neighbouring=True)
 
-            self.debug = True
+            if self.create_file:
+                rospy.loginfo("MapSupervisorCommonRoads: Creating XML-File")
+                writer = CommonRoadFileWriter(
+                    scenario = self.map_cr,
+                    planning_problem_set = PlanningProblemSet(),
+                    author = "paf21-2",
+                    affiliation = "Augsburg University",
+                    source = "CommonRoad Scenario Designer",
+                    tags = {},
+                )
+                writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + "TownTest.xml",
+                    OverwriteExistingFile.ALWAYS)
 
             if self.debug:
                 self.planning_problem = self._generate_dummy_planning_problem()
@@ -376,30 +391,14 @@ class MapSupervisorCommonRoads(MapProvider):
 
     def _visualize_scenario(self, sce: Scenario, prob: PlanningProblem = None):
         """
-        Visualize the scenario (map); Therefore creates a .png file.
+        Visualize the scenario (map);
         :param sce: scenario to be visualized
         :param prob: planning_problem
         """
-        plt.figure(figsize=(50, 50))
-
-        draw_object(sce, draw_params={'time_begin': 0,
-                                      'scenario':
-                                          {'lanelet_network': {'traffic_sign':
-                                                               {'draw_traffic_signs': True,
-                                                                'show_traffic_signs': 'all',
-                                                                # 'all' or list of TrafficSignIDs
-                                                                'speed_limit_unit': 'ms',
-                                                                # 'mph', 'kmh', 'ms', 'auto'
-                                                                'show_label': False,
-                                                                'scale_factor': 0.25,
-                                                                'zorder': 30
-                                                                }
-                                                               }}})
-        if prob is not None:
-            draw_object(prob)
-        plt.gca().set_aspect('equal')
-        plt.savefig(self.map_name + ".png")
-        plt.close()
+        rnd = MPRenderer(plot_limits=[-30, 120, -140, 20], figsize=(8,4.5))
+        sce.draw(rnd)
+        prob.draw(rnd)
+        rnd.render()
 
     def _add_light_to_lanelet(self, lanelet_id: int):
         """
