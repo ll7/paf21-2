@@ -38,6 +38,10 @@ class SemanticLidarNode(object):
         self.frame_time_odo = perf_counter()
 
     def _process_odometry(self, msg: Odometry):
+        """
+        Odometry topic callback
+        :param msg:
+        """
         t0 = perf_counter()
         self.xy_position = np.array([msg.pose.pose.position.x + self.SENSOR_X_OFFSET, -msg.pose.pose.position.y])
         current_pose = msg.pose.pose
@@ -59,13 +63,23 @@ class SemanticLidarNode(object):
         )
         self.frame_time_odo = time
 
-    def _transform_to_relative_world_pos(self, leftwards, backwards):
+    def _transform_to_relative_world_pos(self, leftwards: float, backwards: float) -> tuple:
+        """
+        Rotates the lidar coordinates to the correct orientation relative to ego_vehicle
+        :param leftwards: lidar point variable leftwards
+        :param backwards: lidar point variable backwards
+        :return: x,y in world coordinates relative to ego_vehicle x,y
+        """
         x = leftwards
         y = -backwards
         x, y = x * self.cos - y * self.sin, y * self.cos + x * self.sin
         return x, y
 
     def _process_lidar_semantic(self, msg: PointCloud2):
+        """
+        Callback for semantic lidar topic
+        :param msg:
+        """
         if self.xy_position is None:
             return
         t0 = perf_counter()
@@ -80,7 +94,12 @@ class SemanticLidarNode(object):
         )
         self.frame_time_lidar = time
 
-    def _process_sorted_points_calculate_bounds(self, sorted_points):
+    def _process_sorted_points_calculate_bounds(self, sorted_points: dict) -> dict:
+        """
+        Calculates bound1, bound2 and closest point (each in x,y,d coords)
+        :param sorted_points: format { obj_index : { "tag" : tag, "pts": [[x,y,d],...] , ...}
+        :return: bounds in format { tag : [ [bound1, bound2, closest], ...] , ...}
+        """
         bounds_by_tag = {}
         for obj_idx, pts_and_tag in sorted_points.items():
             tag = pts_and_tag["tag"]
@@ -92,8 +111,7 @@ class SemanticLidarNode(object):
 
                 # bounds: select two most distant points of interest (poi)
                 poi = [pts[a_max_x], pts[a_min_x], pts[a_max_y], pts[a_min_y]]
-                poi = sorted(poi, key=lambda _x: _x[-1], reverse=True)
-                bound_1, bound_2 = poi[:2]
+                bound_1, bound_2 = self._get_vectors_with_maximum_angle(poi)
 
                 # closest: select closest point to sensor
                 closest = np.array((pts[a_min_d][:2]))
@@ -111,7 +129,13 @@ class SemanticLidarNode(object):
                 bounds_by_tag[tag].append(poi)
         return bounds_by_tag
 
-    def _process_lidar_points_by_tag_and_idx(self, points):
+    def _process_lidar_points_by_tag_and_idx(self, points: list) -> dict:
+        """
+        Ordering and clustering points by index, tag and max allowed distance
+        :param points: lidar points in format
+            [[leftwards, backwards, downwards, cos_inc_angle, object_idx, object_tag],...]
+        :return: sorted points in format { obj_index : { "tag" : tag, "pts": [[x,y,d],...] , ...}
+        """
         objects = {}
         for point in points:
             leftwards, backwards, downwards, cos_inc_angle, object_idx, object_tag = point
@@ -137,7 +161,11 @@ class SemanticLidarNode(object):
                     objects[object_idx]["pts"].append([[x, y, d]])
         return objects
 
-    def _publish_object_information(self, bounds_by_tag):
+    def _publish_object_information(self, bounds_by_tag: dict):
+        """
+        publishes ObstacleList topic
+        :param bounds_by_tag: format { tag : [ [bound1, bound2, closest], ...] , ...}
+        """
         header = Header()
         header.stamp = rospy.Time.now()
         for tag, values in bounds_by_tag.items():
@@ -154,13 +182,52 @@ class SemanticLidarNode(object):
             self._obstacle_publisher.publish(obstacles)
 
     @staticmethod
-    def _dist(p1, p2=(0, 0)):
+    def _get_vectors_with_maximum_angle(poi_list: list) -> list:
+        """
+        calculates the two vectors with maximum 2d-angular distance
+        :param poi_list: list of (x,y,d) vectors
+        :return: the two vectors with maximum 2d-angular distance
+        """
+        angle_max = -1
+        pts_max = poi_list[:2]
+        for j, p in enumerate(poi_list):
+            k = j + 1
+            for q in poi_list[k:]:
+                angle = SemanticLidarNode._angle(p, q)
+                if angle > angle_max:
+                    angle_max = angle
+                    pts_max = [p, q]
+        return pts_max
+
+    @staticmethod
+    def _angle(p1: list, p2: list) -> float:
+        """
+        Angle between two vectors (x,y,d)
+        :param p1: vector 1
+        :param p2: vector 2
+        :return: angle in rads
+        """
+        x1, y1, d1 = p1
+        x2, y2, d2 = p2
+        return np.arccos((x1 * x2 + y1 * y2) / (d1 * d2))
+
+    @staticmethod
+    def _dist(p1: tuple, p2: tuple = (0, 0)) -> float:
+        """
+        Euclidean distance between two 2d points (or origin)
+        :param p1: first point (x,y)
+        :param p2: second point (defaults to zero)
+        :return:
+        """
         x1, y1 = p1
         x2, y2 = p2
         return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
     @staticmethod
     def start():
+        """
+        starts ROS node
+        """
         rospy.spin()
 
 
