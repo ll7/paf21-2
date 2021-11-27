@@ -1,3 +1,5 @@
+import rospy
+
 """
 A file that contains the Stanley Lateral Controller (inspired by PSAF WS20/21 2)
 """
@@ -45,15 +47,20 @@ class StanleyLateralController:
         Returns:
            float: Steering angle
         """
-        current_target_idx, error_front_axle = self.calc_target_index(path, pose)
+        current_target_idx, error_front_axle = self.calc_target_index(
+            path, pose)
         # compute heading error correction
-        theta_e = normalize_angle(calc_path_yaw(path, current_target_idx) - calc_egocar_yaw(pose))
+        theta_e = normalize_angle(calc_path_yaw(
+            path, current_target_idx) - calc_egocar_yaw(pose))
         if speed < self.min_speed:
             speed = self.min_speed
+
         # compute cross track error correction
         theta_d = np.arctan2(self.k * error_front_axle, speed)
+
         # compute steer
         delta = theta_e + theta_d
+
         return np.clip(delta, -self.max_steer, self.max_steer)
 
     def calc_target_index(self, path: Path, pose: PoseStamped) -> Tuple[int, float]:
@@ -87,6 +94,7 @@ class StanleyLateralController:
 
         # Project RMS error onto front axle vector
         front_axle_vec = [-np.cos(yaw + np.pi / 2), -np.sin(yaw + np.pi / 2)]
-        error_front_axle = np.dot([dx[target_idx], dy[target_idx]], front_axle_vec)
+        error_front_axle = np.dot(
+            [dx[target_idx], dy[target_idx]], front_axle_vec)
 
         return target_idx, error_front_axle

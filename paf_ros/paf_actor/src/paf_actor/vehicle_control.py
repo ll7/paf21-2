@@ -33,21 +33,23 @@ class VehicleController:
         self._current_pose: Pose = Pose()
         self._route: Path = Path()
         self._target_speed: float = target_speed
-        self._current_distance: float = 0
-        self._target_distance: float = 10
         # TODO remove this (handled by the local planner)
-        self._first_point_reached = False
+        self._last_point_reached = False
 
         # speed controller parameters
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
         # distance control parameters
         args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
         # Stanley control parameters
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2.9, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2.9,
+                        "max_steer": 30.0, "min_speed": 0.1}
 
-        self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
-        self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
-        self._dist_controller: PIDLongitudinalController = PIDLongitudinalController(**args_dist)
+        self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(
+            **args_longitudinal)
+        self._lat_controller: StanleyLateralController = StanleyLateralController(
+            **args_lateral)
+        self._dist_controller: PIDLongitudinalController = PIDLongitudinalController(
+            **args_dist)
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
@@ -68,11 +70,10 @@ class VehicleController:
 
         self._route = self.__init_test_szenario()
 
-        self.__calculate_target_distance()
-
         throttle: float = self.__calculate_throttle(dt)
         steering: float = self.__calculate_steering()
-        control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
+        control: CarlaEgoVehicleControl = self.__generate_control_message(
+            throttle, steering)
 
         return control
 
@@ -102,16 +103,6 @@ class VehicleController:
         control.manual_gear_shift = False
         return control
 
-    def __calculate_target_distance(self):
-        """
-        compute the saftey distance
-        """
-        min_dist: float = 4
-        if self._current_speed > min_dist * 2:
-            self._target_distance = self._current_speed * 0.55
-        else:
-            self._target_distance = min_dist
-
     def __calculate_throttle(self, dt: float) -> float:
         """
         Calculate the throttle for the vehicle
@@ -124,13 +115,13 @@ class VehicleController:
         """
         # perform pid control step with distance and speed controllers
 
-        lon: float = self._lon_controller.run_step(self._target_speed, self._current_speed, dt)
+        lon: float = self._lon_controller.run_step(
+            self._target_speed, self._current_speed, dt)
         # rospy.loginfo(
         #    f"Target_speed {self._target_speed}; Lon {lon}; Current_speed {self._current_speed}")
-        dist: float = -self._dist_controller.run_step(self._target_distance, self._current_distance, dt)
 
         # use whichever controller yields the lowest throttle
-        return lon if lon < dist else dist
+        return lon
 
     def __calculate_steering(self) -> float:
         """
@@ -141,7 +132,7 @@ class VehicleController:
         """
         # calculate steer
         # self._current_speed)
-        return self._lat_controller.run_step(self._route, self._current_pose, 0.0)
+        return self._lat_controller.run_step(self._route, self._current_pose, self._current_speed)
 
     def __init_test_szenario(self) -> Path:
         """
@@ -152,17 +143,17 @@ class VehicleController:
             Path: The path to folow
         """
         # TODO: Remove this. Used for validation
-        # rospy.loginfo(f"Current speed: {self._current_speed}")
-        self._current_distance = 5000
-        positions = [[-79.5, -115.5], [-79.5, -120.0]]
-        speeds = [50.0, 0.0]
 
-        if not self._first_point_reached:
+        self._current_distance = 5000
+        positions = [[-80, -20.5], [-80, -40.5], [-80, -60.5], [-80, -80.5], [-80, -100.5],
+                     [-80, -115.5], [-80, -135.5], [-80, -150.0], [-70, -170.0], [-70.0, -190.0], [-70.0, -195.0], [-70.0, -200.0]]
+        positions = [[-80, -150.0], [-70.0, -195.0], [-70.0, -200.0]]
+        speeds = [30.0, 0.0]
+
+        if not self._last_point_reached:
             self._target_speed = speeds[0]
-            positions = [positions[0]]
         else:
             self._target_speed = speeds[1]
-            positions = [positions[1]]
 
         path = np.array(positions)
         path_msg = Path()
@@ -201,21 +192,24 @@ class VehicleController:
         """
         # calculate current speed (km/h) from twist
         self._current_speed = (
-            math.sqrt(odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2)
+            math.sqrt(odo.twist.twist.linear.x ** 2 +
+                      odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2)
             * 3.6
         )
+
         self._current_pose = odo.pose.pose
 
         current_pos = [odo.pose.pose.position.x, odo.pose.pose.position.y]
-        first_target_point = [-79.5, -115.5]
+        last_position = [-70.0, -195.0]
         distance = math.sqrt(
-            (current_pos[0] - first_target_point[0]) ** 2 + (current_pos[1] - first_target_point[1]) ** 2
+            (current_pos[0] - last_position[0]) ** 2 +
+            (current_pos[1] - last_position[1]) ** 2
         )
 
         # rospy.loginfo(f"current_pos: {current_pos}; distance {distance}")
 
-        if distance < 10.0:
-            self._first_point_reached = True
+        if distance < 5.0:
+            self._last_point_reached = True
 
     def run(self):
         """
