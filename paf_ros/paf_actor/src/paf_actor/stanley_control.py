@@ -1,4 +1,5 @@
 import rospy
+from paf_messages.msg import LocalPath
 
 """
 A file that contains the Stanley Lateral Controller (inspired by PSAF WS20/21 2)
@@ -63,12 +64,12 @@ class StanleyLateralController:
 
         return np.clip(delta, -self.max_steer, self.max_steer)
 
-    def calc_target_index(self, path: Path, pose: PoseStamped) -> Tuple[int, float]:
+    def calc_target_index(self, path: LocalPath, pose: PoseStamped) -> Tuple[int, float]:
         """
         Calculates the index of the closest Point on the Path relative to the front axle
 
         Args:
-            currentPath (Path): Path to follow
+            currentPath (LocalPath): Path to follow
             currentPose (PoseStamped): Pose of Ego Vehicle
 
         Returns:
@@ -81,6 +82,7 @@ class StanleyLateralController:
 
         # Calc front axle position
         yaw = calc_egocar_yaw(pose)
+        
         fx = pose.position.x + self.L * np.cos(yaw)
         fy = pose.position.y + self.L * np.sin(yaw)
 

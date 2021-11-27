@@ -11,6 +11,7 @@ from nav_msgs.msg import Path, Odometry
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
+from paf_messages.msg import LocalPath
 
 
 class VehicleController:
@@ -31,8 +32,9 @@ class VehicleController:
 
         self._current_speed: float = 0.0  # Km/h
         self._current_pose: Pose = Pose()
-        self._route: Path = Path()
+        self._route: LocalPath = LocalPath()
         self._target_speed: float = target_speed
+        self._is_reverse: bool = False
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
 
@@ -59,6 +61,16 @@ class VehicleController:
             f"/carla/{role_name}/vehicle_control_cmd", CarlaEgoVehicleControl, queue_size=1
         )
 
+        self.local_path_publisher: rospy.Publisher = rospy.Publisher(
+            f"/local_planner/{role_name}/local_path", LocalPath, queue_size=1
+        )
+
+        self.local_path_subscriber: rospy.Subscriber = rospy.Subscriber(
+            f"/local_planner/{role_name}/local_path", LocalPath, self.__local_path_received
+        )
+
+        self.__init_test_szenario()
+
     def __run_step(self):
         """
         This function should be called periodically to compute steering, throttle and brake commands
@@ -68,7 +80,7 @@ class VehicleController:
         """
         self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
 
-        self._route = self.__init_test_szenario()
+        self.__init_test_szenario()
 
         throttle: float = self.__calculate_throttle(dt)
         steering: float = self.__calculate_steering()
@@ -101,6 +113,7 @@ class VehicleController:
         control.steer = steering
         control.hand_brake = False
         control.manual_gear_shift = False
+        control.reverse = self._is_reverse
         return control
 
     def __calculate_throttle(self, dt: float) -> float:
@@ -134,32 +147,41 @@ class VehicleController:
         # self._current_speed)
         return self._lat_controller.run_step(self._route, self._current_pose, self._current_speed)
 
-    def __init_test_szenario(self) -> Path:
+    def __local_path_received(self, local_path: LocalPath) -> None:
+        """
+        Updates the local path and target speed based on the message argument.
+
+        Args:
+            local_path (LocalPath): The new local path from the local planner.
+        """
+        self._route = local_path
+        self._is_reverse = local_path.target_speed < 0.0
+        self._target_speed = abs(local_path.target_speed)
+
+    def __init_test_szenario(self) -> None:
         """
         Generate a test_szenrio to debug this class
-        Also sets the target_speed and current_distance (artifact)
+        Also sets the target_speed.
 
         Returns:
             Path: The path to folow
         """
         # TODO: Remove this. Used for validation
 
-        self._current_distance = 5000
         positions = [[-80, -20.5], [-80, -40.5], [-80, -60.5], [-80, -80.5], [-80, -100.5],
                      [-80, -115.5], [-80, -135.5], [-80, -150.0], [-70, -170.0], [-70.0, -190.0], [-70.0, -195.0], [-70.0, -200.0]]
         positions = [[-80, -150.0], [-70.0, -195.0], [-70.0, -200.0]]
-        speeds = [30.0, 0.0]
+        # positions = [[-80, -150.0], [-70.0, -195.0], [-70.0, -200.0]]
+        speeds = [-30.0, 0.0]
+
+        path_msg: LocalPath = LocalPath()
 
         if not self._last_point_reached:
-            self._target_speed = speeds[0]
+            path_msg.target_speed = speeds[0]
         else:
-            self._target_speed = speeds[1]
+            path_msg.target_speed = speeds[1]
 
-        path = np.array(positions)
-        path_msg = Path()
-        path_msg.header.frame_id = "map"
-        path_msg.header.stamp = rospy.Time.now()
-        for point in path:
+        for point in positions:
             pose = PoseStamped()
             pose.header.frame_id = "map"
             pose.header.stamp = rospy.Time.now()
@@ -167,7 +189,7 @@ class VehicleController:
             pose.pose.position.y = point[1]
             pose.pose.position.z = 0
             path_msg.poses.append(pose)
-        return path_msg
+        self.local_path_publisher.publish(path_msg)
 
     def __calculate_current_time_and_delta_time(self) -> Tuple[float, float]:
         """
