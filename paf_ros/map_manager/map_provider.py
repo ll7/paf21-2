@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from commonroad.scenario.lanelet import LaneletType
 import rospy
 import os
 
@@ -19,7 +20,7 @@ from crdesigner.map_conversion.opendrive.opendrive_conversion.network import Net
 from commonroad.common.file_writer import CommonRoadFileWriter, OverwriteExistingFile
 from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad.scenario.scenario import Tag
-from commonroad.scenario.scenario import Scenario, ScenarioID
+from commonroad.scenario.scenario import Scenario
 
 import tempfile
 
@@ -72,9 +73,11 @@ class MapProvider:
             opendrive = parse_opendrive(etree.parse(BytesIO(self.map.encode('utf-8'))).getroot())
             roadNetwork = Network()
             roadNetwork.load_opendrive(opendrive)
-            scenario_id = ScenarioID(country_id="DEU", map_name="psaf")
             lanelet = roadNetwork.export_commonroad_scenario()
-            rospy.loginfo("MapProvider: Conversion done!")
+            rospy.loginfo("MapProvider: Conversion done! Removing Sidewalks...")
+            for lane in lanelet.lanelet_network.lanelets:
+                if lane.lanelet_type == LaneletType.SIDEWALK:
+                    lanelet.lanelet_network.remove_lanelet(lane.lanelet_id)
         return lanelet
 
     """
@@ -93,8 +96,8 @@ class MapProvider:
                 tags={Tag.URBAN, Tag.HIGHWAY},
             )
             # write CommonRoad data to xml file
-            writer.write_to_file(self.map_name + ".xml", OverwriteExistingFile.ALWAYS)
-            rospy.loginfo("MapProvider: Wrote file" + self.map_name + ".xml")
+            writer.write_to_file(self.map_name + "MapProvider" + ".xml", OverwriteExistingFile.ALWAYS)
+            rospy.loginfo("MapProvider: Wrote file " + self.map_name + "MapProvider" + ".xml")
         else:
             rospy.logerr("MapProvider: lanelet not available")
             rospy.logerr("MapProvider: No file generated")
@@ -105,6 +108,7 @@ def main():
     while not provider.map_ready:
         rospy.loginfo("Waiting")
     provider.convert_od_to_lanelet()
+    provider.generate_com_road_file()
 
 
 if __name__ == "__main__":

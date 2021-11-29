@@ -11,7 +11,8 @@ from commonroad.common.file_writer import CommonRoadFileWriter, OverwriteExistin
 from landmark_provider import LandMarkProvider, LandMarkPoint
 from map_provider import MapProvider
 from geometry_msgs.msg import Point
-from commonroad.scenario.lanelet import Lanelet
+from commonroad.scenario.scenario import Tag
+from commonroad.scenario.lanelet import Lanelet, LaneletType
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany, TrafficLight, TrafficSign, TrafficSignElement
 from copy import deepcopy
 import math
@@ -28,7 +29,9 @@ from lxml import etree
 from carla_msgs.msg import CarlaWorldInfo
 from crdesigner.map_conversion.opendrive.opendrive_parser.parser import parse_opendrive
 from crdesigner.map_conversion.opendrive.opendrive_conversion.network import Network
-from commonroad.scenario.scenario import Scenario, ScenarioID
+from crdesigner.input_output.api import opendrive_to_commonroad
+
+from commonroad.scenario.scenario import Scenario
 
 
 class MapSupervisorCommonRoads(MapProvider):
@@ -40,7 +43,7 @@ class MapSupervisorCommonRoads(MapProvider):
         self.intersection = {}
         self.map_cr: Scenario = None
         self.landmark_provider: LandMarkProvider = None
-        self.cur_mark_id = -1
+        self.cur_mark_id = 10000
         self.planning_problem = None
         self.debug = debug
         self.opendrive_loaded = False
@@ -72,20 +75,21 @@ class MapSupervisorCommonRoads(MapProvider):
         if self.map_name == world_info.map_name:
             rospy.loginfo("MapSupervisorCommonRoads: Map already loaded")
         else:
-            self.cur_mark_id = -1
+            self.cur_mark_id = 10000
             self.map_name = world_info.map_name
             self.map = world_info.opendrive
             self.opendrive_loaded = True
             rospy.loginfo(
                 "MapSupervisorCommonRoads: Received: " + self.map_name)
             self.map_cr = self._gen_raw_scenario()
+            self._clean_up_scenario()
             rospy.loginfo("MapSupervisorCommonRoads: Getting landmarks")
             self.landmark_provider = LandMarkProvider()
             rospy.loginfo("MapSupervisorCommonRoads: Detecting intersections")
-            self._detect_intersections()
+            self._detect_intersections()            
             rospy.loginfo("MapSupervisorCommonRoads: Adding traffic lights")
-            #self._traffic_lights_to_scenario(
-            #    self.landmark_provider.get_marks_by_category('Signal_3Light_Post01'))
+            self._traffic_lights_to_scenario(
+                self.landmark_provider.get_marks_by_category('Signal_3Light_Post01'))
             for key in self.landmark_provider.available_categories():
                 if 'Speed' in key:
                     rospy.loginfo(
@@ -95,13 +99,13 @@ class MapSupervisorCommonRoads(MapProvider):
                 elif 'stencil_stop' in key.lower():
                     rospy.loginfo(
                         "MapSupervisorCommonRoads: Adding stop marks")
-                    #self._stop_signs_to_scenario(
-                    #    self.landmark_provider.get_marks_by_category(key), neighbouring=False)
+                    self._stop_signs_to_scenario(
+                        self.landmark_provider.get_marks_by_category(key), neighbouring=False)
                 elif 'sign_stop' in key.lower():
                     rospy.loginfo(
                         "MapSupervisorCommonRoads: Adding stop signs")
-                    #self._stop_signs_to_scenario(
-                    #    self.landmark_provider.get_marks_by_category(key), neighbouring=True)
+                    self._stop_signs_to_scenario(
+                        self.landmark_provider.get_marks_by_category(key), neighbouring=True)
 
             if self.create_file:
                 rospy.loginfo("MapSupervisorCommonRoads: Creating XML-File")
@@ -113,8 +117,10 @@ class MapSupervisorCommonRoads(MapProvider):
                     source = "CommonRoad Scenario Designer",
                     tags = {},
                 )
-                writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + "TownTest.xml",
+                writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + self.map_name + ".xml",
                     OverwriteExistingFile.ALWAYS)
+
+            self.debug = True
 
             if self.debug:
                 self.planning_problem = self._generate_dummy_planning_problem()
@@ -131,6 +137,17 @@ class MapSupervisorCommonRoads(MapProvider):
             return self.map_cr
         return None
 
+    def _gen_raw_scenario_from_file(self):
+        """
+        Create a CommonRoad scenario from the OpenDrive file map
+        """
+        lanelet: Scenario = None
+        if self.opendrive_loaded:
+            rospy.loginfo("MapSupervisorCommonRoads: Start conversion of file...")
+            input_path = "OpenDriveMaps/" + self.map_name + ".xodr"
+            lanelet = opendrive_to_commonroad(input_path)
+        return lanelet
+
     def _gen_raw_scenario(self):
         """
         Create a CommonRoad scenario from the OpenDrive received OpenDrive map
@@ -142,9 +159,33 @@ class MapSupervisorCommonRoads(MapProvider):
                 BytesIO(self.map.encode('utf-8'))).getroot())
             roadNetwork = Network()
             roadNetwork.load_opendrive(opendrive)
-            scenario_id = ScenarioID(country_id="DEU", map_name="psaf")
             lanelet = roadNetwork.export_commonroad_scenario()
         return lanelet
+    
+    def _clean_up_scenario(self):
+        """
+        Delete all information of the commonroad scenario other than
+        """
+        deleteLanelet = False
+        for lane in self.map_cr.lanelet_network.lanelets:
+            for i, type in enumerate(lane.lanelet_type):
+                if type == LaneletType.SIDEWALK or type == LaneletType.BICYCLE_LANE or type == LaneletType.CROSSWALK or type == LaneletType.UNKNOWN or type == LaneletType.MAIN_CARRIAGE_WAY: 
+                    deleteLanelet = True
+            if deleteLanelet:
+                self.map_cr.lanelet_network.remove_lanelet(lane.lanelet_id)
+            deleteLanelet = False
+        self.map_cr.lanelet_network.cleanup_lanelet_references()
+
+        for sign in self.map_cr.lanelet_network.traffic_signs:
+            self.map_cr.lanelet_network.remove_traffic_sign(sign.traffic_sign_id)
+        self.map_cr.lanelet_network.cleanup_traffic_sign_references()
+
+        for light in self.map_cr.lanelet_network.traffic_lights:
+            self.map_cr.lanelet_network.remove_traffic_light(light.traffic_light_id)
+        self.map_cr.lanelet_network.cleanup_traffic_light_references()
+
+        for intersec in self.map_cr.lanelet_network.intersections:
+            self.map_cr.lanelet_network.remove_intersection(intersec.intersection_id)
 
     def _get_all_fitting_neighbour_lanelets(self, lanelet_id: int) -> list:
         """
@@ -266,7 +307,12 @@ class MapSupervisorCommonRoads(MapProvider):
             if len(nearest) > 0:
                 for i, lane in enumerate(nearest):
                     # get whether the lanelet is on an intersection
-                    is_intersection = self.intersection[lane.lanelet_id]
+                    
+                    if lane.lanelet_id in self.intersection:
+                        is_intersection = True
+                    else:
+                        is_intersection = False
+
                     # get orientation of that lane
                     lane_orientation = self._get_lanelet_orientation_to_light(
                         lane, use_end=True)
@@ -395,10 +441,14 @@ class MapSupervisorCommonRoads(MapProvider):
         :param sce: scenario to be visualized
         :param prob: planning_problem
         """
-        rnd = MPRenderer(plot_limits=[-30, 120, -140, 20], figsize=(8,4.5))
+        plt.figure(figsize=(50, 50))
+        rnd = MPRenderer()
         sce.draw(rnd)
         prob.draw(rnd)
         rnd.render()
+        plt.gca().set_aspect('equal')
+        plt.savefig(self.map_name + ".png")
+        plt.close()
 
     def _add_light_to_lanelet(self, lanelet_id: int):
         """

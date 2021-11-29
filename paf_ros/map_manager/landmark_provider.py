@@ -89,12 +89,12 @@ class LandMarkProvider:
             for mark in marks:
                 if mark.name in markings:
                     
-                    print("Name ", mark.name)
-                    print("x position: ", mark.transform.location.x)
-                    print("y position: ", -mark.transform.location.y)
-                    print("orientation: ", mark.transform.rotation.yaw)
-                    print("ID: ", int(mark.id))
-                    print("\n")
+                    #print("Name ", mark.name)
+                    #print("x position: ", mark.transform.location.x)
+                    #print("y position: ", -mark.transform.location.y)
+                    #print("orientation: ", mark.transform.rotation.yaw)
+                    #print("ID: ", int(mark.id))
+                    #print("\n")
                     markings[mark.name].add(
                         LandMarkPoint(mark.transform.location.x, -mark.transform.location.y,
                                       mark.transform.rotation.yaw,
