@@ -1,6 +1,5 @@
 from collections import deque
-import math
-import numpy as np
+from typing import Deque
 
 
 class PIDLongitudinalController(object):  # pylint: disable=too-few-public-methods
@@ -8,26 +7,33 @@ class PIDLongitudinalController(object):  # pylint: disable=too-few-public-metho
     PIDLongitudinalController implements longitudinal control using a PID.
     """
 
-    def __init__(self, K_P=1.0, K_D=0.0, K_I=0.0):
+    def __init__(self, K_P: float = 1.0, K_D: float = 0.0, K_I: float = 0.0):
         """
-        :param vehicle: actor to apply to local planner logic onto
-        :param K_P: Proportional term
-        :param K_D: Differential term
-        :param K_I: Integral term
-        """
-        self._K_P = K_P
-        self._K_D = K_D
-        self._K_I = K_I
-        self._e_buffer = deque(maxlen=30)
+        Constructor
 
-    def run_step(self, target_speed, current_speed, dt):
+        Args:
+            K_P (float, optional): Proportional term. Defaults to 1.0.
+            K_D (float, optional): Differential term. Defaults to 0.0.
+            K_I (float, optional): Integral term. Defaults to 0.0.
+        """
+        self._K_P: float = K_P
+        self._K_D: float = K_D
+        self._K_I: float = K_I
+        self._e_buffer: Deque = deque(maxlen=30)
+
+    def run_step(self, target_speed: float, current_speed: float, dt: float) -> float:
         """
         Estimate the throttle of the vehicle based on the PID equations
-        :param target_speed:  target speed in Km/h
-        :param current_speed: current speed of the vehicle in Km/h
-        :return: throttle control in the range [0, 1]
+
+        Args:
+            target_speed (float): Target speed in Km/h
+            current_speed (float): Current speed of the vehicle in Km/h
+            dt (float): time diffrence
+
+        Returns:
+            float: Throttle control in the range [0, 1]
         """
-        _e = (target_speed - current_speed)
+        _e = target_speed - current_speed
         self._e_buffer.append(_e)
 
         if len(self._e_buffer) >= 2:
@@ -38,5 +44,3 @@ class PIDLongitudinalController(object):  # pylint: disable=too-few-public-metho
             _ie = 0.0
 
         return (self._K_P * _e) + (self._K_D * _de / dt) + (self._K_I * _ie * dt)
-
-
