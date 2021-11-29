@@ -73,7 +73,7 @@
   <!--  <include file="$(find paf_actor)/launch/paf_actor.launch"/> -->
 
   <!--  Perception -->
-  <!--  <include file="$(find paf_perception)/launch/semantic_lidar.launch"/> -->
+  <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
 
 
 </launch>
