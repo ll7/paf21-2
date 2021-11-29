@@ -2,8 +2,8 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,0 manual_control:=false validation:=true"
-npc_launch_args="-n 200 -w 200" # n=vehicles, w=pedestrians
+ros_launch_args="town:=Town03 spawn_point:=230,-5,0,0,0,0 manual_control:=true validation:=true"
+npc_launch_args="-n 80 -w 0" # n=vehicles, w=pedestrians
 
 eval "$(cat ~/.bashrc | tail -n +10)" >/dev/null
 function carla_available() {
