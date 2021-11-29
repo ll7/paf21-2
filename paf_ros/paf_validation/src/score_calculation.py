@@ -45,7 +45,7 @@ class ScoreCalculationNode:
 
         rospy.logwarn(
             f"Time: {score_time}s, Penalty: {penalty_total} (CollActor={score_collision_actor}, "
-            f"CollOther={score_collision_other}, Reds={score_red_traffic_light}, "
+            f"CollOther={score_collision_other}, RedLight={score_red_traffic_light}, "
             f"RoadSide={score_wrong_side_of_road}, Speed={score_speed_limit}, Line={score_crossed_line})"
         )
 
