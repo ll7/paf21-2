@@ -7,8 +7,9 @@ npc_launch_args="-n 200 -w 80" # n=vehicles, w=pedestrians
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 export paf_dir="$SCRIPT_DIR/../"
+bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh"
 
-eval "$(cat ~/.bashrc | tail -n +10)" >/dev/null
+eval "$(cat ~/.bashrc | tail -n +10)" 1>/dev/null
 function carla_available() {
   if [[ "$(wmctrl -l)" =~ "CarlaUE4" ]]; then
     return 0
@@ -105,7 +106,7 @@ else
   carla_start $CARLA_ARGS
 fi
 eval "$(cat ~/.bashrc | tail -n +10)"
-close_ros >/dev/null
+close_ros 2>/dev/null
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
 
