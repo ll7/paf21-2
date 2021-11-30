@@ -8,7 +8,7 @@ for VAR in "$@"; do
     clean=1
   fi
   if [ "$VAR" = "--rosdep" ]; then
-    clean=1
+    rosdep=1
   fi
   if [ "$VAR" = "--no-build" ]; then
     build=0
@@ -17,13 +17,15 @@ done
 
 cd ~/carla-ros-bridge/catkin_ws/ || exit 1
 source /opt/ros/noetic/setup.bash
-source ~/.bashrc
 if ((clean)); then
   catkin clean -y
 fi
 if ((rosdep)); then
   rosdep update
 fi
+
 if ((build)); then
   catkin_make -DPYTHON_EXECUTABLE=/usr/bin/python3
 fi
+
+echo "done building..."
