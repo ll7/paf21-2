@@ -66,17 +66,26 @@ class TopDownView(BirdViewProducer):
         client: carla.Client,
         target_size: PixelDimensions = None,
         pixels_per_meter: int = 6,
-        crop_type: BirdViewCropType = BirdViewCropType.FRONT_AND_REAR_AREA,
         north_is_up=True,
         show_whole_map=True,
         dark_mode=True,
     ):
+        """
+        Image Producer
+        :param client: carla client instance
+        :param target_size: size of output image
+        :param pixels_per_meter: resolution of output image
+        :param north_is_up: true: north is always up, false: direction of travel is always up
+        :param show_whole_map: shows whole map (overrides target_size parameter)
+        :param dark_mode: resulting map theme dark/light
+        """
         self.north_is_up = north_is_up
         self.dark_mode = dark_mode
         self.center_on_agent = not show_whole_map
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
-        self.path_width_px = 10
+        self.path_width_px = None
+        self.set_path(width_px=10)
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -85,9 +94,14 @@ class TopDownView(BirdViewProducer):
                 width=int((target_size_.width + 2 * MAP_BOUNDARY_MARGIN) / 2),
                 height=int((target_size_.height + 2 * MAP_BOUNDARY_MARGIN) / 2),
             )
-        super(TopDownView, self).__init__(client, target_size, pixels_per_meter, crop_type)
+        super(TopDownView, self).__init__(client, target_size, pixels_per_meter, BirdViewCropType.FRONT_AND_REAR_AREA)
 
     def produce(self, agent_vehicle: carla.Actor) -> BirdView:
+        """
+        Reads Carla information and translates them to a series of mask layers
+        :param agent_vehicle: actor the map centers on (if not show_whole_map)
+        :return: mask layers
+        """
         all_actors = actors.query_all(world=self._world)
         segregated_actors = actors.segregate_by_type(actors=all_actors)
         agent_vehicle_loc = agent_vehicle.get_location() if self.center_on_agent else Namespace(**{"x": 0, "y": 0})
@@ -137,6 +151,12 @@ class TopDownView(BirdViewProducer):
         agent_vehicle: carla.Actor,
         masks: np.ndarray,
     ) -> np.ndarray:
+        """
+        Cropping and rotating of output masks
+        :param agent_vehicle: actor the map centers on (if not show_whole_map)
+        :param masks: mask layers
+        :return:
+        """
         agent_transform = agent_vehicle.get_transform()
         angle = (0 if self.north_is_up else agent_transform.rotation.yaw) + 90
 
@@ -161,21 +181,39 @@ class TopDownView(BirdViewProducer):
         ), "Trying to access negative indexes is not allowed, check for calculation errors!"
         return rotated[:, vslice, hslice]
 
-    def set_path(self, coordinate_list_global_path=None, coordinate_list_local_path=None, width_px=None):
+    def set_path(
+        self, coordinate_list_global_path: list = None, coordinate_list_local_path: list = None, width_px: float = None
+    ):
+        """
+        Setter for global path, local path and path width
+        :param coordinate_list_global_path: [[ x,y ], [ x,y ], ...]
+        :param coordinate_list_local_path: [[ x,y ], [ x,y ], ...]
+        :param width_px: pixel width at resolution 10px/m (scaled to other resolutions)
+        """
         if coordinate_list_global_path is not None:
             self.global_path = coordinate_list_global_path
         if coordinate_list_local_path is not None:
             self.local_path = coordinate_list_local_path
         if width_px is not None:
-            self.path_width_px = width_px
+            width_px = width_px / 10 * self._pixels_per_meter
+            self.path_width_px = int(np.ceil(width_px))
 
     def clear_path(self, clear_global_path=True, clear_local_path=True):
+        """
+        Remove path(s) from map
+        :param clear_global_path: remove global flag
+        :param clear_local_path: remove local flag
+        """
         if clear_local_path:
             self.local_path = None
         if clear_global_path:
             self.global_path = None
 
     def update_obstacles(self, msg: PafObstacleList):
+        """
+        Update obstacle mask
+        :param msg: msg from Obstacle topic
+        """
         if msg.type == "Pedestrians":
             self.obstacles_pedestrians = self._update_obstacles(msg)
         elif msg.type == "Vehicles":
@@ -184,7 +222,12 @@ class TopDownView(BirdViewProducer):
             rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
 
     @staticmethod
-    def _update_obstacles(msg: PafObstacleList):
+    def _update_obstacles(msg: PafObstacleList) -> list:
+        """
+        Updates a obstacle mask (pedestrians or vehicles) with new data (old data is discarded)
+        :param msg: Obstacle List
+        :return: [ [[ b1_x,b1_y ], [ b2_x,b2_y ], [ cl_x,cl_y ]], ...] list of all obstacles and their points
+        """
         obs: PafObstacle
         ret = []
         for obs in msg.obstacles:
@@ -194,7 +237,13 @@ class TopDownView(BirdViewProducer):
             ret.append(obs_pts)
         return ret
 
-    def _create_obstacle_mask(self, objects, mask=None):
+    def _create_obstacle_mask(self, objects: list, mask: np.array = None) -> np.array:
+        """
+        Draw obstacles on mask
+        :param objects: list of obstacles (3 pts per obstacle)
+        :param mask: layer to draw on. if None, a new one will be created
+        :return: updated mask
+        """
         if mask is None:
             mask = self.masks_generator.make_empty_mask()
         for obs in objects:
@@ -206,7 +255,12 @@ class TopDownView(BirdViewProducer):
             mask = cv2.polylines(mask, [np.array(corner_pixels).reshape((-1, 1, 2))], True, COLOR_ON, 1)
         return mask
 
-    def _create_path_mask(self, path=None):
+    def _create_path_mask(self, path: list = None) -> np.array:
+        """
+        Draws a path on a new mask
+        :param path: list of path points (x,y)
+        :return: updated mask
+        """
         mask = self.masks_generator.make_empty_mask()
         if path is None:
             return mask
@@ -221,6 +275,13 @@ class TopDownView(BirdViewProducer):
         segregated_actors: SegregatedActors,
         masks: np.ndarray,
     ) -> np.ndarray:
+        """
+        Create Actor masks (uses new MaskPriority class, else same as super class)
+        :param agent_vehicle:
+        :param segregated_actors:
+        :param masks:
+        :return:
+        """
         # same as super class with new MaskPriorities
         lights_masks = self.masks_generator.traffic_lights_masks(segregated_actors.traffic_lights)
         red_lights_mask, yellow_lights_mask, green_lights_mask = lights_masks
@@ -232,7 +293,12 @@ class TopDownView(BirdViewProducer):
         masks[MaskPriority.PEDESTRIANS.value] = self.masks_generator.pedestrians_mask(segregated_actors.pedestrians)
         return masks
 
-    def as_rgb(self, birdview: BirdView):
+    def as_rgb(self, birdview: BirdView) -> np.array:
+        """
+        Translates list of masks to a rgb image
+        :param birdview: masks list
+        :return: rgb image
+        """
         _, h, w = birdview.shape
         rgb_canvas = np.zeros(shape=(h, w, 3), dtype=np.uint8)
 
@@ -252,4 +318,9 @@ class TopDownView(BirdViewProducer):
 
     @staticmethod
     def nonzero_indices(arr):
+        """
+        mask2rgb conversion filter
+        :param arr: mask
+        :return: true/false array of pixels to color in
+        """
         return arr == COLOR_ON
