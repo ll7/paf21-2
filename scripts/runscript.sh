@@ -2,8 +2,11 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,0 manual_control:=false validation:=true"
-npc_launch_args="-n 200 -w 200" # n=vehicles, w=pedestrians
+ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,0,90 manual_control:=false validation:=true"
+npc_launch_args="-n 200 -w 80" # n=vehicles, w=pedestrians
+
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+export paf_dir="$SCRIPT_DIR/../"
 
 eval "$(cat ~/.bashrc | tail -n +10)" >/dev/null
 function carla_available() {
@@ -59,7 +62,7 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
   done
 }
 
-cd ~/paf21-2/scripts/ || exit
+cd $paf_dir/scripts/ || exit
 echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality)"
 trap exit_program SIGINT
 
@@ -87,7 +90,7 @@ fi
 if ((BUILD_ROS)); then
   echo building ros
   ./build_ros.sh --clean
-  cd ~/paf21-2/scripts/ || exit
+  cd $paf_dir/scripts/ || exit
 fi
 if ((CARLA_SKIP)); then
   if carla_available; then
