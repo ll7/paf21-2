@@ -1,12 +1,14 @@
 #!/bin/bash
-sudo apt install -y python-is-python3 wmctrl ros-noetic-cv-bridge
-
-pip install carla_birdeye_view pre-commit catkin_tools
-
 if [[ -z ${paf_dir+z} ]]; then
-  SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+  SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
   export paf_dir="$SCRIPT_DIR/../../"
+  sudo apt update
+  sudo apt upgrade
 fi
+bash "$SCRIPT_DIR/_set_python_executable.sh"
+sudo apt install -y python-is-python3 wmctrl ros-noetic-cv-bridge python3.8-venv
+
+pip install carla_birdeye_view pre-commit catkin_tools commonroad-io
 
 echo "creating symlink for paf_dir=$paf_dir"
 cd $paf_dir || exit 1

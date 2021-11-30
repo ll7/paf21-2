@@ -32,10 +32,16 @@ bash scripts/subscripts/_setup_ros.sh     # ros install
 bash scripts/subscripts/_setup_paf.sh     # dependency install
 ```
 
+To install or run the (optional) CommonRoad-Designer, execute the following command (this may take more than 30mins the first time):
+
+```
+bash scripts/commonroad_designer.sh
+```
+
 ### Pre-Commit
 
 For commiting, pre-commit is installed. Python, C++ and other Code is formatted and verified automatically before each
-commit and the project is build. After checkout, a ```cmake clean``` command is executed automatically.
+commit and the project is build. Additionally, a ```cmake clean``` command is executed after each checkout automatically.
 
 The following commands are available:
 
