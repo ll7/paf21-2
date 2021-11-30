@@ -1,6 +1,9 @@
 #!/usr/bin/env python
+from std_msgs.msg import Header
+
 import rospy
 from carla_msgs.msg import CarlaCollisionEvent, CarlaLaneInvasionEvent
+from paf_validation.msg import PafScore
 
 
 class ScoreCalculationNode:
@@ -14,8 +17,12 @@ class ScoreCalculationNode:
         rospy.Subscriber(
             f"/carla/{role_name}/lane_invasion", CarlaLaneInvasionEvent, self._process_lane_event, queue_size=1
         )
+        self._score_pub = rospy.Publisher(rospy.get_param("score_topic"), PafScore, queue_size=1)
 
     def _reset(self):
+        """
+        Resets timer and all penalty counters
+        """
         self.t0 = rospy.get_time()
         self.actor_collisions = []
         self.other_collisions = []
@@ -25,6 +32,9 @@ class ScoreCalculationNode:
         self.crossed_solid_line = []
 
     def _update_score(self):
+        """
+        Calculates the current score with the multipliers and publishes it
+        """
         t1 = rospy.get_time()
 
         score_time = int(t1 - self.t0)
@@ -43,6 +53,19 @@ class ScoreCalculationNode:
             + score_crossed_line
         )
 
+        msg = PafScore()
+        msg.header = Header()
+        msg.header.stamp = rospy.Time.now()
+        msg.actor_collision = score_collision_actor
+        msg.other_collision = score_collision_other
+        msg.red_traffic_light = score_red_traffic_light
+        msg.wrong_side_of_road = score_wrong_side_of_road
+        msg.speed_limit_overridden = score_speed_limit
+        msg.crossed_solid_line = score_crossed_line
+        msg.total_score = penalty_total
+        msg.started_time = rospy.Time.from_sec(self.t0)
+        self._score_pub.publish(msg)
+
         rospy.logwarn(
             f"Time: {score_time}s, Penalty: {penalty_total} (CollActor={score_collision_actor}, "
             f"CollOther={score_collision_other}, RedLight={score_red_traffic_light}, "
@@ -50,6 +73,10 @@ class ScoreCalculationNode:
         )
 
     def _process_collision(self, msg: CarlaCollisionEvent):
+        """
+        Processes a CarlaCollisionEvent. Repeated events are ignored if within the threshold time.
+        :param msg:
+        """
         try:
             if msg.other_actor_id == 0:
                 last_event, last_time = self.other_collisions[-1]
@@ -76,6 +103,11 @@ class ScoreCalculationNode:
                 self._update_score()
 
     def _process_lane_event(self, msg: CarlaLaneInvasionEvent):
+        """
+        Processes a CarlaLaneInvasionEvent. Repeated events are ignored if within the threshold time.
+        Other line types than solid lines will be discarded
+        :param msg:
+        """
         if CarlaLaneInvasionEvent.LANE_MARKING_SOLID not in msg.crossed_lane_markings:
             return
         try:
