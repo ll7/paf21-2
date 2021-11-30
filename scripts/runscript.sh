@@ -38,7 +38,7 @@ function close_all() {
 }
 function carla_start() {
   echo "bash ~/carla_0.9.10.1/CarlaUE4.sh $1"
-  gnome-terminal -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
+  gnome-terminal --title="CarlaUE4" -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
   ./subscripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
   sleep 3
 }

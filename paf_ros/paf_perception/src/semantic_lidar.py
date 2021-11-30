@@ -43,7 +43,7 @@ class SemanticLidarNode(object):
         :param msg:
         """
         t0 = perf_counter()
-        self.xy_position = np.array([msg.pose.pose.position.x + self.SENSOR_X_OFFSET, -msg.pose.pose.position.y])
+        self.xy_position = np.array([msg.pose.pose.position.x, -msg.pose.pose.position.y])
         current_pose = msg.pose.pose
         quaternion = (
             current_pose.orientation.x,
@@ -70,7 +70,7 @@ class SemanticLidarNode(object):
         :param backwards: lidar point variable backwards
         :return: x,y in world coordinates relative to ego_vehicle x,y
         """
-        x = leftwards
+        x = leftwards + self.SENSOR_X_OFFSET
         y = -backwards
         x, y = x * self.cos - y * self.sin, y * self.cos + x * self.sin
         return x, y
@@ -209,7 +209,13 @@ class SemanticLidarNode(object):
         """
         x1, y1, d1 = p1
         x2, y2, d2 = p2
-        return np.arccos((x1 * x2 + y1 * y2) / (d1 * d2))
+        bottom = d1 * d2
+        top = x1 * x2 + y1 * y2
+        if bottom == 0:
+            fraction = 0
+        else:
+            fraction = top / bottom
+        return np.arccos(np.clip(-1, 1, fraction))
 
     @staticmethod
     def _dist(p1: tuple, p2: tuple = (0, 0)) -> float:
