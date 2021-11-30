@@ -6,7 +6,7 @@ if [[ -z ${paf_dir+z} ]]; then
   sudo apt upgrade
 fi
 bash "$SCRIPT_DIR/_set_python_executable.sh"
-sudo apt install -y python-is-python3 wmctrl ros-noetic-cv-bridge python3.8-venv
+sudo apt install -y python-is-python3 wmctrl ros-noetic-cv-bridge
 
 pip install carla_birdeye_view pre-commit catkin_tools commonroad-io
 
