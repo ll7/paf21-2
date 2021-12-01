@@ -56,12 +56,12 @@ class ScoreCalculationNode:
         msg = PafScore()
         msg.header = Header()
         msg.header.stamp = rospy.Time.now()
-        msg.actor_collision = score_collision_actor
-        msg.other_collision = score_collision_other
-        msg.red_traffic_light = score_red_traffic_light
-        msg.wrong_side_of_road = score_wrong_side_of_road
-        msg.speed_limit_overridden = score_speed_limit
-        msg.crossed_solid_line = score_crossed_line
+        msg.actor_collision = len(self.actor_collisions)
+        msg.other_collision = len(self.other_collisions)
+        msg.red_traffic_light = len(self.red_traffic_light)
+        msg.wrong_side_of_road = len(self.wrong_side_of_road)
+        msg.speed_limit_overridden = len(self.speed_limit_overridden)
+        msg.crossed_solid_line = len(self.crossed_solid_line)
         msg.total_score = penalty_total
         msg.started_time = rospy.Time.from_sec(self.t0)
         self._score_pub.publish(msg)
