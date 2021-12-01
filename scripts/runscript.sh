@@ -2,10 +2,14 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-ros_launch_args="town:=Town03 spawn_point:=230,-5,0,0,0,0 manual_control:=true validation:=true"
-npc_launch_args="-n 80 -w 0" # n=vehicles, w=pedestrians
+ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,90 manual_control:=false validation:=true"
+npc_launch_args="-n 200 -w 80" # n=vehicles, w=pedestrians
 
-eval "$(cat ~/.bashrc | tail -n +10)" >/dev/null
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+export paf_dir="$SCRIPT_DIR/../"
+bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh"
+
+eval "$(cat ~/.bashrc | tail -n +10)" 1>/dev/null
 function carla_available() {
   if [[ "$(wmctrl -l)" =~ "CarlaUE4" ]]; then
     return 0
@@ -59,7 +63,7 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
   done
 }
 
-cd ~/paf21-2/scripts/ || exit
+cd $paf_dir/scripts/ || exit
 echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality)"
 trap exit_program SIGINT
 
@@ -87,7 +91,7 @@ fi
 if ((BUILD_ROS)); then
   echo building ros
   ./build_ros.sh --clean
-  cd ~/paf21-2/scripts/ || exit
+  cd $paf_dir/scripts/ || exit
 fi
 if ((CARLA_SKIP)); then
   if carla_available; then
@@ -102,7 +106,7 @@ else
   carla_start $CARLA_ARGS
 fi
 eval "$(cat ~/.bashrc | tail -n +10)"
-close_ros >/dev/null
+close_ros 2>/dev/null
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
 
