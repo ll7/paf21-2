@@ -34,7 +34,7 @@ if ((install_route_planner)); then
   git clone https://gitlab.lrz.de/tum-cps/commonroad-route-planner.git 2>/dev/null
   cd commonroad-route-planner || exit 1
   git pull
-  pip install . --
+  pip install . --  || (echo "python install failed" && exit 1)
 fi
 if ((install_driveability_checker)); then
   # commonroad drivability checker (obstacle avoidance - local planner)
