@@ -1,8 +1,6 @@
-###Symbolischer Link für paf-Packages: 
+# Praktikum für Autonomes Fahren (PAF)
 
-ln -s ~/paf21-2/paf_ros/ ~/carla-ros-bridge/catkin_ws/src/
-
-###Architekturbeschreibung (WIP)
+### Architekturbeschreibung (WIP)
 
 https://app.diagrams.net/#G1EHm7NKyF9iLAxI_44CEEAst4w_rrSQ1e
 

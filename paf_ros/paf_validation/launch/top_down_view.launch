@@ -1,0 +1,5 @@
+<launch>
+  <node pkg="paf_validation" type="top_down_view.py" name="top_down_view">
+    <rosparam file="$(find paf_validation)/parameters/top_down_view.yaml" command="load"/>
+  </node>
+</launch>
