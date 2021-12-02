@@ -1,8 +1,3 @@
-# map cache created automatically
-/paf_ros/paf_validation/src/birdview_v2_cache/*
-# commonroad symlink at root not needed
-/SMP/
-
 .idea
 .vscode
 /test/*
@@ -145,3 +140,7 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+# map cache created automatically
+/paf_ros/paf_validation/src/birdview_v2_cache/*
+# commonroad symlink at root not needed
+/SMP

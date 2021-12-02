@@ -8,12 +8,13 @@ bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh"
 lanelet_py_fix="        if self._buffered_strtee is None:\n            self._create_buffered_strtree()"
 lanelet_py=~/.local/lib/python3.8/site-packages/commonroad/scenario/lanelet.py
 if (which crdesigner); then
-  fixed=$(cat $lanelet_py | grep "if self._buffered_strtee is None")
-  if ! ((fixed)); then
+  fixed=$(cat $lanelet_py | grep -q "if self._buffered_strtee is None")
+  if (! $fixed); then
     echo "sudo required for fixing commonroad.scenario.lanelet.py (line 1423)"
     match="                                                                'type = {}'.format(type(shape))"
-    sudo cp $lanelet_py "$lanelet_py.original"
+    sudo cp -n $lanelet_py "$lanelet_py.original"
     sudo sed -i "s/$match/$match\n$lanelet_py_fix/" $lanelet_py
+exit
   fi
   crdesigner "$@"
   exit
