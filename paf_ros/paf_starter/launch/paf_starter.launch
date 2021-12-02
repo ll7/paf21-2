@@ -70,10 +70,14 @@
   </group>
 
   <!--  Steering  -->
-  <!--  <include file="$(find paf_actor)/launch/paf_actor.launch"/>-->
+  <!--  <include file="$(find paf_actor)/launch/paf_actor.launch"/> -->
 
-  <!--  Perception-->
-  <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
+  <!--  Perception -->
+  <!--  <include file="$(find paf_perception)/launch/semantic_lidar.launch"/> -->
+
+  <!--  Local Planning -->
+  <!--  <include file="$(find paf_local_planner)/launch/paf_local_planner.launch"/> -->
+
 
 
 </launch>
