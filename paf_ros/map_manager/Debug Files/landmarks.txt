@@ -1,0 +1,1210 @@
+Name  Stencil_STOP
+x position:  -137.77001953125
+y position:  -58.969966888427734
+orientation:  134.67684936523438
+ID:  2370
+
+
+Name  Stencil_STOP
+x position:  -149.0388641357422
+y position:  -58.738643646240234
+orientation:  90.02984619140625
+ID:  2424
+
+
+Name  Stencil_STOP
+x position:  -145.54815673828125
+y position:  -76.59490966796875
+orientation:  -89.97014617919922
+ID:  2258
+
+
+Name  Signal_3Light_Post01
+x position:  -158.1666717529297
+y position:  9.317248344421387
+orientation:  180.2946014404297
+ID:  2029
+
+
+Name  Signal_3Light_Post01
+x position:  -158.03085327148438
+y position:  -6.959911823272705
+orientation:  -269.9701232910156
+ID:  2031
+
+
+Name  Signal_3Light_Post01
+x position:  -158.1666717529297
+y position:  9.317248344421387
+orientation:  180.2946014404297
+ID:  2029
+
+
+Name  Signal_3Light_Post01
+x position:  -136.098876953125
+y position:  9.721921920776367
+orientation:  -449.9701232910156
+ID:  2030
+
+
+Name  Signal_3Light_Post01
+x position:  -158.03085327148438
+y position:  -6.959911823272705
+orientation:  -269.9701232910156
+ID:  2031
+
+
+Name  Signal_3Light_Post01
+x position:  -136.098876953125
+y position:  9.721921920776367
+orientation:  -449.9701232910156
+ID:  2030
+
+
+Name  Signal_3Light_Post01
+x position:  143.33799743652344
+y position:  121.593994140625
+orientation:  90.99647521972656
+ID:  2028
+
+
+Name  Signal_3Light_Post01
+x position:  162.85980224609375
+y position:  145.36236572265625
+orientation:  270.0000305175781
+ID:  2027
+
+
+Name  Signal_3Light_Post01
+x position:  163.06507873535156
+y position:  123.77099609375
+orientation:  2.2186020487424685e-06
+ID:  2026
+
+
+Name  Signal_3Light_Post01
+x position:  162.85980224609375
+y position:  145.36236572265625
+orientation:  270.0000305175781
+ID:  2027
+
+
+Name  Signal_3Light_Post01
+x position:  143.33799743652344
+y position:  121.593994140625
+orientation:  90.99647521972656
+ID:  2028
+
+
+Name  Signal_3Light_Post01
+x position:  162.85980224609375
+y position:  145.36236572265625
+orientation:  270.0000305175781
+ID:  2027
+
+
+Name  Signal_3Light_Post01
+x position:  249.39373779296875
+y position:  -46.141639709472656
+orientation:  -444.9999694824219
+ID:  2023
+
+
+Name  Signal_3Light_Post01
+x position:  249.39373779296875
+y position:  -46.141639709472656
+orientation:  -444.9999694824219
+ID:  2023
+
+
+Name  Signal_3Light_Post01
+x position:  224.51016235351562
+y position:  -80.78146362304688
+orientation:  89.99999237060547
+ID:  2025
+
+
+Name  Signal_3Light_Post01
+x position:  249.39373779296875
+y position:  -46.141639709472656
+orientation:  -444.9999694824219
+ID:  2023
+
+
+Name  Signal_3Light_Post01
+x position:  224.51016235351562
+y position:  -80.78146362304688
+orientation:  89.99999237060547
+ID:  2025
+
+
+Name  Signal_3Light_Post01
+x position:  248.65817260742188
+y position:  -73.43611145019531
+orientation:  -359.9999694824219
+ID:  2024
+
+
+Name  Signal_3Light_Post01
+x position:  248.65817260742188
+y position:  -73.43611145019531
+orientation:  -359.9999694824219
+ID:  2024
+
+
+Name  Signal_3Light_Post01
+x position:  224.51016235351562
+y position:  -80.78146362304688
+orientation:  89.99999237060547
+ID:  2025
+
+
+Name  Stencil_STOP
+x position:  215.19456481933594
+y position:  -62.273399353027344
+orientation:  -0.1474011093378067
+ID:  2293
+
+
+Name  Signal_3Light_Post01
+x position:  249.39373779296875
+y position:  -46.141639709472656
+orientation:  -444.9999694824219
+ID:  2023
+
+
+Name  Signal_3Light_Post01
+x position:  -11.507840156555176
+y position:  125.18003845214844
+orientation:  89.99999237060547
+ID:  2022
+
+
+Name  Signal_3Light_Post01
+x position:  -11.507840156555176
+y position:  125.18003845214844
+orientation:  89.99999237060547
+ID:  2022
+
+
+Name  Signal_3Light_Post01
+x position:  -11.507840156555176
+y position:  125.18003845214844
+orientation:  89.99999237060547
+ID:  2022
+
+
+Name  Signal_3Light_Post01
+x position:  16.626787185668945
+y position:  146.6824493408203
+orientation:  271.4135437011719
+ID:  2020
+
+
+Name  Signal_3Light_Post01
+x position:  19.440095901489258
+y position:  126.72017669677734
+orientation:  -6.486953907369752e-07
+ID:  2021
+
+
+Name  Signal_3Light_Post01
+x position:  -11.944024085998535
+y position:  147.88352966308594
+orientation:  -178.77273559570312
+ID:  2019
+
+
+Name  Signal_3Light_Post01
+x position:  -11.507840156555176
+y position:  125.18003845214844
+orientation:  89.99999237060547
+ID:  2022
+
+
+Name  Signal_3Light_Post01
+x position:  16.626787185668945
+y position:  146.6824493408203
+orientation:  271.4135437011719
+ID:  2020
+
+
+Name  Signal_3Light_Post01
+x position:  16.626787185668945
+y position:  146.6824493408203
+orientation:  271.4135437011719
+ID:  2020
+
+
+Name  Signal_3Light_Post01
+x position:  -11.944024085998535
+y position:  147.88352966308594
+orientation:  -178.77273559570312
+ID:  2019
+
+
+Name  Signal_3Light_Post01
+x position:  -11.507840156555176
+y position:  125.18003845214844
+orientation:  89.99999237060547
+ID:  2022
+
+
+Name  Signal_3Light_Post01
+x position:  -11.944024085998535
+y position:  147.88352966308594
+orientation:  -178.77273559570312
+ID:  2019
+
+
+Name  Signal_3Light_Post01
+x position:  19.440095901489258
+y position:  126.72017669677734
+orientation:  -6.486953907369752e-07
+ID:  2021
+
+
+Name  Signal_3Light_Post01
+x position:  94.07635498046875
+y position:  146.4599151611328
+orientation:  271.9547119140625
+ID:  2004
+
+
+Name  Signal_3Light_Post01
+x position:  -96.81536102294922
+y position:  -124.3647232055664
+orientation:  174.99998474121094
+ID:  2001
+
+
+Name  Signal_3Light_Post01
+x position:  -67.81905364990234
+y position:  -121.13629913330078
+orientation:  269.99951171875
+ID:  1998
+
+
+Name  Signal_3Light_Post01
+x position:  16.626787185668945
+y position:  146.6824493408203
+orientation:  271.4135437011719
+ID:  2020
+
+
+Name  Signal_3Light_Post01
+x position:  16.626787185668945
+y position:  146.6824493408203
+orientation:  271.4135437011719
+ID:  2020
+
+
+Name  Signal_3Light_Post01
+x position:  -96.81536102294922
+y position:  -124.3647232055664
+orientation:  174.99998474121094
+ID:  2001
+
+
+Name  Signal_3Light_Post01
+x position:  -93.98143005371094
+y position:  -145.78858947753906
+orientation:  89.99999237060547
+ID:  2000
+
+
+Name  Signal_3Light_Post01
+x position:  -97.61811065673828
+y position:  8.775995254516602
+orientation:  179.99998474121094
+ID:  2018
+
+
+Name  Signal_3Light_Post01
+x position:  -66.85958862304688
+y position:  -142.75335693359375
+orientation:  -359.9999694824219
+ID:  1999
+
+
+Name  Signal_3Light_Post01
+x position:  14.849163055419922
+y position:  -142.09938049316406
+orientation:  4.852975052926922e-06
+ID:  1996
+
+
+Name  Stencil_STOP
+x position:  16.133695602416992
+y position:  -130.8617706298828
+orientation:  -180.81719970703125
+ID:  2280
+
+
+Name  Signal_3Light_Post01
+x position:  10.34000015258789
+y position:  -119.15190887451172
+orientation:  -449.9999694824219
+ID:  1995
+
+
+Name  Signal_3Light_Post01
+x position:  -158.1666717529297
+y position:  9.317248344421387
+orientation:  180.2946014404297
+ID:  2029
+
+
+Name  Signal_3Light_Post01
+x position:  19.440095901489258
+y position:  126.72017669677734
+orientation:  -6.486953907369752e-07
+ID:  2021
+
+
+Name  Signal_3Light_Post01
+x position:  10.34000015258789
+y position:  -119.15190887451172
+orientation:  -449.9999694824219
+ID:  1995
+
+
+Name  Signal_3Light_Post01
+x position:  -15.198844909667969
+y position:  -143.38995361328125
+orientation:  89.99999237060547
+ID:  1994
+
+
+Name  Signal_3Light_Post01
+x position:  10.34000015258789
+y position:  -119.15190887451172
+orientation:  -449.9999694824219
+ID:  1995
+
+
+Name  Signal_3Light_Post01
+x position:  -15.198844909667969
+y position:  -143.38995361328125
+orientation:  89.99999237060547
+ID:  1994
+
+
+Name  Signal_3Light_Post01
+x position:  -17.937288284301758
+y position:  -123.13328552246094
+orientation:  -185.0
+ID:  1997
+
+
+Name  Signal_3Light_Post01
+x position:  73.22512817382812
+y position:  123.36259460449219
+orientation:  92.02411651611328
+ID:  2002
+
+
+Name  Signal_3Light_Post01
+x position:  -15.198844909667969
+y position:  -143.38995361328125
+orientation:  89.99999237060547
+ID:  1994
+
+
+Name  Signal_3Light_Post01
+x position:  -94.05962371826172
+y position:  -28.27228355407715
+orientation:  89.99915313720703
+ID:  2017
+
+
+Name  Signal_3Light_Post01
+x position:  -94.05962371826172
+y position:  -28.27228355407715
+orientation:  89.99915313720703
+ID:  2017
+
+
+Name  Signal_3Light_Post01
+x position:  -17.937288284301758
+y position:  -123.13328552246094
+orientation:  -185.0
+ID:  1997
+
+
+Name  Stencil_STOP
+x position:  -5.668868064880371
+y position:  -185.58351135253906
+orientation:  89.63745880126953
+ID:  2341
+
+
+Name  Signal_3Light_Post01
+x position:  -66.85958862304688
+y position:  -142.75335693359375
+orientation:  -359.9999694824219
+ID:  1999
+
+
+Name  Signal_3Light_Post01
+x position:  95.53292846679688
+y position:  214.11886596679688
+orientation:  270.0
+ID:  2010
+
+
+Name  Signal_3Light_Post01
+x position:  -93.98143005371094
+y position:  -145.78858947753906
+orientation:  89.99999237060547
+ID:  2000
+
+
+Name  Signal_3Light_Post01
+x position:  163.06507873535156
+y position:  123.77099609375
+orientation:  2.2186020487424685e-06
+ID:  2026
+
+
+Name  Signal_3Light_Post01
+x position:  -66.85958862304688
+y position:  -142.75335693359375
+orientation:  -359.9999694824219
+ID:  1999
+
+
+Name  Stencil_STOP
+x position:  148.5517578125
+y position:  21.48953628540039
+orientation:  90.99647521972656
+ID:  2206
+
+
+Name  Stencil_STOP
+x position:  170.6759490966797
+y position:  -86.34841918945312
+orientation:  -90.01083374023438
+ID:  2285
+
+
+Name  Signal_3Light_Post01
+x position:  -17.937288284301758
+y position:  -123.13328552246094
+orientation:  -185.0
+ID:  1997
+
+
+Name  Signal_3Light_Post01
+x position:  -97.61811065673828
+y position:  8.775995254516602
+orientation:  179.99998474121094
+ID:  2018
+
+
+Name  Signal_3Light_Post01
+x position:  -67.81905364990234
+y position:  -121.13629913330078
+orientation:  269.99951171875
+ID:  1998
+
+
+Name  Signal_3Light_Post01
+x position:  224.51016235351562
+y position:  -80.78146362304688
+orientation:  89.99999237060547
+ID:  2025
+
+
+Name  Speed_60
+x position:  90.6399154663086
+y position:  -188.48300170898438
+orientation:  179.99998474121094
+ID:  2098
+
+
+Name  Speed_30
+x position:  43.38453674316406
+y position:  -188.63099670410156
+orientation:  179.99998474121094
+ID:  2097
+
+
+Name  Speed_90
+x position:  -82.43768310546875
+y position:  -191.388427734375
+orientation:  90.0999984741211
+ID:  2099
+
+
+Name  Stencil_STOP
+x position:  232.30404663085938
+y position:  28.214271545410156
+orientation:  91.39320373535156
+ID:  2160
+
+
+Name  Stencil_STOP
+x position:  235.80300903320312
+y position:  28.129173278808594
+orientation:  91.39320373535156
+ID:  2153
+
+
+Name  Signal_3Light_Post01
+x position:  -66.85958862304688
+y position:  -142.75335693359375
+orientation:  -359.9999694824219
+ID:  1999
+
+
+Name  Stencil_STOP
+x position:  -99.21637725830078
+y position:  136.89706420898438
+orientation:  -358.772705078125
+ID:  2257
+
+
+Name  Signal_3Light_Post01
+x position:  -96.81536102294922
+y position:  -124.3647232055664
+orientation:  174.99998474121094
+ID:  2001
+
+
+Name  Stencil_STOP
+x position:  -63.609622955322266
+y position:  139.6350555419922
+orientation:  -178.77273559570312
+ID:  2272
+
+
+Name  Signal_3Light_Post01
+x position:  167.27915954589844
+y position:  187.16702270507812
+orientation:  2.2186020487424685e-06
+ID:  2007
+
+
+Name  Signal_3Light_Post01
+x position:  -67.81905364990234
+y position:  -121.13629913330078
+orientation:  269.99951171875
+ID:  1998
+
+
+Name  Signal_3Light_Post01
+x position:  -17.937288284301758
+y position:  -123.13328552246094
+orientation:  -185.0
+ID:  1997
+
+
+Name  Signal_3Light_Post01
+x position:  -67.81905364990234
+y position:  -121.13629913330078
+orientation:  269.99951171875
+ID:  1998
+
+
+Name  Signal_3Light_Post01
+x position:  -96.81536102294922
+y position:  -124.3647232055664
+orientation:  174.99998474121094
+ID:  2001
+
+
+Name  Stencil_STOP
+x position:  -88.436767578125
+y position:  152.22091674804688
+orientation:  91.9485092163086
+ID:  2242
+
+
+Name  Stencil_STOP
+x position:  -84.94194030761719
+y position:  152.00872802734375
+orientation:  91.93819427490234
+ID:  2236
+
+
+Name  Signal_3Light_Post01
+x position:  14.849163055419922
+y position:  -142.09938049316406
+orientation:  4.852975052926922e-06
+ID:  1996
+
+
+Name  Signal_3Light_Post01
+x position:  140.63490295410156
+y position:  212.0
+orientation:  180.0
+ID:  2008
+
+
+Name  Signal_3Light_Post01
+x position:  -158.03085327148438
+y position:  -6.959911823272705
+orientation:  -269.9701232910156
+ID:  2031
+
+
+Name  Stencil_STOP
+x position:  215.0990447998047
+y position:  -6.233377456665039
+orientation:  -359.1441955566406
+ID:  2309
+
+
+Name  Stencil_STOP
+x position:  215.04676818847656
+y position:  -9.732987403869629
+orientation:  -359.1441955566406
+ID:  2306
+
+
+Name  Signal_3Light_Post01
+x position:  -93.98143005371094
+y position:  -145.78858947753906
+orientation:  89.99999237060547
+ID:  2000
+
+
+Name  Signal_3Light_Post01
+x position:  14.849163055419922
+y position:  -142.09938049316406
+orientation:  4.852975052926922e-06
+ID:  1996
+
+
+Name  Signal_3Light_Post01
+x position:  140.63490295410156
+y position:  212.0
+orientation:  180.0
+ID:  2008
+
+
+Name  Stencil_STOP
+x position:  -74.70077514648438
+y position:  123.13681030273438
+orientation:  269.84375
+ID:  2214
+
+
+Name  Stencil_STOP
+x position:  -78.20040893554688
+y position:  122.99726104736328
+orientation:  269.84375
+ID:  2220
+
+
+Name  Signal_3Light_Post01
+x position:  163.68630981445312
+y position:  216.61834716796875
+orientation:  265.0
+ID:  2006
+
+
+Name  Signal_3Light_Post01
+x position:  140.63490295410156
+y position:  212.0
+orientation:  180.0
+ID:  2008
+
+
+Name  Signal_3Light_Post01
+x position:  167.27915954589844
+y position:  187.16702270507812
+orientation:  2.2186020487424685e-06
+ID:  2007
+
+
+Name  Signal_3Light_Post01
+x position:  -93.98143005371094
+y position:  -145.78858947753906
+orientation:  89.99999237060547
+ID:  2000
+
+
+Name  Signal_3Light_Post01
+x position:  163.68630981445312
+y position:  216.61834716796875
+orientation:  265.0
+ID:  2006
+
+
+Name  Signal_3Light_Post01
+x position:  -93.98143005371094
+y position:  -145.78858947753906
+orientation:  89.99999237060547
+ID:  2000
+
+
+Name  Stencil_STOP
+x position:  -128.10206604003906
+y position:  -44.21446228027344
+orientation:  134.67684936523438
+ID:  2375
+
+
+Name  Signal_3Light_Post01
+x position:  94.90701293945312
+y position:  184.3430938720703
+orientation:  -0.02795838750898838
+ID:  2011
+
+
+Name  Signal_3Light_Post01
+x position:  94.90701293945312
+y position:  184.3430938720703
+orientation:  -0.02795838750898838
+ID:  2011
+
+
+Name  Signal_3Light_Post01
+x position:  71.70591735839844
+y position:  213.64892578125
+orientation:  -180.0
+ID:  2009
+
+
+Name  Signal_3Light_Post01
+x position:  71.70591735839844
+y position:  213.64892578125
+orientation:  -180.0
+ID:  2009
+
+
+Name  Stencil_STOP
+x position:  144.74481201171875
+y position:  -62.45464324951172
+orientation:  -0.14740611612796783
+ID:  2294
+
+
+Name  Signal_3Light_Post01
+x position:  248.65817260742188
+y position:  -73.43611145019531
+orientation:  -359.9999694824219
+ID:  2024
+
+
+Name  Signal_3Light_Post01
+x position:  -67.81905364990234
+y position:  -121.13629913330078
+orientation:  269.99951171875
+ID:  1998
+
+
+Name  Signal_3Light_Post01
+x position:  10.34000015258789
+y position:  -119.15190887451172
+orientation:  -449.9999694824219
+ID:  1995
+
+
+Name  Signal_3Light_Post01
+x position:  10.34000015258789
+y position:  -119.15190887451172
+orientation:  -449.9999694824219
+ID:  1995
+
+
+Name  Signal_3Light_Post01
+x position:  18.697431564331055
+y position:  213.77499389648438
+orientation:  -88.58646392822266
+ID:  2013
+
+
+Name  Signal_3Light_Post01
+x position:  -11.944024085998535
+y position:  147.88352966308594
+orientation:  -178.77273559570312
+ID:  2019
+
+
+Name  Signal_3Light_Post01
+x position:  -15.198844909667969
+y position:  -143.38995361328125
+orientation:  89.99999237060547
+ID:  1994
+
+
+Name  Signal_3Light_Post01
+x position:  -15.198844909667969
+y position:  -143.38995361328125
+orientation:  89.99999237060547
+ID:  1994
+
+
+Name  Signal_3Light_Post01
+x position:  95.8053970336914
+y position:  124.72254943847656
+orientation:  -358.7727355957031
+ID:  2005
+
+
+Name  Signal_3Light_Post01
+x position:  71.53099822998047
+y position:  145.1925506591797
+orientation:  181.21705627441406
+ID:  2003
+
+
+Name  Stencil_STOP
+x position:  -9.169303894042969
+y position:  -185.52565002441406
+orientation:  89.63745880126953
+ID:  2346
+
+
+Name  Signal_3Light_Post01
+x position:  73.22512817382812
+y position:  123.36259460449219
+orientation:  92.02411651611328
+ID:  2002
+
+
+Name  Signal_3Light_Post01
+x position:  95.8053970336914
+y position:  124.72254943847656
+orientation:  -358.7727355957031
+ID:  2005
+
+
+Name  Signal_3Light_Post01
+x position:  71.53099822998047
+y position:  145.1925506591797
+orientation:  181.21705627441406
+ID:  2003
+
+
+Name  Signal_3Light_Post01
+x position:  94.07635498046875
+y position:  146.4599151611328
+orientation:  271.9547119140625
+ID:  2004
+
+
+Name  Signal_3Light_Post01
+x position:  -94.05962371826172
+y position:  -28.27228355407715
+orientation:  89.99915313720703
+ID:  2017
+
+
+Name  Signal_3Light_Post01
+x position:  73.22512817382812
+y position:  123.36259460449219
+orientation:  92.02411651611328
+ID:  2002
+
+
+Name  Signal_3Light_Post01
+x position:  -68.34172821044922
+y position:  12.300986289978027
+orientation:  -89.99999237060547
+ID:  2015
+
+
+Name  Signal_3Light_Post01
+x position:  94.07635498046875
+y position:  146.4599151611328
+orientation:  271.9547119140625
+ID:  2004
+
+
+Name  Signal_3Light_Post01
+x position:  -65.1706314086914
+y position:  -5.689599514007568
+orientation:  2.4247958663181635e-06
+ID:  2016
+
+
+Name  Signal_3Light_Post01
+x position:  -97.61811065673828
+y position:  8.775995254516602
+orientation:  179.99998474121094
+ID:  2018
+
+
+Name  Signal_3Light_Post01
+x position:  95.8053970336914
+y position:  124.72254943847656
+orientation:  -358.7727355957031
+ID:  2005
+
+
+Name  Signal_3Light_Post01
+x position:  73.22512817382812
+y position:  123.36259460449219
+orientation:  92.02411651611328
+ID:  2002
+
+
+Name  Signal_3Light_Post01
+x position:  20.394977569580078
+y position:  187.89520263671875
+orientation:  -359.9999694824219
+ID:  2014
+
+
+Name  Signal_3Light_Post01
+x position:  18.697431564331055
+y position:  213.77499389648438
+orientation:  -88.58646392822266
+ID:  2013
+
+
+Name  Signal_3Light_Post01
+x position:  -9.50802993774414
+y position:  214.24464416503906
+orientation:  -178.56044006347656
+ID:  2012
+
+
+Name  Signal_3Light_Post01
+x position:  19.440095901489258
+y position:  126.72017669677734
+orientation:  -6.486953907369752e-07
+ID:  2021
+
+
+Name  Signal_3Light_Post01
+x position:  167.27915954589844
+y position:  187.16702270507812
+orientation:  2.2186020487424685e-06
+ID:  2007
+
+
+Name  Signal_3Light_Post01
+x position:  167.27915954589844
+y position:  187.16702270507812
+orientation:  2.2186020487424685e-06
+ID:  2007
+
+
+Name  Signal_3Light_Post01
+x position:  94.90701293945312
+y position:  184.3430938720703
+orientation:  -0.02795838750898838
+ID:  2011
+
+
+Name  Signal_3Light_Post01
+x position:  95.53292846679688
+y position:  214.11886596679688
+orientation:  270.0
+ID:  2010
+
+
+Name  Signal_3Light_Post01
+x position:  163.06507873535156
+y position:  123.77099609375
+orientation:  2.2186020487424685e-06
+ID:  2026
+
+
+Name  Signal_3Light_Post01
+x position:  94.90701293945312
+y position:  184.3430938720703
+orientation:  -0.02795838750898838
+ID:  2011
+
+
+Name  Signal_3Light_Post01
+x position:  20.394977569580078
+y position:  187.89520263671875
+orientation:  -359.9999694824219
+ID:  2014
+
+
+Name  Signal_3Light_Post01
+x position:  20.394977569580078
+y position:  187.89520263671875
+orientation:  -359.9999694824219
+ID:  2014
+
+
+Name  Signal_3Light_Post01
+x position:  95.8053970336914
+y position:  124.72254943847656
+orientation:  -358.7727355957031
+ID:  2005
+
+
+Name  Signal_3Light_Post01
+x position:  -97.61811065673828
+y position:  8.775995254516602
+orientation:  179.99998474121094
+ID:  2018
+
+
+Name  Signal_3Light_Post01
+x position:  -9.50802993774414
+y position:  214.24464416503906
+orientation:  -178.56044006347656
+ID:  2012
+
+
+Name  Signal_3Light_Post01
+x position:  -9.50802993774414
+y position:  214.24464416503906
+orientation:  -178.56044006347656
+ID:  2012
+
+
+Name  Signal_3Light_Post01
+x position:  71.53099822998047
+y position:  145.1925506591797
+orientation:  181.21705627441406
+ID:  2003
+
+
+Name  Signal_3Light_Post01
+x position:  -97.61811065673828
+y position:  8.775995254516602
+orientation:  179.99998474121094
+ID:  2018
+
+
+Name  Signal_3Light_Post01
+x position:  -9.50802993774414
+y position:  214.24464416503906
+orientation:  -178.56044006347656
+ID:  2012
+
+
+Name  Signal_3Light_Post01
+x position:  18.697431564331055
+y position:  213.77499389648438
+orientation:  -88.58646392822266
+ID:  2013
+
+
+Name  Signal_3Light_Post01
+x position:  -65.1706314086914
+y position:  -5.689599514007568
+orientation:  2.4247958663181635e-06
+ID:  2016
+
+
+Name  Signal_3Light_Post01
+x position:  20.394977569580078
+y position:  187.89520263671875
+orientation:  -359.9999694824219
+ID:  2014
+
+
+Name  Signal_3Light_Post01
+x position:  -68.34172821044922
+y position:  12.300986289978027
+orientation:  -89.99999237060547
+ID:  2015
+
+
+Name  Signal_3Light_Post01
+x position:  -68.34172821044922
+y position:  12.300986289978027
+orientation:  -89.99999237060547
+ID:  2015
+
+
+Name  Signal_3Light_Post01
+x position:  71.53099822998047
+y position:  145.1925506591797
+orientation:  181.21705627441406
+ID:  2003
+
+
+Name  Signal_3Light_Post01
+x position:  -94.05962371826172
+y position:  -28.27228355407715
+orientation:  89.99915313720703
+ID:  2017
+
+
+Name  Signal_3Light_Post01
+x position:  -65.1706314086914
+y position:  -5.689599514007568
+orientation:  2.4247958663181635e-06
+ID:  2016
+
+
+Name  Signal_3Light_Post01
+x position:  -94.05962371826172
+y position:  -28.27228355407715
+orientation:  89.99915313720703
+ID:  2017
+
+
+Name  Signal_3Light_Post01
+x position:  -94.05962371826172
+y position:  -28.27228355407715
+orientation:  89.99915313720703
+ID:  2017
+
+
+Name  Signal_3Light_Post01
+x position:  -68.34172821044922
+y position:  12.300986289978027
+orientation:  -89.99999237060547
+ID:  2015
+
+
+Name  Signal_3Light_Post01
+x position:  94.07635498046875
+y position:  146.4599151611328
+orientation:  271.9547119140625
+ID:  2004
+
+
+Name  Signal_3Light_Post01
+x position:  -68.34172821044922
+y position:  12.300986289978027
+orientation:  -89.99999237060547
+ID:  2015
+
+
+Name  Signal_3Light_Post01
+x position:  -68.34172821044922
+y position:  12.300986289978027
+orientation:  -89.99999237060547
+ID:  2015
+
+
+Name  Signal_3Light_Post01
+x position:  -65.1706314086914
+y position:  -5.689599514007568
+orientation:  2.4247958663181635e-06
+ID:  2016
+
+
+Name  Signal_3Light_Post01
+x position:  -65.1706314086914
+y position:  -5.689599514007568
+orientation:  2.4247958663181635e-06
+ID:  2016
+
+
+Name  Signal_3Light_Post01
+x position:  143.33799743652344
+y position:  121.593994140625
+orientation:  90.99647521972656
+ID:  2028
+
+
+Name  Signal_3Light_Post01
+x position:  71.70591735839844
+y position:  213.64892578125
+orientation:  -180.0
+ID:  2009
+
+
+Name  Signal_3Light_Post01
+x position:  14.849163055419922
+y position:  -142.09938049316406
+orientation:  4.852975052926922e-06
+ID:  1996
+
