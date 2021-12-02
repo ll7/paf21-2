@@ -16,15 +16,15 @@ class LocalPlanner:
 
         # mocked path - later replace by a calculated path
         self.path_array = [
-            [199.0, -9.5],
-            [210.0, -9.5],
-            [219.0, -9.5],
-            [224.4, -9.9],
-            [227.8, -12.3],
-            [230.1, -15.7],
-            [231.0, -20.2],
-            [231.1, -27.6],
-            [231.2, -34.7],
+            [199.0, 9.5],
+            [210.0, 9.5],
+            [219.0, 9.5],
+            [224.4, 9.9],
+            [227.8, 12.3],
+            [230.1, 15.7],
+            [231.0, 20.2],
+            [231.1, 27.6],
+            [231.2, 34.7],
         ]
 
         self._current_pose = Pose()
@@ -103,7 +103,7 @@ class LocalPlanner:
             self.local_plan_publisher.publish(path_msg)
             rate.sleep()
 
-    def odometry_updated(self, odometry):
+    def odometry_updated(self, odometry: Odometry):
         """Odometry Update Callback"""
 
         # calculate current speed (km/h) from twist
@@ -116,6 +116,8 @@ class LocalPlanner:
             * 3.6
         )
         self._current_pose = odometry.pose.pose
+        # invert y-coordinate of odometry, because odometry sensor returns wrong values
+        self._current_pose.position.y = -self._current_pose.position.y
 
 
 if __name__ == "__main__":
