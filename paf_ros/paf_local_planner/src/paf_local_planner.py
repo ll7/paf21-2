@@ -41,7 +41,7 @@ class LocalPlanner:
         Returns:
             [type]: [description]
         """
-        print(f"closest point in path:{self.closest_point_in_path()}")
+        # print(f"closest point in path:{self.closest_point_in_path()}")
         starting_id = self.path_array.index(self.closest_point_in_path())
         current_path = self.path_array[starting_id:]
 
@@ -69,13 +69,6 @@ class LocalPlanner:
                 nearest_point = point
 
         return nearest_point
-
-    def testing(self):
-        print("oh lol")
-        self._current_pose.position.x = 230
-        self._current_pose.position.y = -16
-        closestPoint = self.closest_point_in_path()
-        print(f'closes point to currentPosition "  {self._current_pose.position} + " is: " + {closestPoint}')
 
     def create_ros_msg(self):
         """create path message for ros
@@ -133,5 +126,4 @@ if __name__ == "__main__":
 
     lp.publish_local_path()
     rospy.spin()
-    print("starting")
     lp.testing()
