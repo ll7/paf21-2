@@ -27,9 +27,10 @@ bash scripts/setup.sh
 To install different parts separately, run one of the following commands:
 
 ```
-bash scripts/subscripts/_setup_carla.sh   # carla install
-bash scripts/subscripts/_setup_ros.sh     # ros install
-bash scripts/subscripts/_setup_paf.sh     # dependency install
+bash scripts/subscripts/_setup_carla.sh      # carla install
+bash scripts/subscripts/_setup_ros.sh        # ros install
+bash scripts/subscripts/_setup_paf.sh        # dependency install
+bash scripts/subscripts/_setup_commonroad.sh     # commonroad extended install
 ```
 
 To install or run the (optional) CommonRoad-Designer, execute the following command (this may take more than 30mins the first time):
