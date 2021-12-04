@@ -13,6 +13,8 @@ from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
 from paf_messages.msg import LocalPath
 
+from paf_actor.spline import calc_spline_course
+
 
 class VehicleController:
     """
@@ -37,6 +39,7 @@ class VehicleController:
         self._is_reverse: bool = False
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
+        self._is_highspeed_mode = False
 
         # speed controller parameters
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
@@ -145,7 +148,7 @@ class VehicleController:
         """
         # calculate steer
         # self._current_speed)
-        return self._lat_controller.run_step(self._route, self._current_pose, self._current_speed)
+        return self._lat_controller.run_step(self._route, self._current_pose, self._current_speed, self._is_reverse)
 
     def __local_path_received(self, local_path: LocalPath) -> None:
         """
@@ -167,12 +170,13 @@ class VehicleController:
             Path: The path to folow
         """
         # TODO: Remove this. Used for validation
-
-        positions = [[-80, -20.5], [-80, -40.5], [-80, -60.5], [-80, -80.5], [-80, -100.5],
-                     [-80, -115.5], [-80, -135.5], [-80, -150.0], [-70, -170.0], [-70.0, -190.0], [-70.0, -195.0], [-70.0, -200.0]]
-        positions = [[-80, -150.0], [-70.0, -195.0], [-70.0, -200.0]]
-        # positions = [[-80, -150.0], [-70.0, -195.0], [-70.0, -200.0]]
-        speeds = [-30.0, 0.0]
+        if self._is_highspeed_mode:
+            positions = [[-80, -20.5], [-80, -40.5], [-80, -60.5], [-80, -80.5], [-80, -100.5],
+                         [-80, -115.5], [-80, -135.5], [-80, -150.0], [-70, -170.0], [-70.0, -190.0], [-70.0, -195.0], [-70.0, -200.0]]
+            speeds = [-500.0, -100.0]
+        else:
+            positions = [[-84, 15.25], [-84, 20.25], [-100, 30]]
+            speeds = [-30.0, 30.0]
 
         path_msg: LocalPath = LocalPath()
 
@@ -180,6 +184,18 @@ class VehicleController:
             path_msg.target_speed = speeds[0]
         else:
             path_msg.target_speed = speeds[1]
+            if self._is_highspeed_mode:
+                positions = [[-80, -170.0], [-80.0, 200.0]]
+            else:
+                positions = [[-87, 0], [-90, 0], [-92, 0],
+                             [-97, 0], [-120, 0], [-140, 0], [-200, 0]]
+
+        ax = [x[0] for x in positions]
+        ay = [x[1] for x in positions]
+        cx, cy, cyaw, ck, s = calc_spline_course(
+            ax, ay, ds=0.1)
+
+        positions = [[x, y] for x, y in zip(cx, cy)]
 
         for point in positions:
             pose = PoseStamped()
@@ -222,7 +238,11 @@ class VehicleController:
         self._current_pose = odo.pose.pose
 
         current_pos = [odo.pose.pose.position.x, odo.pose.pose.position.y]
-        last_position = [-70.0, -195.0]
+
+        if self._is_highspeed_mode:
+            last_position = [-80.0, -150.0]
+        else:
+            last_position = [-84, 15.25]
         distance = math.sqrt(
             (current_pos[0] - last_position[0]) ** 2 +
             (current_pos[1] - last_position[1]) ** 2
