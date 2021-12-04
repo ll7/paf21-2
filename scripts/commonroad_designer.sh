@@ -19,7 +19,6 @@ exit
   crdesigner "$@"
   exit
 fi
-
 mkdir ~/commonroad-tools 2>/dev/null
 cd ~/commonroad-tools || exit 1
 
