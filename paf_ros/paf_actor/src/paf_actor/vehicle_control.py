@@ -7,12 +7,12 @@ import rospy
 
 from geometry_msgs.msg import Pose, PoseStamped
 from carla_msgs.msg import CarlaEgoVehicleControl
-from nav_msgs.msg import Path, Odometry
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
 from paf_messages.msg import LocalPath
-
 from paf_actor.spline import calc_spline_course
 
 
@@ -37,9 +37,12 @@ class VehicleController:
         self._route: LocalPath = LocalPath()
         self._target_speed: float = target_speed
         self._is_reverse: bool = False
+        self._emergency_mode: bool = False
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
-        self._is_highspeed_mode = False
+
+        self._start_time = None
+        self._end_time = None
 
         # speed controller parameters
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
@@ -70,6 +73,14 @@ class VehicleController:
 
         self.local_path_subscriber: rospy.Subscriber = rospy.Subscriber(
             f"/local_planner/{role_name}/local_path", LocalPath, self.__local_path_received
+        )
+
+        self.emergy_break_publisher: rospy.Publisher = rospy.Publisher(
+            f"/local_planner/{role_name}/emergency_break", Bool, queue_size=1
+        )
+
+        self.local_path_subscriber: rospy.Subscriber = rospy.Subscriber(
+            f"/local_planner/{role_name}/emergency_break", Bool, self.__emergency_break_received
         )
 
         self.__init_test_szenario()
@@ -117,6 +128,13 @@ class VehicleController:
         control.hand_brake = False
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
+
+        if self._emergency_mode:
+            control.hand_brake = True  # True
+            control.steer = np.rad2deg(30.0)
+            control.brake = 0.0
+            control.throttle = 1.0
+            control.reverse = not self._is_reverse
         return control
 
     def __calculate_throttle(self, dt: float) -> float:
@@ -161,6 +179,15 @@ class VehicleController:
         self._is_reverse = local_path.target_speed < 0.0
         self._target_speed = abs(local_path.target_speed)
 
+    def __emergency_break_received(self, do_emergency_break: bool):
+        """
+        Listens to emergency break signals
+
+        Args:
+            do_emergency_break (bool): True if an emergency break is needed
+        """
+        self._emergency_mode = do_emergency_break.data
+
     def __init_test_szenario(self) -> None:
         """
         Generate a test_szenrio to debug this class
@@ -170,29 +197,26 @@ class VehicleController:
             Path: The path to folow
         """
         # TODO: Remove this. Used for validation
-        if self._is_highspeed_mode:
-            positions = [[-80, -20.5], [-80, -40.5], [-80, -60.5], [-80, -80.5], [-80, -100.5],
-                         [-80, -115.5], [-80, -135.5], [-80, -150.0], [-70, -170.0], [-70.0, -190.0], [-70.0, -195.0], [-70.0, -200.0]]
-            speeds = [-500.0, -100.0]
-        else:
-            positions = [[-84, 15.25], [-84, 20.25], [-100, 30]]
-            speeds = [-30.0, 30.0]
+        positions = [[-80, -20.5], [-80, -40.5], [-80, -60.5], [-80, -80.5], [-80, -100.5],
+                     [-80, -115.5], [-80, -135.5], [-80, -150.0], [-70, -170.0], [-70.0, -190.0], [-70.0, -195.0], [-70.0, -200.0]]
+        speeds = [200.0, 100.0]
 
+        if self._end_time is not None:
+            import random
+            rospy.loginfo(
+                f"Time taken: {self._end_time - self._start_time}, {random.randint(0,100)}")
         path_msg: LocalPath = LocalPath()
 
         if not self._last_point_reached:
             path_msg.target_speed = speeds[0]
+            self.emergy_break_publisher.publish(False)
         else:
             path_msg.target_speed = speeds[1]
-            if self._is_highspeed_mode:
-                positions = [[-80, -170.0], [-80.0, 200.0]]
-            else:
-                positions = [[-87, 0], [-90, 0], [-92, 0],
-                             [-97, 0], [-120, 0], [-140, 0], [-200, 0]]
+            self.emergy_break_publisher.publish(True)
 
         ax = [x[0] for x in positions]
         ay = [x[1] for x in positions]
-        cx, cy, cyaw, ck, s = calc_spline_course(
+        cx, cy, _, _, _ = calc_spline_course(
             ax, ay, ds=0.1)
 
         positions = [[x, y] for x, y in zip(cx, cy)]
@@ -239,10 +263,7 @@ class VehicleController:
 
         current_pos = [odo.pose.pose.position.x, odo.pose.pose.position.y]
 
-        if self._is_highspeed_mode:
-            last_position = [-80.0, -150.0]
-        else:
-            last_position = [-84, 15.25]
+        last_position = [-80.0, -150.0]
         distance = math.sqrt(
             (current_pos[0] - last_position[0]) ** 2 +
             (current_pos[1] - last_position[1]) ** 2
@@ -250,8 +271,12 @@ class VehicleController:
 
         # rospy.loginfo(f"current_pos: {current_pos}; distance {distance}")
 
-        if distance < 5.0:
+        if distance < 5.0 and self._start_time is None:
             self._last_point_reached = True
+            self._start_time = rospy.get_time()
+
+        if self._current_speed <= 0.5 and self._last_point_reached and self._end_time is None:
+            self._end_time = rospy.get_time()
 
     def run(self):
         """
