@@ -61,8 +61,18 @@ Rückwärts mit 150km/h:
 
 ## 4. Fazit
 
-Es ist nicht zu empfehlen schneller als 30km/h rückwärts zu fahren, eine Erhöhte Punktedichte beim Rückwärtsfahren ist vorteilhaft.
+Es ist eine Erhöhte Punktedichte beim Rückwärtsfahren ist nicht nur vorteilhaft, sondern auch unerlässlich.
 
 Rückwärts fahren 30 km/h mit geringer Punktedichte:
 
 ![backwards, 30km/h, few](backwards_30_few.png)
+
+Versuche haben ergeben, dass das Fahrzeug in Carla genauso schnell rückwärts wie vorwärts fährt.
+Bisher erreichte höchstgeschwindigkeit Rückwärts: 146km/h.
+
+Ebenfalls war es nötig die Einlenkformel wie folgt zu ändern:
+```
+# compute heading error correction
+theta_e = normalize_angle(calc_path_yaw(
+    path, current_target_idx) + (calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose)))
+```
