@@ -106,18 +106,8 @@ class LocalPlanner:
     def odometry_updated(self, odometry: Odometry):
         """Odometry Update Callback"""
 
-        # calculate current speed (km/h) from twist
-        self._current_speed = (
-            math.sqrt(
-                odometry.twist.twist.linear.x ** 2
-                + odometry.twist.twist.linear.y ** 2
-                + odometry.twist.twist.linear.z ** 2
-            )
-            * 3.6
-        )
-        self._current_pose = odometry.pose.pose
-        # invert y-coordinate of odometry, because odometry sensor returns wrong values
-        self._current_pose.position.y = -self._current_pose.position.y
+        
+        
 
 
 if __name__ == "__main__":
