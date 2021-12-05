@@ -102,24 +102,29 @@ class MapSupervisorCommonRoads(MapProvider):
                         self.landmark_provider.get_marks_by_category(key), neighbouring=True)
 
             # create xml file
-            rospy.loginfo("MapSupervisorCommonRoads: Creating XML-File")
-            writer = CommonRoadFileWriter(
-                scenario=self.map_cr,
-                planning_problem_set=PlanningProblemSet(),
-                author="paf21-2",
-                affiliation="Augsburg University",
-                source="CommonRoad Scenario Designer",
-                tags={},
-            )
-            writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + self.map_name + ".xml",
-                                 OverwriteExistingFile.ALWAYS)
+            #rospy.loginfo("MapSupervisorCommonRoads: Creating XML-File")
+            # writer = CommonRoadFileWriter(
+            #    scenario=self.map_cr,
+            #    planning_problem_set=PlanningProblemSet(),
+            #    author="paf21-2",
+            #    affiliation="Augsburg University",
+            #    source="CommonRoad Scenario Designer",
+            #    tags={},
+            # )
+            # writer.write_to_file(os.path.dirname(os.path.realpath(__file__)) + "/" + self.map_name + ".xml",
+            #                     OverwriteExistingFile.ALWAYS)
 
-            self.debug = True
             if self.debug:
                 self.planning_problem = self._generate_dummy_planning_problem()
                 self._visualize_scenario(self.map_cr, self.planning_problem)
             rospy.loginfo("MapSupervisorCommonRoads: Conversion done!")
             self.map_ready = True
+
+            # Test: Print all lanelets that have no neighbours:
+            print("------------ Map Test: " + self.map_name + " ------------")
+            for lane in self.map_cr.lanelet_network.lanelets:
+                if lane.adj_right is None and lane.adj_left is None:
+                    print("Lane " + str(lane.lanelet_id) + " has no neighbours.")
 
     def convert_od_to_lanelet(self) -> Scenario:
         """
