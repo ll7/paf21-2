@@ -11,7 +11,7 @@ from paf_messages.msg import PafLocalPath
 class LocalPlanner:
     """class used for the local planner. Task: return a local path"""
 
-    def __init__(self, _role_name):
+    def __init__(self):
 
         self.role_name = rospy.get_param("~role_name", "ego_vehicle")
 
