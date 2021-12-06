@@ -1,6 +1,4 @@
-role_name: ego_vehicle
-ego_vehicle_type: vehicle.tesla.model3
-
+local_path_topic: /paf/paf_local_planner/path
 obstacles_topic: /paf/paf_perception/obstacles
 score_topic: /paf/paf_validation/score
 

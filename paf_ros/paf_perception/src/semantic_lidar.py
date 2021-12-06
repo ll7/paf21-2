@@ -8,7 +8,7 @@ import rospy
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
-from paf_perception.msg import PafObstacleList, PafObstacle
+from paf_messages.msg import PafObstacleList, PafObstacle
 from tf.transformations import euler_from_quaternion
 
 
@@ -22,7 +22,7 @@ class SemanticLidarNode(object):
 
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
-        role_name = rospy.get_param("role_name")
+        role_name = rospy.get_param("~role_name", "ego_vehicle")
         lidar_topic = f"/carla/{role_name}/semantic_lidar/lidar1/point_cloud"
         odometry_topic = f"/carla/{role_name}/odometry"
         rospy.logwarn(lidar_topic)

@@ -11,7 +11,7 @@ class ScoreCalculationNode:
 
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
-        role_name = rospy.get_param("role_name")
+        role_name = rospy.get_param("~role_name", "ego_vehicle")
         self._reset()
         rospy.Subscriber(f"/carla/{role_name}/collision", CarlaCollisionEvent, self._process_collision, queue_size=1)
         rospy.Subscriber(

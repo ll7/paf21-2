@@ -16,7 +16,7 @@ from carla_birdeye_view.mask import (
 
 from argparse import Namespace
 from enum import IntEnum
-from paf_perception.msg import PafObstacleList, PafObstacle
+from paf_messages.msg import PafObstacleList, PafObstacle
 
 
 class MaskPriority(IntEnum):
@@ -85,7 +85,6 @@ class TopDownView(BirdViewProducer):
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
         self.path_width_px = None
-        self.set_path(width_px=10)
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -95,6 +94,7 @@ class TopDownView(BirdViewProducer):
                 height=int((target_size_.height + 2 * MAP_BOUNDARY_MARGIN) / 2),
             )
         super(TopDownView, self).__init__(client, target_size, pixels_per_meter, BirdViewCropType.FRONT_AND_REAR_AREA)
+        self.set_path(width_px=10)
 
     def produce(self, agent_vehicle: carla.Actor) -> BirdView:
         """

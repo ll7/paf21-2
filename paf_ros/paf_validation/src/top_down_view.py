@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 import carla
-import numpy as np
 import rospy
-from carla_birdeye_view.mask import PixelDimensions
 
+from carla_birdeye_view.mask import PixelDimensions
 from time import perf_counter, sleep
-from paf_perception.msg import PafObstacleList
+from paf_messages.msg import PafObstacleList, PafLocalPath
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -28,31 +27,18 @@ class TopDownRosNode(object):
             north_is_up=self.params["north_is_up"],
             dark_mode=self.params["dark_mode"],
         )
-        self.update_local_path("temporary")
         print(f"top_down_view tracking {self.actor.type_id}")
         rospy.init_node(self.params["node"], anonymous=True)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.update_obstacles)
-        # rospy.Subscriber(rospy.get_param("local_path_topic"), MsgType, self.update_local_path)
+        rospy.Subscriber(rospy.get_param("local_path_topic"), PafLocalPath, self.update_local_path)
 
     def update_obstacles(self, msg: PafObstacleList):
         self.producer.update_obstacles(msg)
 
-    def update_local_path(self, msg):
-        # todo temporary
-        dummy_path = [
-            [199.0, -9.5],
-            [210.0, -9.5],
-            [219.0, -9.5],
-            [224.4, -9.9],
-            [227.8, -12.3],
-            [230.1, -15.7],
-            [231.0, -20.2],
-            [231.1, -27.6],
-            [231.2, -34.7],
-        ]
-        dummy_path = np.array(dummy_path) + [1, 5]
-        self.producer.set_path(coordinate_list_local_path=dummy_path)
+    def update_local_path(self, msg: PafLocalPath):
+        path = [[pose.position.x, pose.position.y] for pose in msg.poses]
+        self.producer.set_path(coordinate_list_local_path=path)
 
     def produce_map(self):
         birdview = self.producer.produce(agent_vehicle=self.actor)
@@ -70,11 +56,12 @@ class TopDownRosNode(object):
 
 def main():
     client = carla.Client("127.0.0.1", 2000)
+    search_name = rospy.get_param("~role_name", "ego_vehicle")
 
     while True:
         actors = client.get_world().get_actors()
         for actor in actors:
-            if "role_name" in actor.attributes and actor.attributes["role_name"] == rospy.get_param("role_name"):
+            if "role_name" in actor.attributes and actor.attributes["role_name"] == search_name:
                 rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {actor.get_location()}")
                 TopDownRosNode(client, actor).start()
                 return
