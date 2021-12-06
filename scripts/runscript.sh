@@ -2,7 +2,7 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,90 manual_control:=false validation:=true"
+ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,90 validation:=true"
 npc_launch_args="-n 200 -w 80" # n=vehicles, w=pedestrians
 
 SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -64,7 +64,7 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 }
 
 cd $paf_dir/scripts/ || exit
-echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality)"
+echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality --manual-control)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
@@ -74,6 +74,9 @@ CARLA_ARGS=""
 for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
+  fi
+  if [ "$VAR" = "--manual-control" ]; then
+    ros_launch_args="$ros_launch_args manual_control:=true"
   fi
   if [ "$VAR" = "--build" ]; then
     BUILD_ROS=1

@@ -1,0 +1,3 @@
+<launch>
+  <node pkg="paf_validation" type="score_calculation.py" name="score_calculation"/>
+</launch>

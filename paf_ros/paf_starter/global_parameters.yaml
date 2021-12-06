@@ -2,6 +2,7 @@ role_name: ego_vehicle
 ego_vehicle_type: vehicle.tesla.model3
 
 obstacles_topic: /paf/paf_perception/obstacles
+score_topic: /paf/paf_validation/score
 
 semantic_tags:
   "0": "Unlabeled"
