@@ -109,9 +109,9 @@ class SemanticLidarNode(object):
 
     def _process_sorted_points_calculate_bounds(self, sorted_points: dict) -> dict:
         """
-        Calculates bound1, bound2 and closest point (each in x,y,d coords)
+        Calculates bound1, bound2, closest point (each in x,y,d coords) and speed (in m/s)
         :param sorted_points: format { obj_index : { "tag" : tag, "pts": [[x,y,d],...] , ...}
-        :return: bounds in format { tag : [ [bound1, bound2, closest], ...] , ...}
+        :return: bounds in format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
         bounds_by_tag = {}
         previous_obstacles = self.previous_obstacles
@@ -147,7 +147,7 @@ class SemanticLidarNode(object):
 
                 obj_id = f"{tag}-{obj_idx}-{i}"
                 speed = None
-                if obj_id in previous_obstacles:
+                if obj_idx != 0 and obj_id in previous_obstacles:
                     prev_closest = previous_obstacles[obj_id][2]
                     time_delta = current_time - self.previous_time
                     distance_delta = self._dist(poi[2], prev_closest)
