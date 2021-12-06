@@ -32,81 +32,20 @@ class ObstacleDetectionNode(object):
 
     def __init__(self):
 
-        rospy.init_node("obstacle_detection", anonymous=True)
-        role_name = rospy.get_param("role_name")
-        odometry_topic = f"/carla/{role_name}/odometry"
-        obstacle_topic = f"/paf/paf_perception/obstacles"
-        detected_obstacle_topic = f"/paf/paf_perception/detected_obstacles"
-        rospy.logwarn(odometry_topic)
-        rospy.logwarn(obstacle_topic)
-        rospy.Subscriber(odometry_topic, Odometry, self._odometry_updated)
-        rospy.Subscriber(obstacle_topic, PafObstacleList,
-                         self._obstacle_list_updated)
-        self.detected_obstacle_publisher = rospy.Publisher(
-            detected_obstacle_topic,
-            Bool,
-            queue_size=1
-        )
         self.xy_position = None
         self.z_orientation = None
         self.current_pose = Pose()  # car_position
         self.target_position = None
-        self.frame_time_obstacle = perf_counter()
-        self.frame_time_odo = perf_counter()
         self.obstacle_list = []
         self.risk = False
 
-    def _obstacle_list_updated(self, msg: PafObstacleList):
-        """
-        Callback for PAFObstacle topic
-        :param msg: format { tag : [ [bound1, bound2, closest], ...] , ...}
-        """
-        rospy.logwarn("Nachricht wird empfangen")
-        self.obstacle_list = msg
-        self._process_obstacle_detection()
-
-    def _odometry_updated(self, odometry: Odometry):
-        """
-        Odometry topic callback
-        :param msg: 
-        """
-        t0 = perf_counter()
-        # calculate current speed (km/h) from twist
-        self._current_speed = (
-            math.sqrt(
-                odometry.twist.twist.linear.x ** 2
-                + odometry.twist.twist.linear.y ** 2
-                + odometry.twist.twist.linear.z ** 2
-            )
-            * 3.6
-        )
-        self._current_pose = odometry.pose.pose
-        # invert y-coordinate of odometry, because odometry sensor returns wrong values
-        self._current_pose.position.y = -self._current_pose.position.y
-        # time = perf_counter()
-        # rospy.logwarn_throttle(
-        #     self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={1 / (time - t0)}")
-        # rospy.logwarn_throttle(
-        #     self.LOG_FPS_SECS, f"[obstacle detection] current odo fps={1 / (time - self.frame_time_odo)}"
-        # )
-        # self.frame_time_odo = time
-
+    
     def _process_obstacle_detection(self):
 
-        t0 = perf_counter()
-        time = perf_counter()
         car_position = self.current_pose
         target_position = self.target_position
         obstaclelist = self.obstacle_list
-        risk_of_collision = self._check_roadway(
-            car_position, target_position, obstaclelist)
-        rospy.logwarn_throttle(
-            self.LOG_FPS_SECS, f"[obstacle detection] max fps={1 / (time - t0)}")
-        rospy.logwarn_throttle(
-            self.LOG_FPS_SECS,
-            f"[obstacle detection] current fps={1 / (time - self.frame_time_obstacle)}"
-        )
-        self.frame_time_obstacle = time
+        risk_of_collision = self._check_roadway(car_position, target_position, obstaclelist)
         self.risk = risk_of_collision
 
     def _check_roadway(self, car_position, target_position, obstaclelist):
@@ -194,7 +133,3 @@ class ObstacleDetectionNode(object):
         """
         rospy.spin()
 
-
-if __name__ == "__main__":
-    node = ObstacleDetectionNode()
-    node.start()
