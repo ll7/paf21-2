@@ -15,7 +15,7 @@ conda deactivate 2>/dev/null
 # recommended not to install everything at once..
 install_search=0
 install_route_planner=0
-install_driveability_checker=0
+install_driveability_checker=1
 #install_collision_checker=0 # deprecated
 
 if ((install_search)); then
@@ -39,7 +39,7 @@ fi
 if ((install_driveability_checker)); then
   # commonroad drivability checker (obstacle avoidance - local planner)
   cd ~/commonroad-tools || exit 1
-  pip install pybind11 1>/dev/null
+  pip install pybind11
   git clone https://github.com/danfis/libccd 2>/dev/null
   cd libccd || exit 1
   git pull 1>/dev/null
