@@ -10,6 +10,7 @@ from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header, Bool
 from geometry_msgs.msg import Pose, PoseStamped
 from paf_perception.msg import PafObstacleList, PafObstacle
+from argparse import Namespace
 
 # import functions to read xml file +CommonRoad Drivability Checker
 from commonroad.common.file_reader import CommonRoadFileReader
@@ -64,6 +65,25 @@ class ObstacleDetectionNode(object):
         rospy.logwarn("Nachricht wird empfangen")
         self.obstacle_list = msg
         self._process_obstacle_detection()
+
+    def update_obstacles(self, msg: PafObstacleList):
+        if msg.type == "Pedestrians":
+            self.obstacles_pedestrians = self._update_obstacles(msg)
+        elif msg.type == "Vehicles":
+            self.obstacles_vehicles = self._update_obstacles(msg)
+        else:
+            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+
+    @staticmethod
+    def _update_obstacles(msg: PafObstacleList):
+        obs: PafObstacle
+        ret = []
+        for obs in msg.obstacles:
+            obs_pts = []
+            for x, y in [obs.bound_1, obs.bound_2, obs.closest]:
+                obs_pts.append(Namespace(**{"x": x, "y": y}))
+            ret.append(obs_pts)
+        return ret
 
     def _odometry_updated(self, odometry: Odometry):
         """
@@ -163,6 +183,7 @@ class ObstacleDetectionNode(object):
             rospy.loginfo(f"boolean is Obstacle detected {self.risk}")
             self.detected_obstacle_publisher.publish(self.risk)
             rate.sleep()
+
 
     @staticmethod
     def _unit_vector(p1: list) -> float:
