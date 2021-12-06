@@ -177,20 +177,19 @@ class SemanticLidarNode(object):
             object_tag = self.TAGS[object_tag]
             if object_idx == 0:
                 continue
+            d = self._dist((x, y))
+            if d < self.MIN_DIST_IS_SELF:
+                continue
+            if object_idx not in objects:
+                objects[object_idx] = {"pts": [], "tag": object_tag}
+            for idx, objects_with_idx in enumerate(objects[object_idx]["pts"]):
+                _x, _y, _ = objects_with_idx[0]
+                _d = self._dist((x, y), (_x, _y))
+                if _d < self.MIN_OBJ_DIFF_DIST:
+                    objects[object_idx]["pts"][idx].append([x, y, d])
+                    break
             else:
-                d = self._dist((x, y))
-                if d < self.MIN_DIST_IS_SELF:
-                    continue
-                if object_idx not in objects:
-                    objects[object_idx] = {"pts": [], "tag": object_tag}
-                for idx, objects_with_idx in enumerate(objects[object_idx]["pts"]):
-                    _x, _y, _ = objects_with_idx[0]
-                    _d = self._dist((x, y), (_x, _y))
-                    if _d < self.MIN_OBJ_DIFF_DIST:
-                        objects[object_idx]["pts"][idx].append([x, y, d])
-                        break
-                else:
-                    objects[object_idx]["pts"].append([[x, y, d]])
+                objects[object_idx]["pts"].append([[x, y, d]])
         return objects
 
     def _publish_object_information(self, bounds_by_tag: dict):
