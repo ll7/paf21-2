@@ -37,6 +37,19 @@ class SemanticLidarNode(object):
         self.frame_time_lidar = perf_counter()
         self.frame_time_odo = perf_counter()
 
+        self.previous_obstacles = {}
+        self.previous_time = rospy.Time.now().to_time()
+
+    @staticmethod
+    def _get_max_ai_speed(position: list) -> float:
+        """
+        Retrieves max speed from position by asking the MapManager
+        :param position: x,y coordinates of the map
+        :return: speed value in m/s
+        """
+        max_ai_speed = 60 / 3.6  # in m/s todo: use lanelet speed limit instead
+        return max_ai_speed
+
     def _process_odometry(self, msg: Odometry):
         """
         Odometry topic callback
@@ -101,6 +114,10 @@ class SemanticLidarNode(object):
         :return: bounds in format { tag : [ [bound1, bound2, closest], ...] , ...}
         """
         bounds_by_tag = {}
+        previous_obstacles = self.previous_obstacles
+        self.previous_obstacles = {}
+        current_time = rospy.Time.now().to_time()
+
         for obj_idx, pts_and_tag in sorted_points.items():
             tag = pts_and_tag["tag"]
             if tag not in bounds_by_tag:
@@ -124,9 +141,24 @@ class SemanticLidarNode(object):
                     d_min = pts[a_min_d][-1]
                     bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min
                     bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min
+
                 poi = [bound_1, bound_2, closest]
                 poi = [p + self.xy_position for p in poi]
+
+                obj_id = f"{tag}-{obj_idx}-{i}"
+                speed = None
+                if obj_id in previous_obstacles:
+                    prev_closest = previous_obstacles[obj_id][2]
+                    time_delta = current_time - self.previous_time
+                    distance_delta = self._dist(poi[2], prev_closest)
+                    if time_delta > 0:
+                        speed = distance_delta / time_delta
+                        speed = speed if speed <= self._get_max_ai_speed(poi[2]) else None
+                poi.append(speed)
                 bounds_by_tag[tag].append(poi)
+                self.previous_obstacles[obj_id] = poi
+
+        self.previous_time = current_time
         return bounds_by_tag
 
     def _process_lidar_points_by_tag_and_idx(self, points: list) -> dict:
@@ -173,12 +205,15 @@ class SemanticLidarNode(object):
             obstacles.type = tag
             obstacles.header = header
             obstacles.obstacles = []
-            for i, (bound_1, bound_2, closest) in enumerate(values):
+            for i, (bound_1, bound_2, closest, speed) in enumerate(values):
                 obstacle = PafObstacle()
                 obstacle.bound_1 = bound_1
                 obstacle.bound_2 = bound_2
                 obstacle.closest = closest
+                obstacle.speed = speed
                 obstacles.obstacles.append(obstacle)
+                # if speed is not None and speed > 5:
+                #     rospy.logwarn_throttle(1, f"{np.round(speed * 3.6, 1)} km/h")
             self._obstacle_publisher.publish(obstacles)
 
     @staticmethod
