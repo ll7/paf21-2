@@ -1,18 +1,19 @@
 #!/usr/bin/env python
+import rospy
+import numpy as np
+
+from typing import List
 from commonroad.common.file_reader import CommonRoadFileReader
 from commonroad.common.util import Interval, AngleInterval
 from commonroad.geometry.shape import Circle
 from commonroad.planning.goal import GoalRegion
 from commonroad.planning.planning_problem import PlanningProblem
-from commonroad.scenario.lanelet import LaneletNetwork
 from commonroad.scenario.scenario import Scenario
 from commonroad.scenario.trajectory import State
-from commonroad_route_planner.route import Route
 from commonroad_route_planner.route_planner import RoutePlanner
-from typing import List
 
-import rospy
-import numpy as np
+from paf_ros.paf_global_planner.src.classes.PafRoute import PafRoute
+from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry as Country
 
 
 class GlobalPlanner:
@@ -24,20 +25,18 @@ class GlobalPlanner:
     def __init__(self):
         self.scenario: Scenario
         self.scenario, _ = CommonRoadFileReader("/home/julin/Downloads/Town03.xml").open()
-
-        self.network: LaneletNetwork
-        self.network = self.scenario.lanelet_network
+        self.country = Country.USA
 
     def _retrieve_possible_routes(
         self,
-        start_coordinates: list[float],
+        start_coordinates: List[float],
         start_orientation_rad: float,
-        target_coordinates: list,
+        target_coordinates: List[float],
         target_orientation_rad: float = None,
         start_velocity: float = 0.0,
         target_circle_diameter: float = 4.0,
         target_orientation_allowed_error: float = 0.2,
-    ) -> List[Route]:
+    ) -> List[PafRoute]:
         """
         Creates a commonroad planning problem with the given parameters
         and calculates possible routes to the target region.
@@ -81,7 +80,7 @@ class GlobalPlanner:
         route_planner = RoutePlanner(self.scenario, planning_problem, backend=self.BACKEND)
 
         routes, _ = route_planner.plan_routes().retrieve_all_routes()
-        return routes
+        return [PafRoute(route, self.country) for route in routes]
 
     @staticmethod
     def start():
