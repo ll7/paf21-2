@@ -8,7 +8,7 @@ import rospy
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
-from paf_perception.msg import PafObstacleList, PafObstacle
+from paf_messages.msg import PafObstacleList, PafObstacle
 from tf.transformations import euler_from_quaternion
 
 
@@ -22,7 +22,7 @@ class SemanticLidarNode(object):
 
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
-        role_name = rospy.get_param("role_name")
+        role_name = rospy.get_param("~role_name", "ego_vehicle")
         lidar_topic = f"/carla/{role_name}/semantic_lidar/lidar1/point_cloud"
         odometry_topic = f"/carla/{role_name}/odometry"
         rospy.logwarn(lidar_topic)
@@ -37,13 +37,26 @@ class SemanticLidarNode(object):
         self.frame_time_lidar = perf_counter()
         self.frame_time_odo = perf_counter()
 
+        self.previous_obstacles = {}
+        self.previous_time = rospy.Time.now().to_time()
+
+    @staticmethod
+    def _get_max_ai_speed(position: list) -> float:
+        """
+        Retrieves max speed from position by asking the MapManager
+        :param position: x,y coordinates of the map
+        :return: speed value in m/s
+        """
+        max_ai_speed = 150 / 3.6  # in m/s todo: use lanelet speed limit instead
+        return max_ai_speed
+
     def _process_odometry(self, msg: Odometry):
         """
         Odometry topic callback
         :param msg:
         """
-        t0 = perf_counter()
-        self.xy_position = np.array([msg.pose.pose.position.x + self.SENSOR_X_OFFSET, -msg.pose.pose.position.y])
+        t0 = rospy.Time.now().to_time()
+        self.xy_position = np.array([msg.pose.pose.position.x, -msg.pose.pose.position.y])
         current_pose = msg.pose.pose
         quaternion = (
             current_pose.orientation.x,
@@ -56,11 +69,13 @@ class SemanticLidarNode(object):
         # rotation of result in opposite direction to get world coords
         self.cos = np.cos(-self.z_orientation)
         self.sin = np.sin(-self.z_orientation)
-        time = perf_counter()
-        rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={1 / (time - t0)}")
-        rospy.logwarn_throttle(
-            self.LOG_FPS_SECS, f"[semantic lidar] current odo fps={1 / (time - self.frame_time_odo)}"
-        )
+        time = rospy.Time.now().to_time()
+        delta = time - t0
+        if delta > 0:
+            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={1 / delta}")
+        delta = time - self.frame_time_odo
+        if delta > 0:
+            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current odo fps={1 / delta}")
         self.frame_time_odo = time
 
     def _transform_to_relative_world_pos(self, leftwards: float, backwards: float) -> tuple:
@@ -70,7 +85,7 @@ class SemanticLidarNode(object):
         :param backwards: lidar point variable backwards
         :return: x,y in world coordinates relative to ego_vehicle x,y
         """
-        x = leftwards
+        x = leftwards + self.SENSOR_X_OFFSET
         y = -backwards
         x, y = x * self.cos - y * self.sin, y * self.cos + x * self.sin
         return x, y
@@ -82,25 +97,31 @@ class SemanticLidarNode(object):
         """
         if self.xy_position is None:
             return
-        t0 = perf_counter()
+        t0 = rospy.Time.now().to_time()
         points = pc2.read_points(msg, skip_nans=True)
         sorted_points = self._process_lidar_points_by_tag_and_idx(points)
         bounds_by_tag = self._process_sorted_points_calculate_bounds(sorted_points)
         self._publish_object_information(bounds_by_tag)
-        time = perf_counter()
-        rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max lidar fps={1 / (time - t0)}")
-        rospy.logwarn_throttle(
-            self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={1 / (time - self.frame_time_lidar)}"
-        )
+        time = rospy.Time.now().to_time()
+        delta = time - t0
+        if delta > 0:
+            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max lidar fps={1 / delta}")
+        delta = time - self.frame_time_lidar
+        if delta > 0:
+            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={1 / delta}")
         self.frame_time_lidar = time
 
     def _process_sorted_points_calculate_bounds(self, sorted_points: dict) -> dict:
         """
-        Calculates bound1, bound2 and closest point (each in x,y,d coords)
+        Calculates bound1, bound2, closest point (each in x,y,d coords) and speed (in m/s)
         :param sorted_points: format { obj_index : { "tag" : tag, "pts": [[x,y,d],...] , ...}
-        :return: bounds in format { tag : [ [bound1, bound2, closest], ...] , ...}
+        :return: bounds in format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
         bounds_by_tag = {}
+        previous_obstacles = self.previous_obstacles
+        self.previous_obstacles = {}
+        current_time = rospy.Time.now().to_time()
+
         for obj_idx, pts_and_tag in sorted_points.items():
             tag = pts_and_tag["tag"]
             if tag not in bounds_by_tag:
@@ -124,10 +145,47 @@ class SemanticLidarNode(object):
                     d_min = pts[a_min_d][-1]
                     bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min
                     bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min
+
                 poi = [bound_1, bound_2, closest]
                 poi = [p + self.xy_position for p in poi]
+
+                obj_id = f"{tag}-{obj_idx}-{i}"
+
+                speed = self._get_obj_speed(previous_obstacles, poi, obj_id, obj_idx, current_time)
+                if speed is None and len(previous_obstacles) > 0:
+                    pass
+                poi.append(speed)
                 bounds_by_tag[tag].append(poi)
+                self.previous_obstacles[obj_id] = poi
+
+        self.previous_time = current_time
         return bounds_by_tag
+
+    def _get_obj_speed(
+        self, previous_obstacles: dict, obstacle_bounds: list, obj_id: str, obj_idx: int, current_time: float
+    ):
+        def speed_calc(xy):
+            if xy is None:
+                return None
+            time_delta = current_time - self.previous_time
+            distance_delta = self._dist(cur_closest, xy)
+            if time_delta > 0:
+                _speed = distance_delta / time_delta
+                return _speed if _speed <= self._get_max_ai_speed(xy) else None
+
+        cur_closest = obstacle_bounds[2]
+        if obj_idx != 0 and obj_id in previous_obstacles:
+            prev_closest = previous_obstacles[obj_id][2]
+            speed = speed_calc(prev_closest)
+            if speed is not None:
+                return speed
+        min_point, min_dist = None, None
+        for poi in previous_obstacles.values():
+            prev_closest = poi[2]
+            dist = self._dist(cur_closest, prev_closest)
+            if min_point is None or dist < min_dist:
+                min_point, min_dist = prev_closest, dist
+        return speed_calc(min_point)
 
     def _process_lidar_points_by_tag_and_idx(self, points: list) -> dict:
         """
@@ -145,26 +203,25 @@ class SemanticLidarNode(object):
             object_tag = self.TAGS[object_tag]
             if object_idx == 0:
                 continue
+            d = self._dist((x, y))
+            if d < self.MIN_DIST_IS_SELF:
+                continue
+            if object_idx not in objects:
+                objects[object_idx] = {"pts": [], "tag": object_tag}
+            for idx, objects_with_idx in enumerate(objects[object_idx]["pts"]):
+                _x, _y, _ = objects_with_idx[0]
+                _d = self._dist((x, y), (_x, _y))
+                if _d < self.MIN_OBJ_DIFF_DIST:
+                    objects[object_idx]["pts"][idx].append([x, y, d])
+                    break
             else:
-                d = self._dist((x, y))
-                if d < self.MIN_DIST_IS_SELF:
-                    continue
-                if object_idx not in objects:
-                    objects[object_idx] = {"pts": [], "tag": object_tag}
-                for idx, objects_with_idx in enumerate(objects[object_idx]["pts"]):
-                    _x, _y, _ = objects_with_idx[0]
-                    _d = self._dist((x, y), (_x, _y))
-                    if _d < self.MIN_OBJ_DIFF_DIST:
-                        objects[object_idx]["pts"][idx].append([x, y, d])
-                        break
-                else:
-                    objects[object_idx]["pts"].append([[x, y, d]])
+                objects[object_idx]["pts"].append([[x, y, d]])
         return objects
 
     def _publish_object_information(self, bounds_by_tag: dict):
         """
         publishes ObstacleList topic
-        :param bounds_by_tag: format { tag : [ [bound1, bound2, closest], ...] , ...}
+        :param bounds_by_tag: format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
         header = Header()
         header.stamp = rospy.Time.now()
@@ -173,12 +230,17 @@ class SemanticLidarNode(object):
             obstacles.type = tag
             obstacles.header = header
             obstacles.obstacles = []
-            for i, (bound_1, bound_2, closest) in enumerate(values):
+            for i, (bound_1, bound_2, closest, speed) in enumerate(values):
                 obstacle = PafObstacle()
-                obstacle.bound_1 = bound_1
-                obstacle.bound_2 = bound_2
-                obstacle.closest = closest
+                obstacle.bound_1 = tuple(bound_1)
+                obstacle.bound_2 = tuple(bound_2)
+                obstacle.closest = tuple(closest)
+                obstacle.speed_known = speed is not None
+                if obstacle.speed_known:
+                    obstacle.speed = speed
                 obstacles.obstacles.append(obstacle)
+                # if speed is not None and speed > 5:
+                #     rospy.logwarn_throttle(1, f"{np.round(speed * 3.6, 1)} km/h")
             self._obstacle_publisher.publish(obstacles)
 
     @staticmethod
@@ -209,7 +271,13 @@ class SemanticLidarNode(object):
         """
         x1, y1, d1 = p1
         x2, y2, d2 = p2
-        return np.arccos((x1 * x2 + y1 * y2) / (d1 * d2))
+        bottom = d1 * d2
+        top = x1 * x2 + y1 * y2
+        if bottom == 0:
+            fraction = 0
+        else:
+            fraction = top / bottom
+        return np.arccos(np.clip(-1, 1, fraction))
 
     @staticmethod
     def _dist(p1: tuple, p2: tuple = (0, 0)) -> float:
@@ -219,9 +287,9 @@ class SemanticLidarNode(object):
         :param p2: second point (defaults to zero)
         :return:
         """
-        x1, y1 = p1
-        x2, y2 = p2
-        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+        x1, y1 = p1[0], p1[1]
+        x2, y2 = p2[0], p2[1]
+        return float(np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2))
 
     @staticmethod
     def start():

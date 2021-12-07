@@ -19,6 +19,7 @@ cd ~/carla-ros-bridge/catkin_ws/ || exit 1
 source /opt/ros/noetic/setup.bash
 if ((clean)); then
   catkin clean -y
+  find ~/.ros/log -mtime +7 -exec rm -rf {} \;
 fi
 if ((rosdep)); then
   rosdep update
