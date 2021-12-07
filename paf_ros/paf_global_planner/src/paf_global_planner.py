@@ -17,7 +17,7 @@ from commonroad_route_planner.route_planner import RoutePlanner
 from paf_messages.msg import PafLaneletRoute
 from paf_messages.srv import PafRoutingRequest
 
-from paf_ros.paf_global_planner.src.classes.PafRoute import PafRoute
+from classes.PafRoute import PafRoute
 from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry as Country
 
 
@@ -32,11 +32,12 @@ class GlobalPlanner:
         self.scenario, _ = CommonRoadFileReader("/home/julin/Downloads/Town03.xml").open()
         self.country = Country.USA
 
-        rospy.Service("paf_routing_request", PafRoutingRequest, self._routing_provider)
+        rospy.init_node("paf_global_planner", anonymous=True)
+        rospy.Service("/paf_global_planner/routing_request", PafRoutingRequest, self._routing_provider)
 
-    def _routing_provider(self, request: PafRoutingRequest) -> List[PafLaneletRoute]:
+    def _routing_provider(self, request: PafRoutingRequest) -> List[List[PafLaneletRoute]]:
         routes = self._routes_from_objective(request.start, request.start_yaw, request.target)
-        return [route.as_msg(request.resolution) for route in routes]
+        return [[route.as_msg(request.resolution) for route in routes]]
 
     def _routes_from_objective(
         self,
@@ -102,7 +103,7 @@ class GlobalPlanner:
 
         if target_orientation_rad is None:
             target_orientation_rad = 0
-            target_orientation_allowed_error = np.pi
+            target_orientation_allowed_error = np.pi - 0.01
 
         initial_state = State(
             position=np.array(start_coordinates, dtype=float),
