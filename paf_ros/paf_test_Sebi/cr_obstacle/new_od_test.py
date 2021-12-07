@@ -34,84 +34,70 @@ class ObstacleDetectionNode(object):
 
     def __init__(self):
 
-        self.xy_position = None
-        self.z_orientation = None
+        #self.xy_position = None
+        #self.z_orientation = None
         self.current_pose = Pose()  # car_position
         self.target_position = None
         self.obstacle_list = []
-        self.risk = False
+        self.detected_obstacle = None
 
-    
     def _process_obstacle_detection(self):
 
         car_position = self.current_pose
         target_position = self.target_position
         obstaclelist = self.obstacle_list
-        risk_of_collision = self._check_roadway2(car_position, target_position, obstaclelist)
-        self.risk = risk_of_collision
+        dangerrous_obs_list = self._check_roadway(car_position, obstaclelist)
+        return dangerrous_obs_list
 
-    def _check_roadway(self, car_position, target_position, obstaclelist):
-        """
-        detects potential obstacles in front of the car (collision) along the way
-        Step1: 
-        Step2:
-        """
-        danger_zone = self._define_danger_zone(car_position, target_position)
-        observated_obstacles = self._check_obstacles_in_danger_zone(
-            obstaclelist, danger_zone)
-        risk_of_collision = self._check_risk_of_collision(
-            self, observated_obstacles)
-        return risk_of_collision
-
-    def _check_roadway2(self, car_position, target_position, obstaclelist):
+    def _check_roadway(self, car_position, obstaclelist):
         """
         detects potential obstacles in front of the car (collision) in the same lanelet
         Step1: 
         Step2:
         """
-        danger_zone = self._define_danger_zone2(
-            car_position, target_position)
+        lanelet_ID = self._define_danger_zone(car_position)
         observated_obstacles = self._check_obstacles_in_danger_zone(
-            obstaclelist, danger_zone)
-        risk_of_collision = self._check_risk_of_collision(
-            self, observated_obstacles)
-        return risk_of_collision
+            obstaclelist, lanelet_ID)
+        min_dist = self.MIN_DISTANCE_TO_OBSTACLE
+        obs_list = self._check_obstacles_in_range(observated_obstacles, min_dist)
+        return obs_list
 
-    def _define_danger_zone2(car_position, target_position):
+    def _define_danger_zone(car_position, target_position):
         laneletId = lanelet_network.find_lanelet_by_position(car_position)
         return laneletId
 
-    def _define_danger_zone(self, car_position, target_position):
-        length_vector = np.substract(car_position, target_position)
-        v1 = length_vector * np.array([-1, 0])
-        v2 = length_vector * np.array([0, -1])
-        width_vector1 = self.ROADWAY_WIDTH * self._unit_vector(v1)
-        width_vector2 = self.ROADWAY_WIDTH * self._unit_vector(v2)
-        corner_point3 = length_vector + width_vector1
-        corner_point4 = length_vector + width_vector2
-        corner_points = np.array[(
-            width_vector1, width_vector2, corner_point3, corner_point4)]
-        return corner_points
-
-    def _check_obstacles_in_danger_zone2(self, obstaclelist, danger_zone):
+    def _check_obstacles_in_danger_zone(self, obstaclelist, laneletID):
         observated_obstacles = []
         for obstacle in obstaclelist:
-            bound1, bound2 = obstacle[:2]
-            poi = np.array([bound1, bound2])
-            if danger_zone in lanelet_network.find_lanelet_by_position(poi):
-                observated_obstacles.append(poi)
+            bound1, bound2, closest= obstacle[:3]
+            pos_list = np.array([bound1, bound2, closest])
+            if laneletID in lanelet_network.find_lanelet_by_position(pos_list):
+                observated_obstacles.append(obstacle)
         return observated_obstacles
 
-    def _check_obstacles_in_danger_zone(self, obstaclelist, danger_zone):
-        observated_obstacles = []
-        x1, y1 = np.minimum(danger_zone[0], danger_zone[3])
-        x2, y2 = np.maximum(danger_zone[0], danger_zone[3])
-        for obstacle in obstaclelist:
-            x, y, _ = obstacle
-            poi = (x, y)
-            if x1 < x < x2 and y1 < y < y2:
-                observated_obstacles.append(poi)
-        return observated_obstacles
+    def _check_obstacles_in_range(self, observated_obstacles, min_dist):
+        obs_list = []
+        for obstacle in observated_obstacles:
+            bound1, bound2, closest= obstacle[:3]
+            pos_list = np.array([bound1, bound2, closest])
+            for xy in pos_list:
+                dist = self._dist(xy)
+                if min_dist > dist:
+                    obs_list.append(obstacle)
+                    break
+        return obs_list
+
+    # def _check_obstacles_in_range(self, obstacleList, danger_zone):
+    #     observated_obstacles = []
+    #     for obstacle in obstaclelist:
+    #         bound1, bound2, closest= obstacle[:3]
+    #         pos_list = np.array([bound1, bound2, closest])
+    #         for xy in pos_list:
+    #             dist = self._dist(xy)
+    #             if self.MIN_DISTANCE_TO_OBSTACLE > dist:
+    #                 observated_obstacles.append(pos_list)
+    #                 break
+    #     return observated_obstacles
 
     def _check_risk_of_collision(self, observated_obstacles):
         risk_of_collision = False
