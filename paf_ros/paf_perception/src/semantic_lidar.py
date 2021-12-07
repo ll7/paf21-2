@@ -206,10 +206,12 @@ class SemanticLidarNode(object):
             obstacles.obstacles = []
             for i, (bound_1, bound_2, closest, speed) in enumerate(values):
                 obstacle = PafObstacle()
-                obstacle.bound_1 = bound_1
-                obstacle.bound_2 = bound_2
-                obstacle.closest = closest
-                obstacle.speed = speed
+                obstacle.bound_1 = tuple(bound_1)
+                obstacle.bound_2 = tuple(bound_2)
+                obstacle.closest = tuple(closest)
+                obstacle.speed_known = speed is not None
+                if obstacle.speed_known:
+                    obstacle.speed = speed
                 obstacles.obstacles.append(obstacle)
                 # if speed is not None and speed > 5:
                 #     rospy.logwarn_throttle(1, f"{np.round(speed * 3.6, 1)} km/h")
