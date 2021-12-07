@@ -14,6 +14,7 @@ add_message_files(
   PafLocalPath.msg
   PafObstacle.msg
   PafObstacleList.msg
+  Point2D.msg
 )
 
 generate_messages(
