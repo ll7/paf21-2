@@ -3,9 +3,9 @@
 import rospy
 import math
 
-from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose
-from paf_messages.msg import PafLocalPath
+from nav_msgs.msg import Odometry
+from paf_messages.msg import PafLocalPath, Point2D as Point
 
 
 class LocalPlanner:
@@ -85,11 +85,10 @@ class LocalPlanner:
         current_path = self.get_current_path()
 
         for point in current_path:
-            pose = Pose()
-            pose.position.x = point[0]
-            pose.position.y = point[1]
-            pose.position.z = 0
-            path_msg.poses.append(pose)
+            pt = Point()
+            pt.x = point[0]
+            pt.y = point[1]
+            path_msg.points.append(pt)
 
         return path_msg
 

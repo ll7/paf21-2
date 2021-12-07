@@ -37,7 +37,7 @@ class TopDownRosNode(object):
         self.producer.update_obstacles(msg)
 
     def update_local_path(self, msg: PafLocalPath):
-        path = [[pose.position.x, pose.position.y] for pose in msg.poses]
+        path = [[point.x, point.y] for point in msg.points]
         self.producer.set_path(coordinate_list_local_path=path)
 
     def produce_map(self):
