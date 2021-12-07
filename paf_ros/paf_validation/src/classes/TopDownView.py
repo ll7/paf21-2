@@ -231,6 +231,8 @@ class TopDownView(BirdViewProducer):
         obs: PafObstacle
         ret = []
         for obs in msg.obstacles:
+            # if not obs.speed_known:
+            #     continue
             obs_pts = []
             for x, y in [obs.bound_1, obs.bound_2, obs.closest]:
                 obs_pts.append(Namespace(**{"x": x, "y": y}))

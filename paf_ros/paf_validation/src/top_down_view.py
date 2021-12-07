@@ -3,7 +3,7 @@ import carla
 import rospy
 
 from carla_birdeye_view.mask import PixelDimensions
-from time import perf_counter, sleep
+from time import sleep
 from paf_messages.msg import PafObstacleList, PafLocalPath
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
@@ -47,10 +47,12 @@ class TopDownRosNode(object):
     def start(self):
         rate = rospy.Rate(self.params["update_hz"])
         while not rospy.is_shutdown():
-            t0 = perf_counter()
+            t0 = rospy.Time.now().to_time()
             rgb = self.produce_map()
             self.pub.publish(self.br.cv2_to_imgmsg(rgb, "rgb8"))
-            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / (perf_counter() - t0)}")
+            delta = rospy.Time.now().to_time() - t0
+            if delta > 0:
+                rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / delta}")
             rate.sleep()
 
 
