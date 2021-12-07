@@ -237,16 +237,17 @@ class PafRoute:
 
         return sorted(traffic_signals, key=lambda elem: elem.index)
 
-    def as_msg(self, resolution=1):
-        if resolution == 0:
-            resolution = 1
+    def as_msg(self, resolution=0):
         msg = PafLaneletRoute()
         msg.lanelet_ids = self.route.list_ids_lanelets
-        msg.length = self.route.path_length[-1]
         msg.points = []
-        every_nth = int(np.round(len(self.route.path_length) / msg.length / resolution))
-        every_nth = every_nth if every_nth != 0 else 1
+        if resolution == 0:
+            every_nth = 1
+        else:
+            every_nth = int(np.round(len(self.route.path_length) / msg.length / resolution))
+            every_nth = every_nth if every_nth != 0 else 1
         path_pts = self.route.reference_path[::every_nth]
+        msg.distances = self.route.path_length[::every_nth]
         msg.traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
         for x, y in path_pts:
             point = Point2D()
