@@ -137,3 +137,12 @@ class GlobalPlanner:
 if __name__ == "__main__":
     node = GlobalPlanner()
     node.start()
+
+# rosservice call /paf_global_planner/routing_request "start:
+# - -85.0
+# - -75.0
+# start_yaw: 1.56
+# target:
+# - -180.0
+# - 180.0
+# resolution: 0.0"

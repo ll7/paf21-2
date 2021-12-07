@@ -186,7 +186,8 @@ class PafRoute:
         msg.lanelet_ids = self.route.list_ids_lanelets
         msg.length = self.route.path_length[-1]
         msg.points = []
-        every_nth = int(np.round(resolution / self.route.path_length[1]))
+        every_nth = int(np.round(len(self.route.path_length) / msg.length / resolution))
+        every_nth = every_nth if every_nth != 0 else 1
         for x, y in self.route.reference_path[::every_nth]:
             point = Point2D()
             point.x = x
