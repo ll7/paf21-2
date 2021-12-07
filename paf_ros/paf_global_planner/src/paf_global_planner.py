@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from commonroad_route_planner.route import Route, RouteType
+
 import rospy
 import numpy as np
 
@@ -11,6 +13,9 @@ from commonroad.planning.planning_problem import PlanningProblem
 from commonroad.scenario.scenario import Scenario
 from commonroad.scenario.trajectory import State
 from commonroad_route_planner.route_planner import RoutePlanner
+
+from paf_messages.msg import PafLaneletRoute
+from paf_messages.srv import PafRoutingRequest
 
 from paf_ros.paf_global_planner.src.classes.PafRoute import PafRoute
 from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry as Country
@@ -27,7 +32,13 @@ class GlobalPlanner:
         self.scenario, _ = CommonRoadFileReader("/home/julin/Downloads/Town03.xml").open()
         self.country = Country.USA
 
-    def _retrieve_possible_routes(
+        rospy.Service("paf_routing_request", PafRoutingRequest, self._routing_provider)
+
+    def _routing_provider(self, request: PafRoutingRequest) -> List[PafLaneletRoute]:
+        routes = self._routes_from_objective(request.start, request.start_yaw, request.target)
+        return [route.as_msg(request.resolution) for route in routes]
+
+    def _routes_from_objective(
         self,
         start_coordinates: List[float],
         start_orientation_rad: float,
@@ -49,6 +60,42 @@ class GlobalPlanner:
         :param target_orientation_allowed_error: if target_orientation_rad is not None,
                                                     specify allowed margin of error here
         :return: list of Routes
+        """
+        planning_problem = self._get_planning_problem(
+            start_coordinates,
+            start_orientation_rad,
+            target_coordinates,
+            target_orientation_rad,
+            start_velocity,
+            target_circle_diameter,
+            target_orientation_allowed_error,
+        )
+        route_planner = RoutePlanner(self.scenario, planning_problem, backend=self.BACKEND)
+
+        routes, _ = route_planner.plan_routes().retrieve_all_routes()
+        return [PafRoute(route, self.country) for route in routes]
+
+    @staticmethod
+    def _get_planning_problem(
+        start_coordinates: List[float],
+        start_orientation_rad: float,
+        target_coordinates: List[float],
+        target_orientation_rad: float = None,
+        start_velocity: float = 0.0,
+        target_circle_diameter: float = 4.0,
+        target_orientation_allowed_error: float = 0.2,
+    ) -> PlanningProblem:
+        """
+        Creates a commonroad planning problem with the given parameters
+        :param start_coordinates: start coordinates [x,y]
+        :param start_orientation_rad: start orientation in radians (yaw)
+        :param target_coordinates: target coordinates [x,y]
+        :param target_orientation_rad: target orientation in radians (yaw). Standard: None for any direction
+        :param start_velocity: start velocity in m/s. Standard: 0
+        :param target_circle_diameter: size of the target region (circle diameter)
+        :param target_orientation_allowed_error: if target_orientation_rad is not None,
+                                                    specify allowed margin of error here
+        :return planning problem
         """
         assert len(start_coordinates) == 2
         assert len(target_coordinates) == 2
@@ -76,11 +123,10 @@ class GlobalPlanner:
             time_step=Interval(0, int(1e10)),
         )
 
-        planning_problem = PlanningProblem(1, initial_state, GoalRegion([target_state]))
-        route_planner = RoutePlanner(self.scenario, planning_problem, backend=self.BACKEND)
+        return PlanningProblem(1, initial_state, GoalRegion([target_state]))
 
-        routes, _ = route_planner.plan_routes().retrieve_all_routes()
-        return [PafRoute(route, self.country) for route in routes]
+    def _route_from_ids(self, lanelet_ids: List[int]):
+        return PafRoute(Route(self.scenario, None, lanelet_ids, RouteType.REGULAR), self.country)
 
     @staticmethod
     def start():

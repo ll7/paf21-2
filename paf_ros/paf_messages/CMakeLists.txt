@@ -14,6 +14,13 @@ add_message_files(
   PafLocalPath.msg
   PafObstacle.msg
   PafObstacleList.msg
+  PafLaneletRoute.msg
+  PafRoutingGraphNode.msg
+)
+
+add_service_files(
+  FILES
+  PafRoutingRequest.srv
 )
 
 generate_messages(
