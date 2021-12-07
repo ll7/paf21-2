@@ -6,8 +6,7 @@ from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry as Coun
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
-from geometry_msgs.msg import Point
-from paf_messages.msg import PafLaneletRoute, PafRoutingGraphNode
+from paf_messages.msg import PafLaneletRoute, PafRoutingGraphNode, Point2D
 
 
 class PafRoute:
@@ -186,13 +185,13 @@ class PafRoute:
         msg = PafLaneletRoute()
         msg.lanelet_ids = self.route.list_ids_lanelets
         msg.length = self.route.path_length[-1]
-        msg.poses = []
+        msg.points = []
         every_nth = int(np.round(resolution / self.route.path_length[1]))
         for x, y in self.route.reference_path[::every_nth]:
-            pose = Point()
-            pose.x = x
-            pose.y = y
-            msg.poses.append(pose)
+            point = Point2D()
+            point.x = x
+            point.y = y
+            msg.points.append(point)
         msg.graph = []
         for key, values in self.graph.items():
             node_msg = PafRoutingGraphNode()
