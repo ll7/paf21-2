@@ -195,7 +195,7 @@ class SemanticLidarNode(object):
     def _publish_object_information(self, bounds_by_tag: dict):
         """
         publishes ObstacleList topic
-        :param bounds_by_tag: format { tag : [ [bound1, bound2, closest], ...] , ...}
+        :param bounds_by_tag: format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
         header = Header()
         header.stamp = rospy.Time.now()
