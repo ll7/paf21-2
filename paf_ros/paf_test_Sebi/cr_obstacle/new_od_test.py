@@ -10,6 +10,7 @@ from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header, Bool
 from geometry_msgs.msg import Pose, PoseStamped
 from paf_perception.msg import PafObstacleList, PafObstacle
+#from paf_messages.msg import PafObstacleList, PafObstacle
 
 # import functions to read xml file +CommonRoad Drivability Checker
 from commonroad.common.file_reader import CommonRoadFileReader
@@ -17,8 +18,9 @@ import commonroad_dc.pycrcc as pycrcc
 
 file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
 
-# read in the scenario and planning problem set
-scenario, planning_problem_set = CommonRoadFileReader(file_path).open()
+# read in the scenario and the lanelet set
+scenario, _ = CommonRoadFileReader(file_path).open()
+lanelet_network = scenario.lanelet_network
 
 class ObstacleDetectionNode(object):
     """
@@ -45,7 +47,7 @@ class ObstacleDetectionNode(object):
         car_position = self.current_pose
         target_position = self.target_position
         obstaclelist = self.obstacle_list
-        risk_of_collision = self._check_roadway(car_position, target_position, obstaclelist)
+        risk_of_collision = self._check_roadway2(car_position, target_position, obstaclelist)
         self.risk = risk_of_collision
 
     def _check_roadway(self, car_position, target_position, obstaclelist):
@@ -61,6 +63,24 @@ class ObstacleDetectionNode(object):
             self, observated_obstacles)
         return risk_of_collision
 
+    def _check_roadway2(self, car_position, target_position, obstaclelist):
+        """
+        detects potential obstacles in front of the car (collision) in the same lanelet
+        Step1: 
+        Step2:
+        """
+        danger_zone = self._define_danger_zone2(
+            car_position, target_position)
+        observated_obstacles = self._check_obstacles_in_danger_zone(
+            obstaclelist, danger_zone)
+        risk_of_collision = self._check_risk_of_collision(
+            self, observated_obstacles)
+        return risk_of_collision
+
+    def _define_danger_zone2(car_position, target_position):
+        laneletId = lanelet_network.find_lanelet_by_position(car_position)
+        return laneletId
+
     def _define_danger_zone(self, car_position, target_position):
         length_vector = np.substract(car_position, target_position)
         v1 = length_vector * np.array([-1, 0])
@@ -72,6 +92,15 @@ class ObstacleDetectionNode(object):
         corner_points = np.array[(
             width_vector1, width_vector2, corner_point3, corner_point4)]
         return corner_points
+
+    def _check_obstacles_in_danger_zone2(self, obstaclelist, danger_zone):
+        observated_obstacles = []
+        for obstacle in obstaclelist:
+            bound1, bound2 = obstacle[:2]
+            poi = np.array([bound1, bound2])
+            if danger_zone in lanelet_network.find_lanelet_by_position(poi):
+                observated_obstacles.append(poi)
+        return observated_obstacles
 
     def _check_obstacles_in_danger_zone(self, obstaclelist, danger_zone):
         observated_obstacles = []
