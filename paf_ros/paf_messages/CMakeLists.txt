@@ -17,6 +17,7 @@ add_message_files(
   Point2D.msg
   PafLaneletRoute.msg
   PafRoutingGraphNode.msg
+  PafTrafficSignal.msg
 )
 
 add_service_files(

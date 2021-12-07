@@ -2,11 +2,16 @@ import numpy as np
 from typing import List, Tuple
 
 from commonroad.scenario.lanelet import Lanelet
-from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry as Country
+from commonroad.scenario.traffic_sign import (
+    SupportedTrafficSignCountry as Country,
+    TrafficSign,
+    TrafficLight,
+    TrafficLightState,
+)
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
-from paf_messages.msg import PafLaneletRoute, PafRoutingGraphNode, Point2D
+from paf_messages.msg import PafLaneletRoute, PafRoutingGraphNode, Point2D, PafTrafficSignal
 
 
 class PafRoute:
@@ -126,6 +131,15 @@ class PafRoute:
         out += f"Route completed at {route_ids[-1]}"
         return out
 
+    @staticmethod
+    def _locate_obj_on_lanelet(route_pts: List[List[float]], object_position: List[float]):
+        def dist(a, b):
+            x1, y1 = a
+            x2, y2 = b
+            return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+        return np.argmin([dist(x, object_position) for x in route_pts])
+
     def _calc_lane_rightmost_leftmost_routes(self) -> Tuple[List[int], List[int]]:
         """
         Calculates alternatives to the current route
@@ -179,7 +193,51 @@ class PafRoute:
 
         return calc_extremum(is_left_extremum=True), calc_extremum(is_left_extremum=False)
 
-    def as_msg(self, resolution):
+    def _extract_traffic_signals(self, path_pts, route_lanelet_ids):
+        traffic_signals = []
+        relevant_traffic_signs = []
+        relevant_traffic_lights = []
+        for lanelet_id in route_lanelet_ids:
+            lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            relevant_traffic_lights += list(lanelet.traffic_lights)
+            relevant_traffic_signs += list(lanelet.traffic_signs)
+
+        sign: TrafficSign
+        for sign in self.route.scenario.lanelet_network.traffic_signs:
+            if sign.traffic_sign_id not in relevant_traffic_signs:
+                continue
+            paf_sign = PafTrafficSignal()
+            paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.name
+            try:
+                paf_sign.value = sign.traffic_sign_elements[0].additional_values[0]
+            except IndexError:
+                paf_sign.value = -1
+            paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(sign.position))
+            traffic_signals.append(paf_sign)
+
+        light: TrafficLight
+        for light in self.route.scenario.lanelet_network.traffic_lights:
+            if light.traffic_light_id not in relevant_traffic_lights:
+                continue
+            paf_sign = PafTrafficSignal()
+            paf_sign.type = "LIGHT"
+            paf_sign.value = 0
+            red_value = 0
+            for phase in light.cycle:
+                if phase.state == TrafficLightState.RED:
+                    red_value += phase.duration
+                else:
+                    paf_sign.value += phase.duration
+            try:
+                paf_sign.value /= paf_sign.value + red_value
+            except ZeroDivisionError:
+                paf_sign.value = -1
+            paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(light.position))
+            traffic_signals.append(paf_sign)
+
+        return sorted(traffic_signals, key=lambda elem: elem.index)
+
+    def as_msg(self, resolution=1):
         if resolution == 0:
             resolution = 1
         msg = PafLaneletRoute()
@@ -188,15 +246,19 @@ class PafRoute:
         msg.points = []
         every_nth = int(np.round(len(self.route.path_length) / msg.length / resolution))
         every_nth = every_nth if every_nth != 0 else 1
-        for x, y in self.route.reference_path[::every_nth]:
+        path_pts = self.route.reference_path[::every_nth]
+        msg.traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
+        for x, y in path_pts:
             point = Point2D()
             point.x = x
             point.y = y
             msg.points.append(point)
         msg.graph = []
-        for key, values in self.graph.items():
+        for key, (l, s, r) in self.graph.items():
             node_msg = PafRoutingGraphNode()
             node_msg.start = key
-            node_msg.allowed = [v for v in values if v is not None]
+            node_msg.left = -1 if l is None else l
+            node_msg.straight = -1 if s is None else s
+            node_msg.right = -1 if r is None else r
             msg.graph.append(node_msg)
         return msg
