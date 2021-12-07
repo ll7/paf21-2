@@ -24,7 +24,9 @@ function _close_ros() {
   wmctrl -c " - RViz"
 }
 function exit_program() {
-  _close_ros
+  # exit all ros instances
+  echo "closing all ros launchers..."
+  _close_ros 1>/dev/null
   echo ""
   echo "following log files have been created:"
   echo ""
@@ -144,7 +146,4 @@ echo "press ctrl+c to kill all ros terminals."
 
 echo "listening for error/exit of carla environment..."
 ./subscripts/wait_for_window.sh CarlaUE4 open >/dev/null
-
-# exit all ros instances
-echo "closing all ros launchers..."
 exit_program
