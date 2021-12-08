@@ -4,7 +4,7 @@ import rospy
 
 from carla_birdeye_view.mask import PixelDimensions
 from time import sleep
-from paf_messages.msg import PafObstacleList, PafLocalPath
+from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -32,9 +32,14 @@ class TopDownRosNode(object):
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.update_obstacles)
         rospy.Subscriber(rospy.get_param("local_path_topic"), PafLocalPath, self.update_local_path)
+        rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
 
     def update_obstacles(self, msg: PafObstacleList):
         self.producer.update_obstacles(msg)
+
+    def update_global_path(self, msg: PafLaneletRoute):
+        path = [[point.x, point.y] for point in msg.points]
+        self.producer.set_path(coordinate_list_global_path=path)
 
     def update_local_path(self, msg: PafLocalPath):
         path = [[point.x, point.y] for point in msg.points]

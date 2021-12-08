@@ -16,14 +16,14 @@ add_message_files(
   PafObstacleList.msg
   Point2D.msg
   PafLaneletRoute.msg
+  PafRoutingRequest.msg
   PafRoutingGraphNode.msg
   PafTrafficSignal.msg
 )
 
-add_service_files(
-  FILES
-  PafRoutingRequest.srv
-)
+#add_service_files(
+#  FILES
+#)
 
 generate_messages(
   DEPENDENCIES

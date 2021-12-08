@@ -1,6 +1,0 @@
-float32[2] start
-float32 start_yaw
-float32[2] target
-float32 resolution
----
-PafLaneletRoute[] route

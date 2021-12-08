@@ -141,7 +141,9 @@ class PafRoute:
             x2, y2 = b
             return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
-        return np.argmin([dist(x, object_position) for x in route_pts])
+        if len(route_pts) == 0:
+            return -1
+        return int(np.argmin([dist(x, object_position) for x in route_pts]))
 
     def _calc_lane_rightmost_leftmost_routes(self) -> Tuple[List[int], List[int]]:
         """
@@ -212,11 +214,11 @@ class PafRoute:
             paf_sign = PafTrafficSignal()
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             try:
-                paf_sign.value = sign.traffic_sign_elements[0].additional_values[0]
+                paf_sign.value = float(sign.traffic_sign_elements[0].additional_values[0])
                 if paf_sign.type == TrafficSignIDGermany.MAX_SPEED:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
-                paf_sign.value = -1
+                paf_sign.value = -1.0
             paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(sign.position))
             traffic_signals.append(paf_sign)
 
@@ -226,7 +228,7 @@ class PafRoute:
                 continue
             paf_sign = PafTrafficSignal()
             paf_sign.type = "LIGHT"
-            paf_sign.value = 0
+            paf_sign.value = 0.0
             red_value = 0
             for phase in light.cycle:
                 if phase.state == TrafficLightState.RED:
@@ -236,7 +238,7 @@ class PafRoute:
             try:
                 paf_sign.value /= paf_sign.value + red_value
             except ZeroDivisionError:
-                paf_sign.value = -1
+                paf_sign.value = -1.0
             paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(light.position))
             traffic_signals.append(paf_sign)
 
@@ -249,15 +251,15 @@ class PafRoute:
         if resolution == 0:
             every_nth = 1
         else:
-            every_nth = int(np.round(len(self.route.path_length) / msg.length / resolution))
+            every_nth = int(np.round(len(self.route.path_length) / self.route.path_length[-1] / resolution))
             every_nth = every_nth if every_nth != 0 else 1
         path_pts = self.route.reference_path[::every_nth]
-        msg.distances = self.route.path_length[::every_nth]
+        msg.distances = list(self.route.path_length[::every_nth])
         msg.traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
         for x, y in path_pts:
             point = Point2D()
             point.x = x
-            point.y = y
+            point.y = -y
             msg.points.append(point)
         msg.graph = []
         for key, (l, s, r) in self.graph.items():

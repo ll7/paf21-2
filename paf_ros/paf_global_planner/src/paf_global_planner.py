@@ -14,10 +14,13 @@ from commonroad.scenario.scenario import Scenario
 from commonroad.scenario.trajectory import State
 from commonroad_route_planner.route_planner import RoutePlanner
 
-from paf_messages.msg import PafLaneletRoute
-from paf_messages.srv import PafRoutingRequest
+from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
+from paf_messages.msg import PafLaneletRoute, PafRoutingRequest
 
 from classes.PafRoute import PafRoute
+from std_srvs.srv import Empty
+from tf.transformations import euler_from_quaternion
 
 
 class GlobalPlanner:
@@ -29,13 +32,86 @@ class GlobalPlanner:
     def __init__(self):
         self.scenario: Scenario
         self.scenario, _ = CommonRoadFileReader("/home/julin/Downloads/Town03.xml").open()
+        self._position = [1e99, 1e99]
+        self._yaw = 0
+        self._routing_target = None
 
         rospy.init_node("paf_global_planner", anonymous=True)
-        rospy.Service("/paf_global_planner/routing_request", PafRoutingRequest, self._routing_provider)
+        role_name = rospy.get_param("~role_name", "ego_vehicle")
 
-    def _routing_provider(self, request: PafRoutingRequest) -> List[List[PafLaneletRoute]]:
-        routes = self._routes_from_objective(request.start, request.start_yaw, request.target)
-        return [[route.as_msg(request.resolution) for route in routes]]
+        rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider)
+        rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
+        rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
+
+        rospy.Service("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
+
+        self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
+        self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)
+
+    def _reroute_provider(self, _: Empty):
+        rospy.loginfo("[global planner] rerouting...")
+        self._routing_provider()
+
+    def _routing_provider(self, msg: PafRoutingRequest = None):
+        if msg is None:
+            msg = self._routing_target
+        else:
+            self._routing_target = msg
+
+        if msg is not None:
+            routes = self._routes_from_objective(self._position, self._yaw, msg.target, return_shortest_only=True)
+            if len(routes) > 0:
+                rospy.loginfo_throttle(1, f"[global planner] publishing route to target {msg.target}")
+                self._routing_pub.publish(routes[0].as_msg(msg.resolution))
+                return
+        resolution = msg.resolution if msg is not None else 0
+        rospy.logwarn_throttle(
+            1, "[global planner] route planning failed, " "trying to find any straight route for now..."
+        )
+        try:
+            lanelet_id = self._find_closest_lanelet()[0]
+        except IndexError:
+            rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
+            return
+        ids = [lanelet_id]
+        for i in range(10):
+            lanelet = self.scenario.lanelet_network.find_lanelet_by_id(ids[-1])
+            choices = lanelet.successor
+            if len(choices) == 0:
+                rospy.logerr_throttle(1, "[global planner] unable to find successor lanelet")
+                return
+            ids.append(np.random.choice(choices))
+        rospy.loginfo_throttle(1, "[global planner] publishing route to a target straight ahead")
+        self._routing_pub.publish(self._route_from_ids(ids).as_msg(resolution))
+
+    def _find_closest_lanelet(self, p=None):
+        if p is None:
+            p = self._position
+        p = np.array(p, dtype=float)
+        lanelets = self.scenario.lanelet_network.find_lanelet_by_position([p])[0]
+        if len(lanelets) > 0:
+            return lanelets
+        shape = Circle(radius=5, center=p)
+        lanelets = self.scenario.lanelet_network.find_lanelet_by_shape(shape)
+        return lanelets
+
+    def _teleport(self, msg: Pose):
+        msg_out = PoseWithCovarianceStamped()
+        msg_out.header.stamp = rospy.Time.now()
+        msg_out.pose = msg
+        self._teleport_pub.publish(msg_out)
+
+    def _odometry_provider(self, odometry: Odometry):
+        pose = odometry.pose.pose
+        self._position = pose.position.x, pose.position.y
+        _, _, self._yaw = euler_from_quaternion(
+            [
+                odometry.pose.pose.orientation.x,
+                odometry.pose.pose.orientation.y,
+                odometry.pose.pose.orientation.z,
+                odometry.pose.pose.orientation.w,
+            ]
+        )
 
     def _routes_from_objective(
         self,
@@ -46,6 +122,7 @@ class GlobalPlanner:
         start_velocity: float = 0.0,
         target_circle_diameter: float = 4.0,
         target_orientation_allowed_error: float = 0.2,
+        return_shortest_only=False,
     ) -> List[PafRoute]:
         """
         Creates a commonroad planning problem with the given parameters
@@ -70,8 +147,10 @@ class GlobalPlanner:
             target_orientation_allowed_error,
         )
         route_planner = RoutePlanner(self.scenario, planning_problem, backend=self.BACKEND)
-
         routes, _ = route_planner.plan_routes().retrieve_all_routes()
+        if return_shortest_only:
+            routes = sorted(routes, key=lambda x: x.reference_path[-1])
+            return [PafRoute(routes[0])]
         return [PafRoute(route) for route in routes]
 
     @staticmethod
@@ -136,7 +215,7 @@ if __name__ == "__main__":
     node = GlobalPlanner()
     node.start()
 
-# rosservice call /paf_global_planner/routing_request "start:
+# rosservice call /paf/paf_global_planner/routing_request "start:
 # - -85.0
 # - -75.0
 # start_yaw: 1.56
