@@ -169,7 +169,15 @@ class LocalPlanner:
             pt.y = point[1]
             path_msg.points.append(pt)
 
-        path_msg.target_speed = 30
+        if self.currentPointIndex < 14:
+            path_msg.target_speed = 50
+
+        if self.currentPointIndex >= 14 and self.currentPointIndex < 37:
+            path_msg.target_speed = 30
+
+        if self.currentPointIndex >= 37:
+            path_msg.target_speed = 50
+
         return path_msg
 
     def publish_local_path(self):
