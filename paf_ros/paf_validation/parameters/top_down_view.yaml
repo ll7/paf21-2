@@ -5,7 +5,7 @@ img_size: {
   width: 900,
   height: 500
 }
-pixels_per_meter: 10
+pixels_per_meter: 5
 north_is_up: true
 dark_mode: false
 show_whole_map: false
