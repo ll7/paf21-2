@@ -3,8 +3,12 @@
 import rospy
 import math
 
-from nav_msgs.msg import Path, Odometry
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import Pose
+from nav_msgs.msg import Odometry
+from paf_messages.msg import PafLocalPath, Point2D as Point
+
+
+
 
 LOOK_AHEAD_POINTS = 10
 
@@ -12,9 +16,9 @@ class LocalPlanner:
 
     """class used for the local planner. Task: return a local path"""
 
-    def __init__(self, role_name):
+    def __init__(self):
 
-        self.role_name = role_name
+        self.role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         # mocked path - later replace by a calculated path
         self.path_array = [
@@ -100,12 +104,14 @@ class LocalPlanner:
         self.currentPointIndex = 0
 
         self._current_pose = Pose()
+        self._current_speed = 0
+        self._target_speed = 180
 
         # subscribe to carla odometry
         self.odometry_sub = rospy.Subscriber(f"carla/{self.role_name}/odometry", Odometry, self.odometry_updated)
 
         # create and start the publisher for the local path
-        self.local_plan_publisher = rospy.Publisher("local_path_publisher", Path, queue_size=10)
+        self.local_plan_publisher = rospy.Publisher(rospy.get_param("local_path_topic"), PafLocalPath, queue_size=1)
 
 
 
@@ -134,7 +140,7 @@ class LocalPlanner:
             [type]: [description]
         """
         # initialize with a high value
-        min_distance = 99999999999
+        min_distance = 1e10
         current_pos = [self._current_pose.position.x, self._current_pose.position.y]
         nearest_point = None
         for point in self.path_array:
@@ -143,7 +149,6 @@ class LocalPlanner:
 
             distance = math.sqrt(distance_x * distance_x + distance_y * distance_y)
 
-            # print(f'distance to point on path {point} is {distance}')
             if distance < min_distance:
                 min_distance = distance
                 nearest_point = point
@@ -158,19 +163,18 @@ class LocalPlanner:
         Returns:
             [type]: [description]
         """
-        path_msg = Path()
+        path_msg = PafLocalPath()
         path_msg.header.frame_id = "local path"
-
+        path_msg.header.stamp = rospy.Time.now()
+        path_msg.target_speed = self._target_speed
         current_path = self.get_current_path()
 
         for point in current_path:
-            pose = PoseStamped()
-            pose.header.frame_id = "map"
-            pose.header.stamp = rospy.Time.now()
-            pose.pose.position.x = point[0]
-            pose.pose.position.y = point[1]
-            pose.pose.position.z = 0
-            path_msg.poses.append(pose)
+            pt = Point()
+            pt.x = point[0]
+            pt.y = point[1]
+            path_msg.points.append(pt)
+            path_msg.target_speed = 30
 
         
 
@@ -180,8 +184,8 @@ class LocalPlanner:
         rate = rospy.Rate(1)  # 10hz
         while not rospy.is_shutdown():
             path_msg = self.create_ros_msg()
-            next_waypoint = path_msg.poses[0].pose.position
-            rospy.loginfo(f"current position {self._current_pose.position}, next waypoint: {next_waypoint}")
+            # next_waypoint = path_msg.poses[0].position
+            # rospy.loginfo(f"current position {self._current_pose.position}, next waypoint: {next_waypoint}")
             self.local_plan_publisher.publish(path_msg)
             rate.sleep()
 
@@ -189,39 +193,18 @@ class LocalPlanner:
     def odometry_updated(self, odometry: Odometry):
         """Odometry Update Callback"""
 
-        # calculate current speed (km/h) from twist
-        self._current_speed = (
-            math.sqrt(
-                odometry.twist.twist.linear.x ** 2
-                + odometry.twist.twist.linear.y ** 2
-                + odometry.twist.twist.linear.z ** 2
-            )
-            * 3.6
+        # calculate current speed (m/s) from twist
+        self._current_speed = math.sqrt(
+            odometry.twist.twist.linear.x ** 2 + odometry.twist.twist.linear.y ** 2 + odometry.twist.twist.linear.z ** 2
         )
         self._current_pose = odometry.pose.pose
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
 
-
-        # calculate distance to current next point
-        current_pos = self._current_pose.position
-        nextpoint = self.path_array[self.currentPointIndex]
-        distance = math.sqrt(
-            (current_pos.x - nextpoint[0]) ** 2 + (current_pos.y- nextpoint[1]) ** 2
-        )
-
-        #current point reached 
-        if(distance < 10):
-            self.currentPointIndex = self.currentPointIndex +1
-        
+    def start(self):
+        rospy.init_node("local_path_publisher", anonymous=True)
+        self.publish_local_path()
 
 
 if __name__ == "__main__":
-
-    rospy.init_node("local_path_publisher", anonymous=True)
-    role_name = rospy.get_param("~role_name", "ego_vehicle")
-    lp = LocalPlanner(role_name)
-
-    lp.publish_local_path()
-    rospy.spin()
-    lp.testing()
+    LocalPlanner().start()
