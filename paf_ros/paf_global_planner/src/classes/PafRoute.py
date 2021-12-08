@@ -7,6 +7,7 @@ from commonroad.scenario.traffic_sign import (
     TrafficSign,
     TrafficLight,
     TrafficLightState,
+    TrafficSignIDGermany,
 )
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
@@ -15,7 +16,9 @@ from paf_messages.msg import PafLaneletRoute, PafRoutingGraphNode, Point2D, PafT
 
 
 class PafRoute:
-    def __init__(self, route: CommonroadRoute, traffic_sign_country: Country):
+    SPEED_KMH_TO_MS = 1 / 3.6
+
+    def __init__(self, route: CommonroadRoute, traffic_sign_country: Country = Country.GERMANY):
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
 
@@ -207,9 +210,11 @@ class PafRoute:
             if sign.traffic_sign_id not in relevant_traffic_signs:
                 continue
             paf_sign = PafTrafficSignal()
-            paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.name
+            paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             try:
                 paf_sign.value = sign.traffic_sign_elements[0].additional_values[0]
+                if paf_sign.type == TrafficSignIDGermany.MAX_SPEED:
+                    paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
                 paf_sign.value = -1
             paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(sign.position))

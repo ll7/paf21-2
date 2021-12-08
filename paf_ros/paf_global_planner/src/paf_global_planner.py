@@ -18,7 +18,6 @@ from paf_messages.msg import PafLaneletRoute
 from paf_messages.srv import PafRoutingRequest
 
 from classes.PafRoute import PafRoute
-from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry as Country
 
 
 class GlobalPlanner:
@@ -30,7 +29,6 @@ class GlobalPlanner:
     def __init__(self):
         self.scenario: Scenario
         self.scenario, _ = CommonRoadFileReader("/home/julin/Downloads/Town03.xml").open()
-        self.country = Country.USA
 
         rospy.init_node("paf_global_planner", anonymous=True)
         rospy.Service("/paf_global_planner/routing_request", PafRoutingRequest, self._routing_provider)
@@ -74,7 +72,7 @@ class GlobalPlanner:
         route_planner = RoutePlanner(self.scenario, planning_problem, backend=self.BACKEND)
 
         routes, _ = route_planner.plan_routes().retrieve_all_routes()
-        return [PafRoute(route, self.country) for route in routes]
+        return [PafRoute(route) for route in routes]
 
     @staticmethod
     def _get_planning_problem(
@@ -127,7 +125,7 @@ class GlobalPlanner:
         return PlanningProblem(1, initial_state, GoalRegion([target_state]))
 
     def _route_from_ids(self, lanelet_ids: List[int]):
-        return PafRoute(Route(self.scenario, None, lanelet_ids, RouteType.REGULAR), self.country)
+        return PafRoute(Route(self.scenario, None, lanelet_ids, RouteType.REGULAR))
 
     @staticmethod
     def start():
