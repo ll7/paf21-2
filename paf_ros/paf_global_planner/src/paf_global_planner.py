@@ -19,7 +19,7 @@ from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest
 
 from classes.PafRoute import PafRoute
-from std_srvs.srv import Empty
+from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion
 
 
@@ -43,7 +43,7 @@ class GlobalPlanner:
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
 
-        rospy.Service("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
+        rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
 
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
         self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)

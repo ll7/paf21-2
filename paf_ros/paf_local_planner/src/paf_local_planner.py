@@ -11,9 +11,9 @@ import rospy
 import numpy as np
 
 from geometry_msgs.msg import Pose
-from std_srvs.srv import Empty
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLocalPath, Point2D as Point, PafLaneletRoute
+from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion
 
 
@@ -26,7 +26,7 @@ class LocalPlanner:
     CAR_DECELERATION = -9.81 * rospy.get_param("deceleration_g_factor", 8)  # m/s^2
     QUICK_BRAKE_EVENTS = [SignsDE.STOP]
     ROLLING_EVENTS = ["LIGHT", SignsDE.YIELD]
-
+    DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
 
     def __init__(self):
@@ -37,6 +37,7 @@ class LocalPlanner:
         self._current_pitch = 0
         self._target_speed = 250
         self._speed_limit = 250
+        self._target_reached = False
         self._global_path = []
         self._distances = []
         self._traffic_signals = []
@@ -50,6 +51,7 @@ class LocalPlanner:
 
         # create and start the publisher for the local path
         self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
+        self._reroute_publisher = rospy.Publisher("/paf/paf_local_planner/reroute", Empty, queue_size=1)
 
     def _current_deceleration_distance(self, target_speed=0):
         deceleration = self.CAR_DECELERATION - 9.81 * np.sin(self._current_pitch)
@@ -71,10 +73,17 @@ class LocalPlanner:
             d_ref = 0
         try:
             delta = self._distances[index + 1] - d_ref
-            index_end = int(np.ceil(self.TRANSMIT_FRONT_M / delta))
+            index_end = int(np.ceil(self.TRANSMIT_FRONT_M / delta)) + index
             _ = self._distances[index_end]
         except IndexError:
-            self._send_global_path_request()
+            if (
+                self._dist(
+                    (self._global_path[-1].x, self._global_path[-1].y),
+                    (self._current_pose.position.x, self._current_pose.position.y),
+                )
+                > self.DIST_TARGET_REACHED
+            ):
+                self._send_global_path_request()
             index_end = len(self._distances)
 
         signals = {}
@@ -195,12 +204,8 @@ class LocalPlanner:
         except IndexError:
             return False
 
-    @staticmethod
-    def _send_global_path_request():
-        try:
-            rospy.ServiceProxy("/paf/paf_local_planner/reroute", Empty)()
-        except rospy.ServiceException:
-            rospy.logwarn_throttle(10, "[local planner] rerouting service unavailable")
+    def _send_global_path_request(self):
+        self._reroute_publisher.publish(Empty())
 
     def start(self):
         rospy.init_node("local_path_node", anonymous=True)

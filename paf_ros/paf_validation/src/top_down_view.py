@@ -38,7 +38,7 @@ class TopDownRosNode(object):
         self.producer.update_obstacles(msg)
 
     def update_global_path(self, msg: PafLaneletRoute):
-        path = [[point.x, point.y] for point in msg.points]
+        path = [[point.x, point.y] for point in msg.points[::10]]
         self.producer.set_path(coordinate_list_global_path=path)
 
     def update_local_path(self, msg: PafLocalPath):
