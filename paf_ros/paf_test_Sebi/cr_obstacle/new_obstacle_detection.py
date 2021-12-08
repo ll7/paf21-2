@@ -9,8 +9,8 @@ import rospy
 from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header, Bool
 from geometry_msgs.msg import Pose, PoseStamped
-from paf_perception.msg import PafObstacleList, PafObstacle
-#from paf_messages.msg import PafObstacleList, PafObstacle
+# from paf_perception.msg import PafObstacleList, PafObstacle
+from paf_messages.msg import PafObstacleList, PafObstacle
 from argparse import Namespace
 
 # import functions to read xml file +CommonRoad Drivability Checker
@@ -22,6 +22,12 @@ file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
 # read in the scenario and the lanelet set
 scenario, _ = CommonRoadFileReader(file_path).open()
 lanelet_network = scenario.lanelet_network
+
+class ObstacleContainer:
+    def __init__(self):
+        self.pedestrians = []
+        self.vehicles = []
+
 
 class ObstacleDetectionNode(object):
     """
@@ -44,7 +50,7 @@ class ObstacleDetectionNode(object):
         rospy.logwarn(obstacle_topic)
         rospy.Subscriber(odometry_topic, Odometry, self._odometry_updated)
         rospy.Subscriber(obstacle_topic, PafObstacleList,
-                         self._update_obstacles)
+                         self._obstacle_list_updated)
         self.detected_obstacle_publisher = rospy.Publisher(
             detected_obstacle_topic,
             PafObstacleList,
@@ -53,7 +59,8 @@ class ObstacleDetectionNode(object):
 
         self.current_pose = Pose()  # car_position
         self.target_position = None
-        self.obstacle_list = {}
+
+        self.obstacles = ObstacleContainer()
 
         self.detected_obstacle = None
 
@@ -63,22 +70,20 @@ class ObstacleDetectionNode(object):
         :param bounds_by_tag: format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
         rospy.logwarn("Nachricht wird empfangen")
-        
-        self.obstacle_list[msg.tag] = msg.obstacles
-        for tag,liste in self.obstacle_list.items()
-            ...
-        self._process_obstacle_detection()
-    
-    def update_obstacles(self, msg: PafObstacleList):
-        self.producer.update_obstacles(msg)
 
-    def update_obstacles(self, msg: PafObstacleList):
         if msg.type == "Pedestrians":
-            self.obstacles_pedestrians = self._update_obstacles(msg)
-        elif msg.type == "Vehicles":
-            self.obstacles_vehicles = self._update_obstacles(msg)
+            self.obstacles.pedestrians = msg.obstacles
+        if msg.type == "Vehicles":
+            self.obstacles.vehicles = msg.obstacles
         else:
-            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to obstacle detection")
+    
+        
+        # if msg.type == "Pedestrians" or msg.type == "Vehicles":
+        #     self.obstacles[msg.type] = msg.obstacles
+        #     self._process_obstacle_detection()
+        # else:
+        #     rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to obstacle detection")
 
     @staticmethod
     def _update_obstacles(msg: PafObstacleList):
