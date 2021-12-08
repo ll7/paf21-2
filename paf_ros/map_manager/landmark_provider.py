@@ -89,13 +89,6 @@ class LandMarkProvider:
             marks = world.get_map().get_all_landmarks()
 
             for mark in marks:
-                print("Name ", mark.name)
-                print("x position: ", mark.transform.location.x)
-                print("y position: ", -mark.transform.location.y)
-                print("ID: ", int(mark.id))
-                print("\n")
-
-            for mark in marks:
                 if mark.name in markings:
 
                     # print("Name ", mark.name)
@@ -130,7 +123,7 @@ class LandMarkProvider:
 
 def main():
     landmark_provider = LandMarkProvider()
-    landmark_provider._get_markings
+    landmark_provider._get_markings()
 
 
 if __name__ == "__main__":
