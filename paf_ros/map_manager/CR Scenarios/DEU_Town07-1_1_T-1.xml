@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<commonRoad timeStepSize="0.1" commonRoadVersion="2020a" author="paf21-2" affiliation="Augsburg University" source="CommonRoad Scenario Designer" benchmarkID="DEU_Town07-1_1_T-1" date="2021-12-07">
+<commonRoad timeStepSize="0.1" commonRoadVersion="2020a" author="paf21-2" affiliation="Augsburg University" source="CommonRoad Scenario Designer" benchmarkID="DEU_Town07-1_1_T-1" date="2021-12-08">
   <location>
     <geoNameId>-999</geoNameId>
     <gpsLatitude>999.0</gpsLatitude>
@@ -1123,6 +1123,7 @@
     <successor ref="111"/>
     <adjacentLeft ref="100" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="380"/>
     <trafficLightRef ref="13"/>
   </lanelet>
   <lanelet id="112">
@@ -3087,6 +3088,7 @@
     <successor ref="124"/>
     <adjacentLeft ref="125" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="356"/>
   </lanelet>
   <lanelet id="125">
     <leftBound>
@@ -5700,6 +5702,7 @@
     <successor ref="142"/>
     <adjacentLeft ref="143" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="359"/>
   </lanelet>
   <lanelet id="143">
     <leftBound>
@@ -6649,6 +6652,7 @@
     <successor ref="139"/>
     <adjacentLeft ref="140" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="360"/>
   </lanelet>
   <lanelet id="146">
     <leftBound>
@@ -7631,7 +7635,8 @@
     <successor ref="149"/>
     <adjacentLeft ref="150" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
-    <trafficSignRef ref="356"/>
+    <trafficSignRef ref="354"/>
+    <trafficSignRef ref="357"/>
   </lanelet>
   <lanelet id="150">
     <leftBound>
@@ -8614,6 +8619,7 @@
     <successor ref="153"/>
     <adjacentLeft ref="146" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="358"/>
     <trafficLightRef ref="7"/>
   </lanelet>
   <lanelet id="154">
@@ -11255,6 +11261,7 @@
     <successor ref="172"/>
     <adjacentLeft ref="173" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="369"/>
     <trafficLightRef ref="2"/>
   </lanelet>
   <lanelet id="173">
@@ -14622,6 +14629,7 @@
     <successor ref="190"/>
     <adjacentLeft ref="191" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="365"/>
   </lanelet>
   <lanelet id="191">
     <leftBound>
@@ -15884,6 +15892,7 @@
     <successor ref="169"/>
     <adjacentLeft ref="188" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="368"/>
     <trafficSignRef ref="31"/>
   </lanelet>
   <lanelet id="194">
@@ -20003,6 +20012,8 @@
     <successor ref="148"/>
     <adjacentLeft ref="198" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="353"/>
+    <trafficSignRef ref="374"/>
     <trafficLightRef ref="5"/>
   </lanelet>
   <lanelet id="198">
@@ -28666,6 +28677,7 @@
     <successor ref="145"/>
     <adjacentLeft ref="204" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="351"/>
   </lanelet>
   <lanelet id="205">
     <leftBound>
@@ -29568,6 +29580,7 @@
     <successor ref="208"/>
     <adjacentLeft ref="209" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="379"/>
     <trafficSignRef ref="30"/>
   </lanelet>
   <lanelet id="210">
@@ -31518,6 +31531,7 @@
     <successor ref="216"/>
     <adjacentLeft ref="210" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="378"/>
     <trafficLightRef ref="3"/>
   </lanelet>
   <lanelet id="217">
@@ -31949,6 +31963,7 @@
     <successor ref="219"/>
     <adjacentLeft ref="220" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="373"/>
   </lanelet>
   <lanelet id="220">
     <leftBound>
@@ -32378,6 +32393,7 @@
     <successor ref="196"/>
     <adjacentLeft ref="217" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="377"/>
     <trafficLightRef ref="11"/>
   </lanelet>
   <lanelet id="218">
@@ -33854,6 +33870,7 @@
     <successor ref="229"/>
     <adjacentLeft ref="230" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="372"/>
   </lanelet>
   <lanelet id="230">
     <leftBound>
@@ -40488,6 +40505,8 @@
     <successor ref="193"/>
     <adjacentLeft ref="278" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="363"/>
+    <trafficSignRef ref="367"/>
   </lanelet>
   <lanelet id="278">
     <leftBound>
@@ -44597,6 +44616,7 @@
     <successor ref="305"/>
     <adjacentLeft ref="298" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="383"/>
     <trafficLightRef ref="12"/>
   </lanelet>
   <lanelet id="306">
@@ -45126,6 +45146,7 @@
     <adjacentLeft ref="310" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
     <trafficSignRef ref="26"/>
+    <trafficSignRef ref="370"/>
   </lanelet>
   <lanelet id="310">
     <leftBound>
@@ -45653,6 +45674,7 @@
     <successor ref="313"/>
     <adjacentLeft ref="306" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="371"/>
     <trafficSignRef ref="36"/>
   </lanelet>
   <lanelet id="314">
@@ -55817,8 +55839,9 @@
     <successor ref="147"/>
     <adjacentLeft ref="202" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="350"/>
     <trafficSignRef ref="355"/>
-    <trafficSignRef ref="356"/>
+    <trafficSignRef ref="366"/>
     <trafficLightRef ref="6"/>
   </lanelet>
   <lanelet id="332">
@@ -57546,6 +57569,7 @@
     <successor ref="333"/>
     <adjacentLeft ref="334" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="361"/>
     <trafficSignRef ref="34"/>
   </lanelet>
   <lanelet id="334">
@@ -59273,6 +59297,7 @@
     <successor ref="331"/>
     <adjacentLeft ref="332" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="366"/>
   </lanelet>
   <lanelet id="336">
     <leftBound>
@@ -60384,6 +60409,7 @@
     <adjacentLeft ref="338" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
     <trafficSignRef ref="22"/>
+    <trafficSignRef ref="375"/>
   </lanelet>
   <lanelet id="338">
     <leftBound>
@@ -61494,6 +61520,7 @@
     <successor ref="335"/>
     <adjacentLeft ref="336" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="376"/>
     <trafficSignRef ref="35"/>
   </lanelet>
   <lanelet id="340">
@@ -62524,6 +62551,7 @@
     <successor ref="341"/>
     <adjacentLeft ref="342" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="381"/>
   </lanelet>
   <lanelet id="342">
     <leftBound>
@@ -65356,6 +65384,7 @@
     <successor ref="343"/>
     <adjacentLeft ref="344" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="382"/>
   </lanelet>
   <lanelet id="348">
     <leftBound>
@@ -68530,6 +68559,8 @@
     <successor ref="212"/>
     <adjacentLeft ref="349" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="384"/>
+    <trafficSignRef ref="386"/>
     <trafficLightRef ref="4"/>
   </lanelet>
   <lanelet id="349">
@@ -71705,6 +71736,7 @@
     <successor ref="347"/>
     <adjacentLeft ref="348" drivingDir="opposite"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="385"/>
   </lanelet>
   <lanelet id="101">
     <leftBound>
@@ -85300,6 +85332,7 @@
     <predecessor ref="316"/>
     <successor ref="321"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="362"/>
   </lanelet>
   <lanelet id="319">
     <leftBound>
@@ -106857,6 +106890,7 @@
     <predecessor ref="326"/>
     <successor ref="318"/>
     <laneletType>unknown</laneletType>
+    <trafficSignRef ref="364"/>
   </lanelet>
   <lanelet id="322">
     <leftBound>
@@ -120542,7 +120576,7 @@
     </trafficSignElement>
     <position>
       <point>
-        <x>-168.0</x>
+        <x>-170.0</x>
         <y>244.0</y>
       </point>
     </position>
@@ -120555,7 +120589,7 @@
     </trafficSignElement>
     <position>
       <point>
-        <x>-26.0</x>
+        <x>-25.0</x>
         <y>246.0</y>
       </point>
     </position>
@@ -120568,8 +120602,8 @@
     </trafficSignElement>
     <position>
       <point>
-        <x>24.0</x>
-        <y>233.0</y>
+        <x>21.0</x>
+        <y>234.0</y>
       </point>
     </position>
     <virtual>false</virtual>
@@ -120581,8 +120615,8 @@
     </trafficSignElement>
     <position>
       <point>
-        <x>37.0</x>
-        <y>225.0</y>
+        <x>38.0</x>
+        <y>224.0</y>
       </point>
     </position>
     <virtual>false</virtual>
@@ -120620,13 +120654,26 @@
     </trafficSignElement>
     <position>
       <point>
+        <x>-36.0</x>
+        <y>162.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="357">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
         <x>-4.0</x>
         <y>170.0</y>
       </point>
     </position>
     <virtual>false</virtual>
   </trafficSign>
-  <trafficSign id="357">
+  <trafficSign id="358">
     <trafficSignElement>
       <trafficSignID>274</trafficSignID>
       <additionalValue>40</additionalValue>
@@ -120635,19 +120682,6 @@
       <point>
         <x>-0.5</x>
         <y>176.0</y>
-      </point>
-    </position>
-    <virtual>false</virtual>
-  </trafficSign>
-  <trafficSign id="358">
-    <trafficSignElement>
-      <trafficSignID>274</trafficSignID>
-      <additionalValue>30</additionalValue>
-    </trafficSignElement>
-    <position>
-      <point>
-        <x>-36.0</x>
-        <y>162.0</y>
       </point>
     </position>
     <virtual>false</virtual>
@@ -120724,7 +120758,7 @@
     </trafficSignElement>
     <position>
       <point>
-        <x>-67.0</x>
+        <x>-68.0</x>
         <y>95.0</y>
       </point>
     </position>
@@ -120738,7 +120772,7 @@
     <position>
       <point>
         <x>-14.0</x>
-        <y>66.3</y>
+        <y>66.5</y>
       </point>
     </position>
     <virtual>false</virtual>
@@ -120750,8 +120784,8 @@
     </trafficSignElement>
     <position>
       <point>
-        <x>-152.0</x>
-        <y>71.0</y>
+        <x>-198.0</x>
+        <y>55.0</y>
       </point>
     </position>
     <virtual>false</virtual>
@@ -120763,8 +120797,8 @@
     </trafficSignElement>
     <position>
       <point>
-        <x>-198.0</x>
-        <y>55.0</y>
+        <x>-152.0</x>
+        <y>71.0</y>
       </point>
     </position>
     <virtual>false</virtual>
@@ -120790,7 +120824,228 @@
     <position>
       <point>
         <x>-5.0</x>
-        <y>45.6</y>
+        <y>45.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="370">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-182.0</x>
+        <y>33.5</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="371">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-166.0</x>
+        <y>36.5</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="372">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-36.0</x>
+        <y>3.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="373">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>43.0</x>
+        <y>3.5</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="374">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>40</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>76.0</x>
+        <y>13.6</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="375">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-203.0</x>
+        <y>10.6</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="376">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-201.0</x>
+        <y>-21.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="377">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>40</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>52.0</x>
+        <y>-0.5</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="378">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>40</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>80.5</x>
+        <y>-18.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="379">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>44.5</x>
+        <y>-60.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="380">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-143.0</x>
+        <y>-52.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="381">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>40</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-203.0</x>
+        <y>-82.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="382">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>40</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-156.0</x>
+        <y>-110.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="383">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-103.0</x>
+        <y>-87.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="384">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>40</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>-93.0</x>
+        <y>-121.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="385">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>40</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>69.5</x>
+        <y>-75.0</y>
+      </point>
+    </position>
+    <virtual>false</virtual>
+  </trafficSign>
+  <trafficSign id="386">
+    <trafficSignElement>
+      <trafficSignID>274</trafficSignID>
+      <additionalValue>30</additionalValue>
+    </trafficSignElement>
+    <position>
+      <point>
+        <x>64.4</x>
+        <y>-95.0</y>
       </point>
     </position>
     <virtual>false</virtual>
