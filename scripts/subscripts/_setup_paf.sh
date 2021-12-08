@@ -24,3 +24,6 @@ sleep 1
 pre-commit install
 pre-commit install -t post-checkout
 pre-commit run --all-files
+
+# alt install curl https://pre-commit.com/install-local.py | python
+# then add "source ~/.profile" to file ~/.bashrc
