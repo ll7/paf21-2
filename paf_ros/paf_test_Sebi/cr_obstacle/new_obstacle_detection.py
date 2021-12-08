@@ -11,23 +11,23 @@ from std_msgs.msg import Header, Bool
 from geometry_msgs.msg import Pose, PoseStamped
 # from paf_perception.msg import PafObstacleList, PafObstacle
 from paf_messages.msg import PafObstacleList, PafObstacle
-
+from tf.transformations import euler_from_quaternion
 # import functions to read xml file +CommonRoad Drivability Checker
 from commonroad.common.file_reader import CommonRoadFileReader
 import commonroad_dc.pycrcc as pycrcc
 
 #file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
-file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/DEU_Town03-1_1_T-1.xml"
+file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/Town03.xml"
 
 
 # read in the scenario and the lanelet set
 scenario, _ = CommonRoadFileReader(file_path).open()
 lanelet_network = scenario.lanelet_network
 
-class ObstacleContainer:
-    def __init__(self):
-        self.pedestrians = []
-        self.vehicles = []
+# class ObstacleContainer:
+#     def __init__(self):
+#         self.pedestrians = []
+#         self.vehicles = []
 
 class ObstacleDetectionNode(object):
     """
@@ -35,7 +35,7 @@ class ObstacleDetectionNode(object):
     """
     ROADWAY_WIDTH = 2  # car width = 1.85m + buffer
     # minimum distance the car is able to react to an obstacle in front
-    MIN_DISTANCE_TO_OBSTACLE = 3
+    MIN_DISTANCE_TO_OBSTACLE = 50
     LOG_FPS_SECS = 60
     
 
@@ -60,7 +60,11 @@ class ObstacleDetectionNode(object):
         self._current_pose = Pose()  # car_position
         self.target_position = None 
 
-        self.obstacles = ObstacleContainer()
+        self.x_orientation = 0
+        self.y_orientation = 0
+        self.z_orientation = 0
+
+        # self.obstacles = ObstacleContainer()
 
         self.detected_obstacle = None
 
@@ -118,16 +122,43 @@ class ObstacleDetectionNode(object):
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
 
+        quaternion = (
+            self._current_pose.orientation.x,
+            self._current_pose.orientation.y,
+            self._current_pose.orientation.z,
+            self._current_pose.orientation.w,
+        )
+        _, _, yaw = euler_from_quaternion(quaternion)
+        
+        self.z_orientation = yaw
+        # rotation of result in opposite direction to get world coords
+        self.x_orientation = np.cos(-self.z_orientation)
+        self.y_orientation = np.sin(-self.z_orientation)
+
         # TODO: Remove this
         self.target_position = self._current_pose
     
     def _process_obstacle_detection(self, tag,  obstacles):
 
-        dangerrous_obs_list = self._check_roadway(
+        dangerous_obs_list = self._check_roadway(
             obstacles
         )
-        self.detected_obstacle = dangerrous_obs_list
-        return dangerrous_obs_list
+        
+        if len(dangerous_obs_list) > 0:
+            self._publish_dangerous_obstacle_list(tag, dangerous_obs_list)
+
+        # self.detected_obstacle_publisher.publish(self.detected_obstacle)
+
+    def _publish_dangerous_obstacle_list(self, tag, found_obstacles):
+        header = Header()
+        header.stamp = rospy.Time.now()
+
+        obstacle_list = PafObstacleList()
+        obstacle_list.type = tag
+        obstacle_list.header = header
+        obstacle_list.obstacles = found_obstacles
+
+        self.detected_obstacle_publisher.publish(obstacle_list)
 
     def _check_roadway(self, obstacles):
         """
@@ -143,9 +174,13 @@ class ObstacleDetectionNode(object):
         return obs_list
 
     def _define_danger_zone(self):
+        # cur_pos = np.array([
+        #     self._current_pose.position.x,
+        #     self._current_pose.position.y,
+        # ])
         cur_pos = np.array([
-            self._current_pose.position.x,
-            self._current_pose.position.y,
+            -50.0,
+            0.0
         ])
         laneletId = (
             lanelet_network.find_lanelet_by_position([cur_pos]),
@@ -157,18 +192,19 @@ class ObstacleDetectionNode(object):
     def _check_obstacles_in_danger_zone(self, obstacles, laneletID):
         observated_obstacles = []
         for obstacle in obstacles:
-            x1, y1 = obstacle.bound_1
-            x2, y2 = obstacle.bound_2
-            x3, y3 = obstacle.closest
+            observated_obstacles.append(obstacle)
+            # x1, y1 = obstacle.bound_1
+            # x2, y2 = obstacle.bound_2
+            # x3, y3 = obstacle.closest
 
-            for x in lanelet_network.find_lanelet_by_position([
-                np.array([x1, y1]),
-                np.array([x2, y2]),
-                np.array([x3, y3]),
-            ]):
-                if laneletID[0] in x or laneletID[1] in x:
-                    observated_obstacles.append(obstacle)
-                    break
+            # for x in lanelet_network.find_lanelet_by_position([
+            #     np.array([x1, y1]),
+            #     np.array([x2, y2]),
+            #     np.array([x3, y3]),
+            # ]):
+            #     if laneletID[0] in x or laneletID[1] in x:
+            #         observated_obstacles.append(obstacle)
+            #         break
         return observated_obstacles
 
     def _check_obstacles_in_front(self, observated_obstacles):
@@ -182,7 +218,10 @@ class ObstacleDetectionNode(object):
             closest = obstacle.closest
             pos_list = np.array([bound1, bound2, closest])
             for xy in pos_list:
-                dist = self._dist(xy)
+                car_x = self._current_pose.position.x
+                car_y = self._current_pose.position.y
+
+                dist = self._dist(xy, (car_x, car_y))
                 if min_dist > dist:
                     obs_list.append(obstacle)
                     break
