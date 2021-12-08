@@ -9,7 +9,7 @@ import rospy
 from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header, Bool
 from geometry_msgs.msg import Pose, PoseStamped
-# from paf_perception.msg import PafObstacleList, PafObstacle
+from paf_perception.msg import PafObstacleList, PafObstacle
 from paf_messages.msg import PafObstacleList, PafObstacle
 from argparse import Namespace
 
@@ -115,7 +115,7 @@ class ObstacleDetectionNode(object):
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
     
-    def _process_obstacle_detection(self, tag,  obstacle_list):
+    def _process_obstacle_detection(self, tag,  obstacles):
 
         car_position = self.current_pose
         target_position = self.target_position
@@ -124,7 +124,7 @@ class ObstacleDetectionNode(object):
         self.detected_obstacle = dangerrous_obs_list
         return dangerrous_obs_list
 
-    def _check_roadway(self, car_position, obstaclelist):
+    def _check_roadway(self, car_position, obstacles):
         """
         detects potential obstacles in front of the car (collision) in the same lanelet
         Step1: 
@@ -132,23 +132,32 @@ class ObstacleDetectionNode(object):
         """
         lanelet_ID = self._define_danger_zone(car_position)
         observated_obstacles = self._check_obstacles_in_danger_zone(
-            obstaclelist, lanelet_ID)
+            obstacles, lanelet_ID)
         min_dist = self.MIN_DISTANCE_TO_OBSTACLE
         obs_list = self._check_obstacles_in_range(observated_obstacles, min_dist)
         return obs_list
 
     def _define_danger_zone(car_position, target_position):
-        laneletId = lanelet_network.find_lanelet_by_position(car_position)
+        laneletId = (
+
+            lanelet_network.find_lanelet_by_position(car_position),
+            lanelet_network.find_lanelet_by_position(target_position)
+        )
         return laneletId
 
-    def _check_obstacles_in_danger_zone(self, obstaclelist, laneletID):
+    def _check_obstacles_in_danger_zone(self, obstacles, laneletID):
         observated_obstacles = []
-        for obstacle in obstaclelist:
+        for obstacle in obstacles:
             bound1, bound2, closest= obstacle[:3]
             pos_list = np.array([bound1, bound2, closest])
-            if laneletID in lanelet_network.find_lanelet_by_position(pos_list):
-                observated_obstacles.append(obstacle)
+            for x in lanelet_network.find_lanelet_by_position(pos_list):
+                if laneletID[0] in x or laneletID[1] in x:
+                    observated_obstacles.append(obstacle)
+                    break
         return observated_obstacles
+
+    def _check_obstacles_in_front(self, observated_obstacles):
+        return 0
 
     def _check_obstacles_in_range(self, observated_obstacles, min_dist):
         obs_list = []
