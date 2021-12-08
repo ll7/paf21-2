@@ -16,7 +16,9 @@ from paf_perception.msg import PafObstacleList, PafObstacle
 from commonroad.common.file_reader import CommonRoadFileReader
 import commonroad_dc.pycrcc as pycrcc
 
-file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
+#file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
+file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/DEU_Town03-1_1_T-1.xml"
+
 
 # read in the scenario and the lanelet set
 scenario, _ = CommonRoadFileReader(file_path).open()
@@ -47,6 +49,7 @@ class ObstacleDetectionNode(object):
         target_position = self.target_position
         obstaclelist = self.obstacle_list
         dangerrous_obs_list = self._check_roadway(car_position, obstaclelist)
+        self.detected_obstacle = dangerrous_obs_list
         return dangerrous_obs_list
 
     def _check_roadway(self, car_position, obstaclelist):
@@ -114,8 +117,8 @@ class ObstacleDetectionNode(object):
         rate = rospy.Rate(1)  # 10hz
         while not rospy.is_shutdown():
             path_msg = self.create_ros_msg()
-            rospy.loginfo(f"boolean is Obstacle detected {self.risk}")
-            self.detected_obstacle_publisher.publish(self.risk)
+            rospy.loginfo(f"this list of obstacles are in front {self.detected_obstacle}")
+            self.detected_obstacle_publisher.publish(self.detected_obstacle)
             rate.sleep()
 
     @staticmethod

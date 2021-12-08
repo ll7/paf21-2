@@ -9,15 +9,16 @@ import rospy
 from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header, Bool
 from geometry_msgs.msg import Pose, PoseStamped
-from paf_perception.msg import PafObstacleList, PafObstacle
+# from paf_perception.msg import PafObstacleList, PafObstacle
 from paf_messages.msg import PafObstacleList, PafObstacle
-from argparse import Namespace
 
 # import functions to read xml file +CommonRoad Drivability Checker
 from commonroad.common.file_reader import CommonRoadFileReader
 import commonroad_dc.pycrcc as pycrcc
 
-file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
+#file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
+file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/DEU_Town03-1_1_T-1.xml"
+
 
 # read in the scenario and the lanelet set
 scenario, _ = CommonRoadFileReader(file_path).open()
@@ -27,7 +28,6 @@ class ObstacleContainer:
     def __init__(self):
         self.pedestrians = []
         self.vehicles = []
-
 
 class ObstacleDetectionNode(object):
     """
@@ -57,8 +57,8 @@ class ObstacleDetectionNode(object):
             queue_size=1
         )
 
-        self.current_pose = Pose()  # car_position
-        self.target_position = None
+        self._current_pose = Pose()  # car_position
+        self.target_position = None 
 
         self.obstacles = ObstacleContainer()
 
@@ -71,14 +71,17 @@ class ObstacleDetectionNode(object):
         """
         rospy.logwarn("Nachricht wird empfangen")
 
-        if msg.type == "Pedestrians":
-            self.obstacles.pedestrians = msg.obstacles
-        if msg.type == "Vehicles":
-            self.obstacles.vehicles = msg.obstacles
-        else:
-            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to obstacle detection")
+        # if msg.type == "Pedestrians":
+        #     self.obstacles.pedestrians = msg.obstacles
+        # elif msg.type == "Vehicles":
+        #     self.obstacles.vehicles = msg.obstacles
+        # else:
+        #     rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to obstacle detection")
     
-        
+        self._process_obstacle_detection(
+            msg.type,
+            msg.obstacles
+        )
         # if msg.type == "Pedestrians" or msg.type == "Vehicles":
         #     self.obstacles[msg.type] = msg.obstacles
         #     self._process_obstacle_detection()
@@ -114,43 +117,55 @@ class ObstacleDetectionNode(object):
         self._current_pose = odometry.pose.pose
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
+
+        # TODO: Remove this
+        self.target_position = self._current_pose
     
     def _process_obstacle_detection(self, tag,  obstacles):
 
-        car_position = self.current_pose
-        target_position = self.target_position
-        obstaclelist = self.obstacle_list
-        dangerrous_obs_list = self._check_roadway(car_position, obstaclelist)
+        dangerrous_obs_list = self._check_roadway(
+            obstacles
+        )
         self.detected_obstacle = dangerrous_obs_list
         return dangerrous_obs_list
 
-    def _check_roadway(self, car_position, obstacles):
+    def _check_roadway(self, obstacles):
         """
         detects potential obstacles in front of the car (collision) in the same lanelet
         Step1: 
         Step2:
         """
-        lanelet_ID = self._define_danger_zone(car_position)
+        lanelet_ID = self._define_danger_zone()
         observated_obstacles = self._check_obstacles_in_danger_zone(
             obstacles, lanelet_ID)
         min_dist = self.MIN_DISTANCE_TO_OBSTACLE
         obs_list = self._check_obstacles_in_range(observated_obstacles, min_dist)
         return obs_list
 
-    def _define_danger_zone(car_position, target_position):
+    def _define_danger_zone(self):
+        cur_pos = np.array([
+            self._current_pose.position.x,
+            self._current_pose.position.y,
+        ])
         laneletId = (
-
-            lanelet_network.find_lanelet_by_position(car_position),
-            lanelet_network.find_lanelet_by_position(target_position)
+            lanelet_network.find_lanelet_by_position([cur_pos]),
+            # TODO: target_pos
+            lanelet_network.find_lanelet_by_position([cur_pos])
         )
         return laneletId
 
     def _check_obstacles_in_danger_zone(self, obstacles, laneletID):
         observated_obstacles = []
         for obstacle in obstacles:
-            bound1, bound2, closest= obstacle[:3]
-            pos_list = np.array([bound1, bound2, closest])
-            for x in lanelet_network.find_lanelet_by_position(pos_list):
+            x1, y1 = obstacle.bound_1
+            x2, y2 = obstacle.bound_2
+            x3, y3 = obstacle.closest
+
+            for x in lanelet_network.find_lanelet_by_position([
+                np.array([x1, y1]),
+                np.array([x2, y2]),
+                np.array([x3, y3]),
+            ]):
                 if laneletID[0] in x or laneletID[1] in x:
                     observated_obstacles.append(obstacle)
                     break
@@ -162,7 +177,9 @@ class ObstacleDetectionNode(object):
     def _check_obstacles_in_range(self, observated_obstacles, min_dist):
         obs_list = []
         for obstacle in observated_obstacles:
-            bound1, bound2, closest= obstacle[:3]
+            bound1 = obstacle.bound_1
+            bound2 = obstacle.bound_2
+            closest = obstacle.closest
             pos_list = np.array([bound1, bound2, closest])
             for xy in pos_list:
                 dist = self._dist(xy)
@@ -192,15 +209,10 @@ class ObstacleDetectionNode(object):
                 break
         return risk_of_collision
 
-    def publish_detected_obstacle(self):
-        """ros publisher functionality"""
 
-        rate = rospy.Rate(1)  # 10hz
-        while not rospy.is_shutdown():
-            path_msg = self.create_ros_msg()
-            rospy.loginfo(f"this list of obstacles are in front {self.detected_obstacle}")
-            self.detected_obstacle_publisher.publish(self.detected_obstacle)
-            rate.sleep()
+        #rospy.loginfo(f"this list of obstacles are in front {self.detected_obstacle}")
+        #self.detected_obstacle_publisher.publish(self.detected_obstacle)
+        #rate.sleep()
 
     @staticmethod
     def _unit_vector(p1: list) -> float:
