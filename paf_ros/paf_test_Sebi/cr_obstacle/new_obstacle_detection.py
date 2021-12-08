@@ -129,7 +129,7 @@ class ObstacleDetectionNode(object):
             self._current_pose.orientation.w,
         )
         _, _, yaw = euler_from_quaternion(quaternion)
-        
+
         self.z_orientation = yaw
         # rotation of result in opposite direction to get world coords
         self.x_orientation = np.cos(-self.z_orientation)
@@ -171,6 +171,8 @@ class ObstacleDetectionNode(object):
             obstacles, lanelet_ID)
         min_dist = self.MIN_DISTANCE_TO_OBSTACLE
         obs_list = self._check_obstacles_in_range(observated_obstacles, min_dist)
+        obs_list = self._check_obstacles_in_front(obs_list)
+        
         return obs_list
 
     def _define_danger_zone(self):
@@ -208,7 +210,18 @@ class ObstacleDetectionNode(object):
         return observated_obstacles
 
     def _check_obstacles_in_front(self, observated_obstacles):
-        return 0
+        obs_list = []
+        for obstacle in observated_obstacles:
+            closest = list(obstacle.closest)
+            car_x = self._current_pose.position.x
+            car_y = self._current_pose.position.y
+            vect_car_to_obstacle = np.array(closest) - np.array([car_x, car_y]) 
+            orientation_vect = np.array([self.x_orientation, self.y_orientation])
+            angle = self._angle(vect_car_to_obstacle, orientation_vect)
+            if 1.57 > angle: #1,57rad -> 90degrees
+                obs_list.append(obstacle)
+                break
+        return obs_list
 
     def _check_obstacles_in_range(self, observated_obstacles, min_dist):
         obs_list = []
@@ -254,7 +267,7 @@ class ObstacleDetectionNode(object):
         #rate.sleep()
 
     @staticmethod
-    def _unit_vector(p1: list) -> float:
+    def _unit_vector(p1: np.ndarray) -> float:
         """
         calculates the unit_vector 
         :param p1: vector 1 (x,y)
@@ -275,6 +288,17 @@ class ObstacleDetectionNode(object):
         x1, y1 = p1
         x2, y2 = p2
         return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+    def _angle(self, p1: np.ndarray, p2: np.ndarray) -> float:
+        """
+        Angle between two vectors (x,y,d)
+        :param p1: vector 1
+        :param p2: vector 2
+        :return: angle in rads
+        """
+        v1_u = self._unit_vector(p1)
+        v2_u = self._unit_vector(p2)
+        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
 
     @staticmethod
     def start():
