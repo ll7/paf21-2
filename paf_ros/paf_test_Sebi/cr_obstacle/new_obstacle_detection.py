@@ -7,8 +7,8 @@ import rospy
 
 
 from nav_msgs.msg import Path, Odometry
-from std_msgs.msg import Header, Bool
-from geometry_msgs.msg import Pose, PoseStamped
+from std_msgs.msg import Header
+from geometry_msgs.msg import Pose
 # from paf_perception.msg import PafObstacleList, PafObstacle
 from paf_messages.msg import PafObstacleList, PafObstacle
 from tf.transformations import euler_from_quaternion
@@ -35,7 +35,7 @@ class ObstacleDetectionNode(object):
     """
     ROADWAY_WIDTH = 2  # car width = 1.85m + buffer
     # minimum distance the car is able to react to an obstacle in front
-    MIN_DISTANCE_TO_OBSTACLE = 50
+    MIN_DISTANCE_TO_OBSTACLE = 50 #Idea: scales with speed
     LOG_FPS_SECS = 60
     
 
@@ -73,7 +73,7 @@ class ObstacleDetectionNode(object):
         Callback for PAFObstacle topic
         :param bounds_by_tag: format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
-        rospy.logwarn("Nachricht wird empfangen")
+        #rospy.logwarn("Nachricht wird empfangen")
 
         # if msg.type == "Pedestrians":
         #     self.obstacles.pedestrians = msg.obstacles
