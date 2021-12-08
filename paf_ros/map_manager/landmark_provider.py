@@ -7,10 +7,12 @@ from geometry_msgs.msg import Point
 import rospy
 
 try:
-    sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
-        sys.version_info.major,
-        sys.version_info.minor,
-        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
+    sys.path.append(
+        glob.glob(
+            "../carla/dist/carla-*%d.%d-%s.egg"
+            % (sys.version_info.major, sys.version_info.minor, "win-amd64" if os.name == "nt" else "linux-x86_64")
+        )[0]
+    )
 except IndexError:
     pass
 
@@ -18,7 +20,6 @@ import carla
 
 
 class LandMarkPoint:
-
     def __init__(self, x: float, y: float, orientation: float, id: int):
         self.x = x
         self.y = y
@@ -75,8 +76,8 @@ class LandMarkProvider:
             # First of all, we need to create the client that will send the requests
             # to the simulator. Here we'll assume the simulator is accepting
 
-            host = rospy.get_param('/carla/host', 'localhost')
-            port = rospy.get_param('/carla/port', 2000)
+            host = rospy.get_param("/carla/host", "localhost")
+            port = rospy.get_param("/carla/port", 2000)
 
             client = carla.Client(host, port)
             client.set_timeout(2.0)
@@ -86,36 +87,50 @@ class LandMarkProvider:
             world = client.get_world()
             markings = {}
             marks = world.get_map().get_all_landmarks()
+
+            for mark in marks:
+                print("Name ", mark.name)
+                print("x position: ", mark.transform.location.x)
+                print("y position: ", -mark.transform.location.y)
+                print("ID: ", int(mark.id))
+                print("\n")
+
             for mark in marks:
                 if mark.name in markings:
-                    
-                    #print("Name ", mark.name)
-                    #print("x position: ", mark.transform.location.x)
-                    #print("y position: ", -mark.transform.location.y)
-                    #print("orientation: ", mark.transform.rotation.yaw)
-                    #print("ID: ", int(mark.id))
-                    #print("\n")
+
+                    # print("Name ", mark.name)
+                    # print("x position: ", mark.transform.location.x)
+                    # print("y position: ", -mark.transform.location.y)
+                    # print("orientation: ", mark.transform.rotation.yaw)
+                    # print("ID: ", int(mark.id))
+                    # print("\n")
                     markings[mark.name].add(
-                        LandMarkPoint(mark.transform.location.x, -mark.transform.location.y,
-                                      mark.transform.rotation.yaw,
-                                      int(mark.id)))
-                                      
-      		
-              		
+                        LandMarkPoint(
+                            mark.transform.location.x,
+                            -mark.transform.location.y,
+                            mark.transform.rotation.yaw,
+                            int(mark.id),
+                        )
+                    )
+
                 else:
                     markings[mark.name] = set()
                     markings[mark.name].add(
-                        LandMarkPoint(mark.transform.location.x, -mark.transform.location.y,
-                                      mark.transform.rotation.yaw,
-                                      int(mark.id)))
+                        LandMarkPoint(
+                            mark.transform.location.x,
+                            -mark.transform.location.y,
+                            mark.transform.rotation.yaw,
+                            int(mark.id),
+                        )
+                    )
             return markings
         finally:
             pass
-            
-            
+
+
 def main():
     landmark_provider = LandMarkProvider()
-    #print(landmark_provider.landmarks)
+    landmark_provider._get_markings
 
 
 if __name__ == "__main__":
