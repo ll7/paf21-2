@@ -10,7 +10,7 @@ from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header, Bool
 from geometry_msgs.msg import Pose, PoseStamped
 from paf_perception.msg import PafObstacleList, PafObstacle
-#from paf_messages.msg import PafObstacleList, PafObstacle
+from paf_messages.msg import PafObstacleList, PafObstacle
 from argparse import Namespace
 
 # import functions to read xml file +CommonRoad Drivability Checker
@@ -22,6 +22,12 @@ file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
 # read in the scenario and the lanelet set
 scenario, _ = CommonRoadFileReader(file_path).open()
 lanelet_network = scenario.lanelet_network
+
+class ObstacleContainer:
+    def __init__(self):
+        self.pedestrians = []
+        self.vehicles = []
+
 
 class ObstacleDetectionNode(object):
     """
@@ -44,7 +50,7 @@ class ObstacleDetectionNode(object):
         rospy.logwarn(obstacle_topic)
         rospy.Subscriber(odometry_topic, Odometry, self._odometry_updated)
         rospy.Subscriber(obstacle_topic, PafObstacleList,
-                         self._update_obstacles)
+                         self._obstacle_list_updated)
         self.detected_obstacle_publisher = rospy.Publisher(
             detected_obstacle_topic,
             PafObstacleList,
@@ -53,7 +59,8 @@ class ObstacleDetectionNode(object):
 
         self.current_pose = Pose()  # car_position
         self.target_position = None
-        self.obstacle_list = {}
+
+        self.obstacles = ObstacleContainer()
 
         self.detected_obstacle = None
 
@@ -63,22 +70,20 @@ class ObstacleDetectionNode(object):
         :param bounds_by_tag: format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
         rospy.logwarn("Nachricht wird empfangen")
-        
-        self.obstacle_list[msg.tag] = msg.obstacles
-        for tag,liste in self.obstacle_list.items()
-            ...
-        self._process_obstacle_detection()
-    
-    def update_obstacles(self, msg: PafObstacleList):
-        self.producer.update_obstacles(msg)
 
-    def update_obstacles(self, msg: PafObstacleList):
         if msg.type == "Pedestrians":
-            self.obstacles_pedestrians = self._update_obstacles(msg)
-        elif msg.type == "Vehicles":
-            self.obstacles_vehicles = self._update_obstacles(msg)
+            self.obstacles.pedestrians = msg.obstacles
+        if msg.type == "Vehicles":
+            self.obstacles.vehicles = msg.obstacles
         else:
-            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to obstacle detection")
+    
+        
+        # if msg.type == "Pedestrians" or msg.type == "Vehicles":
+        #     self.obstacles[msg.type] = msg.obstacles
+        #     self._process_obstacle_detection()
+        # else:
+        #     rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to obstacle detection")
 
     @staticmethod
     def _update_obstacles(msg: PafObstacleList):
@@ -110,7 +115,7 @@ class ObstacleDetectionNode(object):
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
     
-    def _process_obstacle_detection(self, tag,  obstacle_list):
+    def _process_obstacle_detection(self, tag,  obstacles):
 
         car_position = self.current_pose
         target_position = self.target_position
@@ -119,7 +124,7 @@ class ObstacleDetectionNode(object):
         self.detected_obstacle = dangerrous_obs_list
         return dangerrous_obs_list
 
-    def _check_roadway(self, car_position, obstaclelist):
+    def _check_roadway(self, car_position, obstacles):
         """
         detects potential obstacles in front of the car (collision) in the same lanelet
         Step1: 
@@ -127,23 +132,32 @@ class ObstacleDetectionNode(object):
         """
         lanelet_ID = self._define_danger_zone(car_position)
         observated_obstacles = self._check_obstacles_in_danger_zone(
-            obstaclelist, lanelet_ID)
+            obstacles, lanelet_ID)
         min_dist = self.MIN_DISTANCE_TO_OBSTACLE
         obs_list = self._check_obstacles_in_range(observated_obstacles, min_dist)
         return obs_list
 
     def _define_danger_zone(car_position, target_position):
-        laneletId = lanelet_network.find_lanelet_by_position(car_position)
+        laneletId = (
+
+            lanelet_network.find_lanelet_by_position(car_position),
+            lanelet_network.find_lanelet_by_position(target_position)
+        )
         return laneletId
 
-    def _check_obstacles_in_danger_zone(self, obstaclelist, laneletID):
+    def _check_obstacles_in_danger_zone(self, obstacles, laneletID):
         observated_obstacles = []
-        for obstacle in obstaclelist:
+        for obstacle in obstacles:
             bound1, bound2, closest= obstacle[:3]
             pos_list = np.array([bound1, bound2, closest])
-            if laneletID in lanelet_network.find_lanelet_by_position(pos_list):
-                observated_obstacles.append(obstacle)
+            for x in lanelet_network.find_lanelet_by_position(pos_list):
+                if laneletID[0] in x or laneletID[1] in x:
+                    observated_obstacles.append(obstacle)
+                    break
         return observated_obstacles
+
+    def _check_obstacles_in_front(self, observated_obstacles):
+        return 0
 
     def _check_obstacles_in_range(self, observated_obstacles, min_dist):
         obs_list = []
