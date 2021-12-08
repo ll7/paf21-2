@@ -24,8 +24,8 @@ class LocalPlanner:
     DETECT_BEHIND_SIGNALS_M = 5
     TRANSMIT_FRONT_M = 150
     CAR_DECELERATION = -9.81 * rospy.get_param("deceleration_g_factor", 8)  # m/s^2
-    QUICK_BRAKE_EVENTS = [SignsDE.STOP]
-    ROLLING_EVENTS = ["LIGHT", SignsDE.YIELD]
+    QUICK_BRAKE_EVENTS = [SignsDE.STOP.value]
+    ROLLING_EVENTS = ["LIGHT", SignsDE.YIELD.value]
     DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
 
@@ -37,7 +37,7 @@ class LocalPlanner:
         self._current_pitch = 0
         self._target_speed = 250
         self._speed_limit = 250
-        self._target_reached = False
+        self._global_path_is_replanning = False
         self._global_path = []
         self._distances = []
         self._traffic_signals = []
@@ -60,12 +60,17 @@ class LocalPlanner:
         return 0.5 * (target_speed + self._current_speed) * deceleration_time + delay
 
     def _process_global_path(self, msg: PafLaneletRoute):
-        rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distances[-1])}m")
+        if len(self._distances) == 0 or len(msg.distances) == 0 or msg.distances[-1] != self._distances[-1]:
+            rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distances[-1])}m")
         self._global_path = msg.points
         self._distances = msg.distances
         self._traffic_signals = msg.traffic_signals
+        self._global_path_is_replanning = False
+        self._local_plan_publisher.publish(self._create_ros_msg())
 
     def _get_current_path(self) -> Tuple[List[Point], Dict[str, Tuple[int, float]]]:
+        if len(self._global_path) == 0:
+            return self._global_path, {}
         index = self._closest_index_in_path()
         try:
             d_ref = self._distances[index]
@@ -136,20 +141,21 @@ class LocalPlanner:
         braking_distance_zero = self._current_deceleration_distance(target_speed=0)
         for signal_type, (distance, value) in signals.items():
             should_stop_now = distance <= braking_distance_zero
+            if signal_type in self.QUICK_BRAKE_EVENTS:
+                if should_stop_now:
+                    if self._is_stopped() and self._can_continue_on_path(signal_type):
+                        self._target_speed = self._speed_limit
+                    else:
+                        self._target_speed = 0
 
-            if signal_type in self.QUICK_BRAKE_EVENTS and should_stop_now:
-                if self._is_stopped() and self._can_continue_on_path(signal_type):
-                    self._target_speed = self._speed_limit
-                else:
-                    self._target_speed = 0
+            elif signal_type in self.ROLLING_EVENTS:
+                if should_stop_now:
+                    if self._can_continue_on_path(signal_type):
+                        self._target_speed = self._speed_limit
+                    else:
+                        self._target_speed = 0
 
-            elif signal_type in self.ROLLING_EVENTS and should_stop_now:
-                if self._can_continue_on_path(signal_type):
-                    self._target_speed = self._speed_limit
-                else:
-                    self._target_speed = 0
-
-            elif signal_type == SignsDE.MAX_SPEED:
+            elif signal_type == SignsDE.MAX_SPEED.value:
                 braking_distance_to_speed_limit = self._current_deceleration_distance(target_speed=value)
                 if distance <= braking_distance_to_speed_limit:
                     self._speed_limit = value  # m/s (km/h -> m/s is done in PafRoute)
@@ -157,7 +163,7 @@ class LocalPlanner:
             else:
                 rospy.logerr_throttle(
                     10,
-                    f"[local planner] unknown sign detected: type={signal_type} at d={distance} "
+                    f"[local planner] unknown signal detected: type={signal_type} at d={distance} "
                     f"(Check TrafficSignIDGermany or TrafficSignIDUsa for more information)",
                 )
 
@@ -209,13 +215,13 @@ class LocalPlanner:
 
     def start(self):
         rospy.init_node("local_path_node", anonymous=True)
-        rate = rospy.Rate(0.1)  # self.UPDATE_HZ)
+        rate = rospy.Rate(self.UPDATE_HZ)
         while not rospy.is_shutdown():
             if not self._on_global_path():
+                self._global_path_is_replanning = True
                 self._send_global_path_request()
             else:
                 rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
-                self._send_global_path_request()
 
             self._local_plan_publisher.publish(self._create_ros_msg())
             rate.sleep()

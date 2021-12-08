@@ -28,6 +28,7 @@ class GlobalPlanner:
     # NETWORKX (later lane change)
     # PRIORITY_QUEUE (heuristic cost a-star-algorithm)
     BACKEND = RoutePlanner.Backend.NETWORKX_REVERSED
+    UPDATE_HZ = 1
 
     def __init__(self):
         self.scenario: Scenario
@@ -35,6 +36,7 @@ class GlobalPlanner:
         self._position = [1e99, 1e99]
         self._yaw = 0
         self._routing_target = None
+        self._last_route = None
 
         rospy.init_node("paf_global_planner", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
@@ -48,7 +50,7 @@ class GlobalPlanner:
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
         self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)
 
-    def _reroute_provider(self, _: Empty):
+    def _reroute_provider(self, _: Empty = None):
         rospy.loginfo("[global planner] rerouting...")
         self._routing_provider()
 
@@ -62,7 +64,8 @@ class GlobalPlanner:
             routes = self._routes_from_objective(self._position, self._yaw, msg.target, return_shortest_only=True)
             if len(routes) > 0:
                 rospy.loginfo_throttle(1, f"[global planner] publishing route to target {msg.target}")
-                self._routing_pub.publish(routes[0].as_msg(msg.resolution))
+                self._last_route = routes[0].as_msg(msg.resolution)
+                self._routing_pub.publish(self._last_route)
                 return
         resolution = msg.resolution if msg is not None else 0
         rospy.logwarn_throttle(
@@ -82,7 +85,8 @@ class GlobalPlanner:
                 return
             ids.append(np.random.choice(choices))
         rospy.loginfo_throttle(1, "[global planner] publishing route to a target straight ahead")
-        self._routing_pub.publish(self._route_from_ids(ids).as_msg(resolution))
+        self._last_route = self._route_from_ids(ids).as_msg(resolution)
+        self._routing_pub.publish(self._last_route)
 
     def _find_closest_lanelet(self, p=None):
         if p is None:
@@ -91,8 +95,11 @@ class GlobalPlanner:
         lanelets = self.scenario.lanelet_network.find_lanelet_by_position([p])[0]
         if len(lanelets) > 0:
             return lanelets
-        shape = Circle(radius=5, center=p)
-        lanelets = self.scenario.lanelet_network.find_lanelet_by_shape(shape)
+        for i in range(3, 30, 3):
+            shape = Circle(radius=5, center=p)
+            lanelets = self.scenario.lanelet_network.find_lanelet_by_shape(shape)
+            if len(lanelets) > 0:
+                break
         return lanelets
 
     def _teleport(self, msg: Pose):
@@ -206,20 +213,16 @@ class GlobalPlanner:
     def _route_from_ids(self, lanelet_ids: List[int]):
         return PafRoute(Route(self.scenario, None, lanelet_ids, RouteType.REGULAR))
 
-    @staticmethod
-    def start():
-        rospy.spin()
+    def start(self):
+        rate = rospy.Rate(self.UPDATE_HZ)
+        while not rospy.is_shutdown():
+            if self._last_route is None:
+                self._reroute_provider()
+            else:
+                self._routing_pub.publish(self._last_route)
+            rate.sleep()
 
 
 if __name__ == "__main__":
     node = GlobalPlanner()
     node.start()
-
-# rosservice call /paf/paf_global_planner/routing_request "start:
-# - -85.0
-# - -75.0
-# start_yaw: 1.56
-# target:
-# - -180.0
-# - 180.0
-# resolution: 0.0"

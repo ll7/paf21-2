@@ -78,5 +78,8 @@
   <!--  Local Planning -->
   <include file="$(find paf_local_planner)/launch/paf_local_planner.launch"/>
 
+  <!--  Global Planning -->
+  <include file="$(find paf_global_planner)/launch/paf_global_planner.launch"/>
+
 
 </launch>
