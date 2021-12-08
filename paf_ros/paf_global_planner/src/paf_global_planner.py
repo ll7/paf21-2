@@ -95,8 +95,8 @@ class GlobalPlanner:
         lanelets = self.scenario.lanelet_network.find_lanelet_by_position([p])[0]
         if len(lanelets) > 0:
             return lanelets
-        for i in range(3, 30, 3):
-            shape = Circle(radius=5, center=p)
+        for radius in range(3, 100, 3):
+            shape = Circle(radius=radius, center=p)
             lanelets = self.scenario.lanelet_network.find_lanelet_by_shape(shape)
             if len(lanelets) > 0:
                 break

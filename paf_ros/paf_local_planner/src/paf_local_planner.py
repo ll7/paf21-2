@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import time
 from typing import List, Tuple, Dict
 
 from commonroad.scenario.traffic_sign import (
@@ -28,8 +29,11 @@ class LocalPlanner:
     ROLLING_EVENTS = ["LIGHT", SignsDE.YIELD.value]
     DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
+    REPLAN_THROTTLE_SEC = 3
 
     def __init__(self):
+
+        rospy.init_node("local_path_node", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         self._current_pose = Pose()
@@ -37,7 +41,7 @@ class LocalPlanner:
         self._current_pitch = 0
         self._target_speed = 250
         self._speed_limit = 250
-        self._global_path_is_replanning = False
+        self._last_replan_request = time.perf_counter()
         self._global_path = []
         self._distances = []
         self._traffic_signals = []
@@ -65,7 +69,6 @@ class LocalPlanner:
         self._global_path = msg.points
         self._distances = msg.distances
         self._traffic_signals = msg.traffic_signals
-        self._global_path_is_replanning = False
         self._local_plan_publisher.publish(self._create_ros_msg())
 
     def _get_current_path(self) -> Tuple[List[Point], Dict[str, Tuple[int, float]]]:
@@ -211,15 +214,18 @@ class LocalPlanner:
             return False
 
     def _send_global_path_request(self):
+        rospy.loginfo("[local planner] requesting new global route")
         self._reroute_publisher.publish(Empty())
 
     def start(self):
-        rospy.init_node("local_path_node", anonymous=True)
+
         rate = rospy.Rate(self.UPDATE_HZ)
         while not rospy.is_shutdown():
             if not self._on_global_path():
-                self._global_path_is_replanning = True
-                self._send_global_path_request()
+                t = time.perf_counter()
+                if t - self._last_replan_request > self.REPLAN_THROTTLE_SEC:
+                    self._last_replan_request = t
+                    self._send_global_path_request()
             else:
                 rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
 
