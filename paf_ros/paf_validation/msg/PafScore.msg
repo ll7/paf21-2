@@ -1,9 +1,0 @@
-Header header
-time started_time
-uint16 total_score
-uint16 actor_collision
-uint16 other_collision
-uint16 red_traffic_light
-uint16 wrong_side_of_road
-uint16 speed_limit_overridden
-uint16 crossed_solid_line

@@ -62,6 +62,8 @@
   <!--  Validation  -->
   <group if="$(arg validation)">
     <include file="$(find paf_validation)/launch/top_down_view.launch"/>
+    <include file="$(find paf_validation)/launch/tensorboard.launch"/>
+    <include file="$(find paf_validation)/launch/score_calculation.launch"/>
   </group>
 
   <!--  Run Time -->
