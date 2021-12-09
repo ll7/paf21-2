@@ -23,13 +23,14 @@ class LocalPlanner:
 
     REPLANNING_THRES_DISTANCE_M = 3
     DETECT_BEHIND_SIGNALS_M = 5
-    TRANSMIT_FRONT_M = 150
+    TRANSMIT_FRONT_MIN_M = 100
+    TRANSMIT_FRONT_SEC = 5
     CAR_DECELERATION = -9.81 * rospy.get_param("deceleration_g_factor", 8)  # m/s^2
     QUICK_BRAKE_EVENTS = [SignsDE.STOP.value]
     ROLLING_EVENTS = ["LIGHT", SignsDE.YIELD.value]
     DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
-    REPLAN_THROTTLE_SEC = 3
+    REPLAN_THROTTLE_SEC = 3.0
 
     def __init__(self):
 
@@ -39,7 +40,7 @@ class LocalPlanner:
         self._current_pose = Pose()
         self._current_speed = 0
         self._current_pitch = 0
-        self.currentPointIndex = 0
+        self._current_point_index = 0
         self._target_speed = 250
         self._speed_limit = 250
         self._last_replan_request = time.perf_counter()
@@ -75,24 +76,25 @@ class LocalPlanner:
     def _get_current_path(self) -> Tuple[List[Point], Dict[str, Tuple[int, float]]]:
         if len(self._global_path) == 0:
             return self._global_path, {}
-        index = self.currentPointIndex
+        index = self._current_point_index
         try:
             d_ref = self._distances[index]
         except IndexError:
             d_ref = 0
         try:
             delta = self._distances[index + 1] - d_ref
-            index_end = int(np.ceil(self.TRANSMIT_FRONT_M / delta)) + index
+            travel_dist = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
+            index_end = int(np.ceil(travel_dist / delta)) + index
             _ = self._distances[index_end]
-        except IndexError:
-            if (
-                self._dist(
-                    (self._global_path[-1].x, self._global_path[-1].y),
-                    (self._current_pose.position.x, self._current_pose.position.y),
-                )
-                > self.DIST_TARGET_REACHED
-            ):
-                self._send_global_path_request()
+        except IndexError:  # todo end of route handling
+            # if (
+            #         self._dist(
+            #             (self._global_path[-1].x, self._global_path[-1].y),
+            #             (self._current_pose.position.x, self._current_pose.position.y),
+            #         )
+            #         > self.DIST_TARGET_REACHED
+            # ):
+            #     self._send_global_path_request()
             index_end = len(self._distances)
 
         signals = {}
@@ -205,36 +207,45 @@ class LocalPlanner:
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
 
-        # calculate distance to current next point
-        current_pos = self._current_pose.position
-        next_point = self._global_path[self.currentPointIndex]
-        distance = self._dist((current_pos.x, current_pos.y), (next_point.x, next_point.y))
+        if len(self._global_path) <= self._current_point_index + 1:
+            self._current_point_index = 0
 
-        # current point reached
-        if distance < 10:
-            self.currentPointIndex = self.currentPointIndex + 1
+        current_pos = self._current_pose.position
+
+        prev_dist = None
+        # calculate distance to current next point
+        idx = self._current_point_index
+        for i, _ in enumerate(self._global_path[idx:]):
+            next_point = self._global_path[i]
+            distance = self._dist((current_pos.x, current_pos.y), (next_point.x, next_point.y))
+            if prev_dist is None or prev_dist > distance:
+                prev_dist = distance
+            else:
+                self._current_point_index = i - 1
+                break
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)
-        i = self._closest_index_of_point_list(self._global_path, p)
+        i = self._current_point_index
         try:
             return self._dist(p, (self._global_path[i].x, self._global_path[i].y)) < self.REPLANNING_THRES_DISTANCE_M
         except IndexError:
             return False
 
     def _send_global_path_request(self):
-        rospy.loginfo("[local planner] requesting new global route")
-        self._reroute_publisher.publish(Empty())
+        t = time.perf_counter()
+        delta_t = t - self._last_replan_request
+        if self.REPLAN_THROTTLE_SEC < delta_t:
+            self._last_replan_request = t
+            rospy.loginfo_throttle(20, "[local planner] requesting new global route")
+            self._reroute_publisher.publish(Empty())
 
     def start(self):
 
         rate = rospy.Rate(self.UPDATE_HZ)
         while not rospy.is_shutdown():
             if not self._on_global_path():
-                t = time.perf_counter()
-                if t - self._last_replan_request > self.REPLAN_THROTTLE_SEC:
-                    self._last_replan_request = t
-                    self._send_global_path_request()
+                self._send_global_path_request()
             else:
                 rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
 
