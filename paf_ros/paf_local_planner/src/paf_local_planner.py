@@ -129,8 +129,6 @@ class LocalPlanner:
 
         return current_path
 
-        return current_path
-
     def closest_point_in_path(self):
         """returns the closest point in the local path to the vehicle's current position
         Returns:
