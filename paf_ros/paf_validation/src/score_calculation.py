@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-from std_msgs.msg import Header
-
 import rospy
 from carla_msgs.msg import CarlaCollisionEvent, CarlaLaneInvasionEvent
-from paf_validation.msg import PafScore
+from paf_messages.msg import PafLogScalar
 
 
 class ScoreCalculationNode:
@@ -17,7 +15,25 @@ class ScoreCalculationNode:
         rospy.Subscriber(
             f"/carla/{role_name}/lane_invasion", CarlaLaneInvasionEvent, self._process_lane_event, queue_size=1
         )
-        self._score_pub = rospy.Publisher(rospy.get_param("score_topic"), PafScore, queue_size=1)
+        self._score_actor_collisions_pub = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+        self._score_other_collisions_pub = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+        self._score_red_traffic_light_pub = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+        self._score_speed_limit_overridden_pub = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+        self._score_wrong_side_of_road_pub = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+        self._score_crossed_solid_line_pub = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+        self._score_total_pub = rospy.Publisher("/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1)
 
     def _reset(self):
         """
@@ -33,7 +49,7 @@ class ScoreCalculationNode:
 
     def _update_score(self):
         """
-        Calculates the current score with the multipliers and publishes it
+        Calculates the current score with the multipliers
         """
         t1 = rospy.get_time()
 
@@ -53,24 +69,15 @@ class ScoreCalculationNode:
             + score_crossed_line
         )
 
-        msg = PafScore()
-        msg.header = Header()
-        msg.header.stamp = rospy.Time.now()
-        msg.actor_collision = len(self.actor_collisions)
-        msg.other_collision = len(self.other_collisions)
-        msg.red_traffic_light = len(self.red_traffic_light)
-        msg.wrong_side_of_road = len(self.wrong_side_of_road)
-        msg.speed_limit_overridden = len(self.speed_limit_overridden)
-        msg.crossed_solid_line = len(self.crossed_solid_line)
-        msg.total_score = penalty_total
-        msg.started_time = rospy.Time.from_sec(self.t0)
-        self._score_pub.publish(msg)
-
         rospy.logwarn(
             f"Time: {score_time}s, Penalty: {penalty_total} (CollActor={score_collision_actor}, "
             f"CollOther={score_collision_other}, RedLight={score_red_traffic_light}, "
             f"RoadSide={score_wrong_side_of_road}, Speed={score_speed_limit}, Line={score_crossed_line})"
         )
+        msg = PafLogScalar()
+        msg.section = "PENALTY total"
+        msg.value = penalty_total
+        self._score_total_pub.publish(msg)
 
     def _process_collision(self, msg: CarlaCollisionEvent):
         """
@@ -93,14 +100,24 @@ class ScoreCalculationNode:
             else:
                 raise IndexError
         except IndexError:
+
+            msgout = PafLogScalar()
+            msgout.section = "PENALTY "
+
             if msg.other_actor_id == 0:
                 self.other_collisions.append((msg, msg.header.stamp.to_time()))
                 rospy.logwarn("Collision with environment detected")
+                msgout.value = len(self.other_collisions)
+                msgout.section += "environment collision count"
                 self._update_score()
+                self._score_other_collisions_pub.publish(msgout)
             else:
                 self.actor_collisions.append((msg, msg.header.stamp.to_time()))
                 rospy.logwarn("Collision with actor detected")
+                msgout.value = len(self.actor_collisions)
+                msgout.section += "actor collision count"
                 self._update_score()
+                self._score_actor_collisions_pub.publish(msgout)
 
     def _process_lane_event(self, msg: CarlaLaneInvasionEvent):
         """
@@ -120,6 +137,11 @@ class ScoreCalculationNode:
             pass
         self.crossed_solid_line.append((msg, msg.header.stamp.to_time()))
         self._update_score()
+
+        msg = PafLogScalar()
+        msg.section = "PENALTY line crossed count"
+        msg.value = len(self.crossed_solid_line)
+        self._score_crossed_solid_line_pub.publish(msg)
         rospy.logwarn("Crossed solid line")
 
     @staticmethod
