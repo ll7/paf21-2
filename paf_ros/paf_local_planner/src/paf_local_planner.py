@@ -8,6 +8,9 @@ from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLocalPath, Point2D as Point
 
 
+LOOK_AHEAD_POINTS = 10
+
+
 class LocalPlanner:
     """class used for the local planner. Task: return a local path"""
 
@@ -20,13 +23,83 @@ class LocalPlanner:
             [199.0, 9.5],
             [210.0, 9.5],
             [219.0, 9.5],
-            [224.4, 9.9],
-            [227.8, 12.3],
-            [230.1, 15.7],
+            [226.1, 9.5],
+            [230.4, 13.6],
+            [231.1, 18.3],
             [231.0, 20.2],
             [231.1, 27.6],
-            [231.2, 34.7],
+            [231.2, 43.1],
+            [231.3, 50],
+            [230.6, 50.3],
+            [230, 54.3],
+            [226.6, 55.8],
+            [221.7, 58.1],
+            [216.6, 58.6],
+            [199.8, 58.5],
+            [179.2, 58.2],
+            [139.3, 57.8],
+            [120.6, 56.5],
+            [107.7, 59.1],
+            [97.1, 56, 9],
+            [88.0, 52.2],
+            [78.4, 48.8],
+            [72.3, 49],
+            [66.8, 52],
+            [64.2, 62.6],
+            [68.9, 69.7],
+            [76.6, 72.1],
+            [82.3, 71.7],
+            [86.7, 69.6],
+            [93.6, 64.2],
+            [100.3, 62.6],
+            [119.6, 62.3],
+            [137.6, 61.9],
+            [160, 62.3],
+            [178.9, 62.3],
+            [199.5, 62.3],
+            [217.5, 62.3],
+            [228.3, 61.9],
+            [235.6, 59],
+            [241, 50],
+            [241.6, 36.4],
+            [242.3, 13.2],
+            [237.8, 2.2],
+            [223.2, -4.7],
+            [206.7, -5.7],
+            [187.4, -5.5],
+            [162.8, -5.7],
+            [141.2, -6],
+            [120.6, -5.7],
+            [100.3, -5.7],
+            [80.3, -6],
+            [60.4, -6],
+            [39.4, -5.7],
+            [29.6, -7.5],
+            [19.6, -12.2],
+            [11.6, -19.3],
+            [0.5, -22.6],
+            [-10.4, -20],
+            [-19.1, -12.8],
+            [-23.4, -1.8],
+            [-22.4, 7.5],
+            [-16.9, 16.7],
+            [-10.7, 21.2],
+            [5.6, 22.3],
+            [13.8, 18.1],
+            [20.8, 10.9],
+            [28, 7.1],
+            [40.7, 6.4],
+            [60.0, 7.7],
+            [79.7, 8],
+            [100.3, 7.4],
+            [119.6, 8.4],
+            [139.6, 8.7],
+            [160, 8.7],
+            [180, 8.4],
         ]
+
+        # next Point in path
+        self.currentPointIndex = 0
 
         self._current_pose = Pose()
         self._current_speed = 0
@@ -36,7 +109,9 @@ class LocalPlanner:
         self.odometry_sub = rospy.Subscriber(f"carla/{self.role_name}/odometry", Odometry, self.odometry_updated)
 
         # create and start the publisher for the local path
-        self.local_plan_publisher = rospy.Publisher(rospy.get_param("local_path_topic"), PafLocalPath, queue_size=1)
+        self.local_plan_publisher = rospy.Publisher(
+            rospy.get_param("local_path_topic", "/paf/paf_local_planner/path"), PafLocalPath, queue_size=1
+        )
 
     def get_current_path(self):
         """returns the current local path starting with the nearest point on the path to the vehicle's position
@@ -45,14 +120,19 @@ class LocalPlanner:
             [type]: [description]
         """
         # print(f"closest point in path:{self.closest_point_in_path()}")
-        starting_id = self.path_array.index(self.closest_point_in_path())
-        current_path = self.path_array[starting_id:]
+        starting_id = self.currentPointIndex
+        if starting_id + LOOK_AHEAD_POINTS < len(self.path_array) - 1:
+            end = starting_id + LOOK_AHEAD_POINTS
+            current_path = self.path_array[starting_id:end]
+        else:
+            current_path = self.path_array[starting_id:]
+
+        return current_path
 
         return current_path
 
     def closest_point_in_path(self):
         """returns the closest point in the local path to the vehicle's current position
-
         Returns:
             [type]: [description]
         """
@@ -74,7 +154,6 @@ class LocalPlanner:
 
     def create_ros_msg(self):
         """create path message for ros
-
         Returns:
             [type]: [description]
         """
@@ -89,6 +168,15 @@ class LocalPlanner:
             pt.x = point[0]
             pt.y = point[1]
             path_msg.points.append(pt)
+
+        if self.currentPointIndex < 14:
+            path_msg.target_speed = 50
+
+        if self.currentPointIndex >= 14 and self.currentPointIndex < 37:
+            path_msg.target_speed = 30
+
+        if self.currentPointIndex >= 37:
+            path_msg.target_speed = 50
 
         return path_msg
 
@@ -113,6 +201,15 @@ class LocalPlanner:
         self._current_pose = odometry.pose.pose
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
+
+        # calculate distance to current next point
+        current_pos = self._current_pose.position
+        nextpoint = self.path_array[self.currentPointIndex]
+        distance = math.sqrt((current_pos.x - nextpoint[0]) ** 2 + (current_pos.y - nextpoint[1]) ** 2)
+
+        # current point reached
+        if distance < 10:
+            self.currentPointIndex = self.currentPointIndex + 1
 
     def start(self):
         rospy.init_node("local_path_publisher", anonymous=True)
