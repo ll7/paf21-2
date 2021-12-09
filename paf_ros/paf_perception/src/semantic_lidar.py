@@ -16,7 +16,7 @@ class SemanticLidarNode(object):
     TAGS = {int(k): v for k, v in rospy.get_param("semantic_tags").items()}
     MIN_DIST_IS_SELF = 0  # not needed if z >= 2.4
     MIN_OBJ_DIFF_DIST = 5
-    SENSOR_X_OFFSET = -1
+    SENSOR_X_OFFSET = -0.3  # x value of lidar1 in paf_perception/sensors.json
     SKIP_NORMALIZING_BOUND_DIST = False
     LOG_FPS_SECS = 60
 
