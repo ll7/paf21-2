@@ -2,10 +2,14 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-ros_launch_args="town:=Town03 spawn_point:=-80,2,0,0,0,0 manual_control:=false validation:=true"
-npc_launch_args="-n 200 -w 200" # n=vehicles, w=pedestrians
+ros_launch_args="town:=Town03 spawn_point:=199.0,9.5,0,0,0,0 validation:=true"
+npc_launch_args="-n 200 -w 80" # n=vehicles, w=pedestrians
 
-eval "$(cat ~/.bashrc | tail -n +10)" >/dev/null
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+export paf_dir="$SCRIPT_DIR/../"
+bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh"
+
+eval "$(cat ~/.bashrc | tail -n +10)" 1>/dev/null
 function carla_available() {
   if [[ "$(wmctrl -l)" =~ "CarlaUE4" ]]; then
     return 0
@@ -20,7 +24,17 @@ function _close_ros() {
   wmctrl -c " - RViz"
 }
 function exit_program() {
-  _close_ros
+  # exit all ros instances
+  echo "closing all ros launchers..."
+  _close_ros 1>/dev/null
+  echo ""
+  echo "following log files have been created:"
+  echo ""
+  cd ~/.ros/log/latest || exit_program
+  # shellcheck disable=SC2162
+  # shellcheck disable=SC2088
+  # shellcheck disable=SC2185
+  find -iname "*.log" | tr " " "\n" | while read line; do echo "~/.ros/log/latest/${line:2}"; done
   exit
 }
 function close_ros() {
@@ -38,7 +52,7 @@ function close_all() {
 }
 function carla_start() {
   echo "bash ~/carla_0.9.10.1/CarlaUE4.sh $1"
-  gnome-terminal -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
+  gnome-terminal --title="CarlaUE4" -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
   ./subscripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
   sleep 3
 }
@@ -59,8 +73,8 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
   done
 }
 
-cd ~/paf21-2/scripts/ || exit
-echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality)"
+cd $paf_dir/scripts/ || exit
+echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality --manual-control)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
@@ -70,6 +84,9 @@ CARLA_ARGS=""
 for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
+  fi
+  if [ "$VAR" = "--manual-control" ]; then
+    ros_launch_args="$ros_launch_args manual_control:=true"
   fi
   if [ "$VAR" = "--build" ]; then
     BUILD_ROS=1
@@ -87,11 +104,12 @@ fi
 if ((BUILD_ROS)); then
   echo building ros
   ./build_ros.sh --clean
-  cd ~/paf21-2/scripts/ || exit
+  cd $paf_dir/scripts/ || exit
 fi
 if ((CARLA_SKIP)); then
   if carla_available; then
     echo skipping carla restart...
+    NPCS=0
   else
     echo starting carla...
     carla_start $CARLA_ARGS
@@ -102,7 +120,7 @@ else
   carla_start $CARLA_ARGS
 fi
 eval "$(cat ~/.bashrc | tail -n +10)"
-close_ros >/dev/null
+close_ros 2>/dev/null
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
 
@@ -119,12 +137,13 @@ fi
 
 echo "loaded the following nodes successfully:"
 rosnode list
+rosservice call /rviz/set_logger_level "logger: 'ros'
+level: 'Error'"
+rosservice call /carla_ros_bridge/set_logger_level "logger: 'rosout'
+level: 'Warn'"
 echo ""
 echo "press ctrl+c to kill all ros terminals."
 
 echo "listening for error/exit of carla environment..."
 ./subscripts/wait_for_window.sh CarlaUE4 open >/dev/null
-
-# exit all ros instances
-echo "closing all ros launchers"
 exit_program

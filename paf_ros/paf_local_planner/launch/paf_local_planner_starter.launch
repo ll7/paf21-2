@@ -3,17 +3,10 @@
   <arg name='port' default='2000'/>
   <arg name='timeout' default='10'/>
 
-  <rosparam file="$(find paf_starter)/global_parameters.yaml" command="load"/>
-
-  <!-- Paf args -->
-  <arg name='manual_control' default='false'/>
-  <arg name='validation' default='true'/>
-
   <!-- Ego vehicle -->
   <arg name='role_name' default='ego_vehicle'/>
   <arg name="vehicle_filter" default='vehicle.tesla.model3'/>
-  <arg name="spawn_point" default=""/><!-- use comma separated format "x,y,z,roll,pitch,yaw" -->
-  <arg name="sensor_definition_file" default="$(find paf_perception)/sensors.json"/>
+  <arg name="spawn_point" default="199,9.5,0,0,0,0"/><!-- use comma separated format "x,y,z,roll,pitch,yaw" -->
 
   <!-- Map to load on startup (either a predefined CARLA town (e.g. 'Town01'), or a OpenDRIVE map file) -->
   <arg name="town" default='Town03'/>
@@ -30,13 +23,11 @@
     <arg name='town' value='$(arg town)'/>
     <arg name='timeout' value='$(arg timeout)'/>
     <arg name='synchronous_mode' value='$(arg synchronous_mode)'/>
-    <arg name='synchronous_mode_wait_for_vehicle_control_command'
-         value='$(arg synchronous_mode_wait_for_vehicle_control_command)'/>
+    <arg name='synchronous_mode_wait_for_vehicle_control_command' value='$(arg synchronous_mode_wait_for_vehicle_control_command)'/>
     <arg name='fixed_delta_seconds' value='$(arg fixed_delta_seconds)'/>
   </include>
 
   <include file="$(find carla_ego_vehicle)/launch/carla_example_ego_vehicle.launch">
-    <arg name='sensor_definition_file' value='$(arg sensor_definition_file)'/>
     <arg name='host' value='$(arg host)'/>
     <arg name='port' value='$(arg port)'/>
     <arg name='timeout' value='$(arg timeout)'/>
@@ -45,38 +36,17 @@
     <arg name="spawn_point" value="$(arg spawn_point)"/>
   </include>
 
-  <group if="$(arg manual_control)">
-    <include file="$(find carla_manual_control)/launch/carla_manual_control.launch">
-      <arg name='role_name' value='$(arg role_name)'/>
-    </include>
-  </group>
+  <include file="$(find carla_manual_control)/launch/carla_manual_control.launch">
+    <arg name='role_name' value='$(arg role_name)'/>
+  </include>
 
   <node pkg="paf_starter" type="paf_starter.py" name="paf_starter" output="screen">
-    <param name="host" value="$(arg host)"/>
-    <param name="port" value="$(arg port)"/>
+    <param name="host" value="$(arg host)" />
+    <param name="port" value="$(arg port)" />
   </node>
 
-  <!--  RVIZ  -->
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find paf_starter)/config/validation.rviz"/>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find paf_starter)/config/paf_rviz.rviz" />
 
-  <!--  Validation  -->
-  <group if="$(arg validation)">
-    <include file="$(find paf_validation)/launch/top_down_view.launch"/>
-  </group>
-
-  <!--  Run Time -->
-  <group unless="$(arg validation)">
-    <!--    example else statement -->
-  </group>
-
-  <!--  Steering  -->
-  <!--  <include file="$(find paf_actor)/launch/paf_actor.launch"/> -->
-
-  <!--  Perception -->
-  <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
-
-  <!--  Local Planning -->
-  <include file="$(find paf_local_planner)/launch/paf_local_planner.launch"/>
-
+  <!--Steering-->
 
 </launch>
