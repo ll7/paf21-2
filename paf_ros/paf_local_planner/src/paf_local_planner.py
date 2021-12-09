@@ -212,17 +212,19 @@ class LocalPlanner:
 
         current_pos = self._current_pose.position
 
-        prev_dist = None
+        # todo marcos algo (unten) ist schlechter wenn fahrzeug abseits von globaler routen-linie
+        # prev_dist = None
         # calculate distance to current next point
-        idx = self._current_point_index
-        for i, _ in enumerate(self._global_path[idx:]):
-            next_point = self._global_path[i]
-            distance = self._dist((current_pos.x, current_pos.y), (next_point.x, next_point.y))
-            if prev_dist is None or prev_dist > distance:
-                prev_dist = distance
-            else:
-                self._current_point_index = i - 1
-                break
+        # idx = self._current_point_index
+        # for i, _ in enumerate(self._global_path[idx:]):
+        #     next_point = self._global_path[i + idx]
+        #     distance = self._dist((current_pos.x, current_pos.y), (next_point.x, next_point.y))
+        #     if prev_dist is None or prev_dist > distance:
+        #         prev_dist = distance
+        #     else:
+        #         self._current_point_index = i + idx - 1
+        #         break
+        self._current_point_index = self._closest_index_of_point_list(self._global_path, (current_pos.x, current_pos.y))
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)
