@@ -39,6 +39,7 @@ class LocalPlanner:
         self._current_pose = Pose()
         self._current_speed = 0
         self._current_pitch = 0
+        self.currentPointIndex = 0
         self._target_speed = 250
         self._speed_limit = 250
         self._last_replan_request = time.perf_counter()
@@ -74,7 +75,7 @@ class LocalPlanner:
     def _get_current_path(self) -> Tuple[List[Point], Dict[str, Tuple[int, float]]]:
         if len(self._global_path) == 0:
             return self._global_path, {}
-        index = self._closest_index_in_path()
+        index = self.currentPointIndex
         try:
             d_ref = self._distances[index]
         except IndexError:
@@ -127,7 +128,6 @@ class LocalPlanner:
 
     def _create_ros_msg(self):
         """create path message for ros
-
         Returns:
             [type]: [description]
         """
@@ -204,6 +204,15 @@ class LocalPlanner:
         self._current_pose = odometry.pose.pose
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
+
+        # calculate distance to current next point
+        current_pos = self._current_pose.position
+        next_point = self._global_path[self.currentPointIndex]
+        distance = self._dist((current_pos.x, current_pos.y), (next_point.x, next_point.y))
+
+        # current point reached
+        if distance < 10:
+            self.currentPointIndex = self.currentPointIndex + 1
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)
