@@ -32,7 +32,7 @@ class GlobalPlanner:
 
     def __init__(self):
         self.scenario: Scenario
-        self.scenario, _ = CommonRoadFileReader("/home/julin/Downloads/Town03.xml").open()
+        self.scenario, _ = CommonRoadFileReader("Town01.xml").open()
         self._position = [1e99, 1e99]
         self._yaw = 0
         self._routing_target = None
@@ -60,8 +60,21 @@ class GlobalPlanner:
         else:
             self._routing_target = msg
 
+        def dist(a, b):
+            x1, y1 = a
+            x2, y2 = b
+            return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+        try:
+            lanelet_id = self._find_closest_lanelet()[0]
+            lanelet = self.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            position = lanelet.center_vertices[np.argmin([dist(a, (self._position)) for a in lanelet.center_vertices])]
+        except IndexError:
+            rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
+            return
+
         if msg is not None:
-            routes = self._routes_from_objective(self._position, self._yaw, msg.target, return_shortest_only=True)
+            routes = self._routes_from_objective(position, self._yaw, msg.target, return_shortest_only=True)
             if len(routes) > 0:
                 rospy.loginfo_throttle(1, f"[global planner] publishing route to target {msg.target}")
                 self._last_route = routes[0].as_msg(msg.resolution)
@@ -71,11 +84,7 @@ class GlobalPlanner:
         rospy.logwarn_throttle(
             1, "[global planner] route planning failed, " "trying to find any straight route for now..."
         )
-        try:
-            lanelet_id = self._find_closest_lanelet()[0]
-        except IndexError:
-            rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
-            return
+
         ids = [lanelet_id]
         for i in range(10):
             lanelet = self.scenario.lanelet_network.find_lanelet_by_id(ids[-1])
@@ -156,8 +165,11 @@ class GlobalPlanner:
         route_planner = RoutePlanner(self.scenario, planning_problem, backend=self.BACKEND)
         routes, _ = route_planner.plan_routes().retrieve_all_routes()
         if return_shortest_only:
-            routes = sorted(routes, key=lambda x: x.reference_path[-1])
-            return [PafRoute(routes[0])]
+            if len(routes) == 0:
+                return []
+            idx = np.argmin([x.path_length[-1] for x in routes])
+            route = routes[idx]
+            return [PafRoute(route)]
         return [PafRoute(route) for route in routes]
 
     @staticmethod

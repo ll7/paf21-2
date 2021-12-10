@@ -14,7 +14,7 @@ conda deactivate 2>/dev/null
 
 # recommended not to install everything at once..
 install_search=0
-install_route_planner=0
+install_route_planner=1
 install_driveability_checker=0
 #install_collision_checker=0 # deprecated
 

@@ -1,11 +1,11 @@
 topic: "/paf/paf_validation/top_down_view"
 node: "top_down_view"
-update_hz: 5
+update_hz: 20
 img_size: {
   width: 900,
   height: 500
 }
 pixels_per_meter: 5
-north_is_up: true
+north_is_up: false
 dark_mode: false
-show_whole_map: true
+show_whole_map: false

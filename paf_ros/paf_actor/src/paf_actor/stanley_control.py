@@ -91,12 +91,16 @@ class StanleyLateralController:
         param = 1
         sin, cos = np.sin(yaw), np.cos(yaw)
 
-        ax = [pose.position.x, pose.position.x + param * cos] + [x.x for x in path[:spline_pts]]
-        ay = [pose.position.y, pose.position.y + param * sin] + [x.y for x in path[:spline_pts]]
-        cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
-        spline_path = self._xy_to_point2d(list(zip(cx, cy)))
-        path = spline_path + path[spline_pts:]
+        ax = [pose.position.x - param * cos, pose.position.x + param * cos] + [x.x for x in path[:spline_pts]]
+        ay = [pose.position.y - param * sin, pose.position.y + param * sin] + [x.y for x in path[:spline_pts]]
+        try:
+            cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
+            spline_path = self._xy_to_point2d(list(zip(cx, cy)))
+            path = spline_path[15:] + path[spline_pts:]
+        except IndexError:
+            ...
 
+        msg.points = path
         local_path1 = []
         for p in path:
             p1 = Point2D()

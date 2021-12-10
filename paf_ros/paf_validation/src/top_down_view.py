@@ -31,7 +31,7 @@ class TopDownRosNode(object):
         rospy.init_node(self.params["node"], anonymous=True)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.update_obstacles)
-        rospy.Subscriber(rospy.get_param("local_path_topic"), PafLocalPath, self.update_local_path)
+        rospy.Subscriber("/paf/paf_actor/path", PafLocalPath, self.update_local_path)
         rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
 
     def update_obstacles(self, msg: PafObstacleList):
