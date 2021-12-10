@@ -1,16 +1,14 @@
-import rospy
-from paf_messages.msg import LocalPath
-
 """
 A file that contains the Stanley Lateral Controller (inspired by PSAF WS20/21 2)
 """
+import rospy
 from typing import Tuple
 
 import numpy as np
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Path
 
 from paf_actor.helper_functions import calc_egocar_yaw, normalize_angle, calc_path_yaw
+from paf_actor.spline import calc_spline_course
 from paf_messages.msg import PafLocalPath, Point2D
 
 
@@ -39,7 +37,7 @@ class StanleyLateralController:
 
         self._local_plan_publisher = rospy.Publisher("/paf/paf_actor/path", PafLocalPath, queue_size=1)
 
-    def run_step(self, path: Path, pose: PoseStamped, speed: float, is_reverse: bool) -> float:
+    def run_step(self, msg: PafLocalPath, pose: PoseStamped, speed: float, is_reverse: bool) -> float:
         """
         Runs the Stanley-Controller calculations once
 
@@ -52,8 +50,8 @@ class StanleyLateralController:
         Returns:
            float: Steering angle
         """
-        path = path.points
-        current_target_idx, error_front_axle = self.calc_target_index(path, pose, is_reverse)
+        path = msg.points
+        current_target_idx, error_front_axle = self.calc_target_index(msg, pose, is_reverse)
         # compute heading error correction
         theta_e = normalize_angle(
             calc_path_yaw(path, current_target_idx) + (calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
@@ -69,7 +67,7 @@ class StanleyLateralController:
 
         return np.clip(delta, -self.max_steer, self.max_steer)
 
-    def calc_target_index(self, path: LocalPath, pose: PoseStamped, is_reverse: bool) -> Tuple[int, float]:
+    def calc_target_index(self, msg: PafLocalPath, pose: PoseStamped, is_reverse: bool) -> Tuple[int, float]:
         """
         Calculates the index of the closest Point on the Path relative to the front axle
 
@@ -82,12 +80,22 @@ class StanleyLateralController:
             target_idx [int]: Index of target point
             error_front_axle [float]: Distance from front axle to target point
         """
-
+        path = msg.points
         if len(path) == 0:
             return 0, 0
 
         # Calc front axle position
         yaw = calc_egocar_yaw(pose)
+
+        spline_pts = msg.spline_pts
+        param = 1
+        sin, cos = np.sin(yaw), np.cos(yaw)
+
+        ax = [pose.position.x, pose.position.x + param * cos] + [x.x for x in path[:spline_pts]]
+        ay = [pose.position.y, pose.position.y + param * sin] + [x.y for x in path[:spline_pts]]
+        cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
+        spline_path = self._xy_to_point2d(list(zip(cx, cy)))
+        path = spline_path + path[spline_pts:]
 
         local_path1 = []
         for p in path:
@@ -122,3 +130,11 @@ class StanleyLateralController:
         error_front_axle = np.dot([dx[target_idx], dy[target_idx]], front_axle_vec)
 
         return target_idx, error_front_axle
+
+    def _xy_to_point2d(self, points):
+        liste = []
+        for point in points:
+            p = Point2D()
+            p.x, p.y = point
+            liste.append(p)
+        return liste
