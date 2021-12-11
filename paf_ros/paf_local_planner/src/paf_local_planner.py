@@ -231,7 +231,6 @@ class LocalPlanner:
         self._current_pitch = 0
         self._current_yaw = 0
         self._current_point_index = 0
-        self._target_speed = 250
         self._speed_limit = 250
         self._last_replan_request = time.perf_counter()
         self._global_path = []
@@ -241,7 +240,11 @@ class LocalPlanner:
         self._following_distance = -1  # todo set following distance
         self._following_speed = -1  # todo set following speed
         self.dist = 0
-        self.spline_pts = 0
+
+        # local path params
+        self._local_path = []
+        self._local_path_signals = {}
+        self._target_speed = []
 
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_updated)
         rospy.Subscriber("/paf/paf_global_planner/routing_response", PafLaneletRoute, self._process_global_path)
@@ -267,7 +270,8 @@ class LocalPlanner:
 
     def _get_current_path(self) -> Tuple[List[Point], Dict[str, Tuple[int, float]]]:
         if len(self._global_path) == 0:
-            return self._global_path, {}
+            self._local_path, self._local_path_signals = [], {}
+            return
         index = self._current_point_index
         try:
             d_ref = self._distances[index]
@@ -300,27 +304,27 @@ class LocalPlanner:
             signals[s.type] = (self._distances[s.index] - d_ref, s.value)
 
         current_path = self._global_path[index:index_end]
-        spline_split = min(40, int(self._current_speed + 30)), int(200 + self._current_speed), 20
-        a, b, c = spline_split
-        self.spline_pts = int((b - a) / c)
-        return self._add_spline(current_path, spline_split), signals
+        # spline_split = min(40, int(self._current_speed + 30)), int(200 + self._current_speed), 20
+        # a, b, c = spline_split
+        # self.spline_pts = int((b - a) / c)
+        self._local_path, self._local_path_signals = current_path, signals
 
-    def _add_spline(self, pth, spline_split):
-        if len(pth) < 200 or self.dist < 0:
-            return pth
-        a, b, c = spline_split
-        my_position = (self._current_pose.position.x, self._current_pose.position.y)
-        mx, my = my_position
-        # sin, cos = np.sin(-self._current_yaw), np.cos(-self._current_yaw)
-        # param = 1
-        # ax = [mx, mx+param*cos] + \
-        #    [x.x for x in pth[100:200:20]]
-        # ay = [my, my+param*sin] + \
-        #    [x.y for x in pth[100:200:20]]
-        # cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
-        # return self._xy_to_point2d([[x, y] for x, y in zip(cx, cy)]) + pth[200:]
-        # pth = pth[a:b:c] + pth[b:]
-        return pth
+    # def _add_spline(self, pth, spline_split):
+    #     if len(pth) < 200 or self.dist < 0:
+    #         return pth
+    #     a, b, c = spline_split
+    #     my_position = (self._current_pose.position.x, self._current_pose.position.y)
+    #     mx, my = my_position
+    #     # sin, cos = np.sin(-self._current_yaw), np.cos(-self._current_yaw)
+    #     # param = 1
+    #     # ax = [mx, mx+param*cos] + \
+    #     #    [x.x for x in pth[100:200:20]]
+    #     # ay = [my, my+param*sin] + \
+    #     #    [x.y for x in pth[100:200:20]]
+    #     # cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
+    #     # return self._xy_to_point2d([[x, y] for x, y in zip(cx, cy)]) + pth[200:]
+    #     # pth = pth[a:b:c] + pth[b:]
+    #     return pth
 
     def _xy_to_point2d(self, points):
         liste = []
@@ -355,23 +359,27 @@ class LocalPlanner:
         Returns:
             [type]: [description]
         """
-        current_path, signals = self._get_current_path()
-        self._update_target_speed(signals)
+        self._get_current_trajectory()
         path_msg = PafLocalPath()
         path_msg.header.stamp = rospy.Time.now()
         path_msg.target_speed = self._target_speed
-        path_msg.points = current_path
-        path_msg.spline_pts = self.spline_pts
+        path_msg.points = self._local_path
         return path_msg
 
-    def _update_target_speed(self, signals: dict):
+    def _get_current_trajectory(self):
+        self._get_current_path()
+        self._update_target_speed()
 
-        if self.plannerisattheend():
-            self._target_speed = 50 / 3.6
+    def _update_target_speed(self):
+        signals = self._local_path_signals
+        if self.plannerisattheend():  # todo remove
+            target_speed = 50 / 3.6
             rospy.loginfo_throttle(5, "speed is zero")
         else:
-            self._target_speed = min(50 / 3.6, self._target_speed)  # todo remove
-            rospy.loginfo_throttle(5, f"speed is {self._current_speed*3.6}/{self._target_speed*3.6}")
+            target_speed = 50 / 3.6  # todo remove
+            rospy.loginfo_throttle(5, f"speed is {self._current_speed * 3.6}/{target_speed * 3.6}")
+
+        self._target_speed = list(np.ones((len(self._local_path),)) * target_speed)
         return
         braking_distance_zero = self._current_deceleration_distance(target_speed=0)
         rospy.loginfo_throttle(5, braking_distance_zero)
