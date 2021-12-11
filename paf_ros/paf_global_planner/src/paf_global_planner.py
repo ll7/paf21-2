@@ -84,7 +84,7 @@ class GlobalPlanner:
             lanelet_id = self._find_closest_lanelet()[0]
             lanelet = self.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
             position = lanelet.center_vertices[
-                np.argmin([self.dist(a, (self._position)) for a in lanelet.center_vertices])
+                np.argmin([self.dist(a, self._position) for a in lanelet.center_vertices])
             ]
         except IndexError:
             rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")

@@ -366,7 +366,7 @@ class LocalPlanner:
 
     def _update_target_speed(self, signals: dict):
 
-        if self.plannerisattheend():
+        if self._planner_at_end_of_route():
             self._target_speed = 50 / 3.6
             rospy.loginfo_throttle(5, "speed is zero")
         else:
@@ -418,7 +418,7 @@ class LocalPlanner:
                 self._target_speed = self._following_speed
 
         rospy.logwarn_throttle_identical(10, f"speed should be {self._target_speed * 3.6}")
-        if self.plannerisattheend():
+        if self._planner_at_end_of_route():
             self._target_speed = 0
             rospy.loginfo_throttle(5, "speed is zero")
         else:
@@ -436,13 +436,13 @@ class LocalPlanner:
         rospy.loginfo_throttle(5, stop)
         return stop
 
-    def plannerisattheend(self):
-        if len(self._global_path) == 0:
-            return False
+    def _planner_at_end_of_route(self):
+        if len(self._global_path) < 100:
+            return True
         return (
             self._dist(
                 (self._current_pose.position.x, self._current_pose.position.y),
-                (self._global_path[-1].x, self._global_path[-1].y),
+                (self._global_path[-100].x, self._global_path[-100].y),
             )
             < self.DIST_TARGET_REACHED
         )
