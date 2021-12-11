@@ -53,13 +53,13 @@ class StanleyLateralController:
         current_target_idx, error_front_axle, target_speed = self.calc_target_index(msg, pose, is_reverse)
         # compute heading error correction
         theta_e = normalize_angle(
-            calc_path_yaw(path, current_target_idx) + (-calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
+            calc_path_yaw(path, current_target_idx) + (calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
         )
         if abs(speed) < self.min_speed:
             speed = self.min_speed
 
         # compute cross track error correction
-        theta_d = np.arctan2(self.k * error_front_axle / abs(speed), speed)
+        theta_d = np.arctan2(self.k * error_front_axle / speed, speed)
 
         # compute steer
         delta = theta_e + theta_d

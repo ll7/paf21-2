@@ -373,10 +373,10 @@ class LocalPlanner:
     def _update_target_speed(self):
         signals = self._local_path_signals
         if self.plannerisattheend():  # todo remove
-            target_speed = 50 / 3.6
+            target_speed = 30 / 3.6
             rospy.loginfo_throttle(5, "speed is zero")
         else:
-            target_speed = 50 / 3.6  # todo remove
+            target_speed = 30 / 3.6  # todo remove
             rospy.loginfo_throttle(5, f"speed is {self._current_speed * 3.6}/{target_speed * 3.6}")
 
         self._target_speed = list(np.ones((len(self._local_path),)) * target_speed)

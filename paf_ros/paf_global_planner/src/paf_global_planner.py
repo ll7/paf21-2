@@ -32,7 +32,7 @@ class GlobalPlanner:
 
     def __init__(self):
         self.scenario: Scenario
-        self.scenario, _ = CommonRoadFileReader("Town03.xml").open()
+        self.scenario, _ = CommonRoadFileReader("DEU_Town06-1_1_T-1.xml").open()
         self._position = [1e99, 1e99]
         self._yaw = 0
         self._routing_target = None
