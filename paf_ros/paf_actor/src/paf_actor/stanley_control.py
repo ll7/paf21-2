@@ -50,21 +50,24 @@ class StanleyLateralController:
            float: Steering angle
         """
         path = msg.points
-        current_target_idx, error_front_axle = self.calc_target_index(msg, pose, is_reverse)
+        current_target_idx, error_front_axle, target_speed = self.calc_target_index(msg, pose, is_reverse)
         # compute heading error correction
         theta_e = normalize_angle(
-            calc_path_yaw(path, current_target_idx) + (calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
+            calc_path_yaw(path, current_target_idx) + (-calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
         )
         if abs(speed) < self.min_speed:
             speed = self.min_speed
 
         # compute cross track error correction
-        theta_d = np.arctan2(self.k * error_front_axle / speed, speed)
+        theta_d = np.arctan2(self.k * error_front_axle / abs(speed), speed)
 
         # compute steer
         delta = theta_e + theta_d
 
-        return np.clip(delta, -self.max_steer, self.max_steer)
+        # rospy.loginfo_throttle(
+        #    1, f"theta_e: {theta_e}, theta_d: {theta_d}, delta: {delta}")
+
+        return np.clip(delta, -self.max_steer, self.max_steer), target_speed
 
     def calc_target_index(self, msg: PafLocalPath, pose: PoseStamped, is_reverse: bool) -> Tuple[int, float]:
         """
@@ -81,23 +84,10 @@ class StanleyLateralController:
         """
         path = msg.points
         if len(path) == 0:
-            return 0, 0
+            return 0, 0, 0
 
         # Calc front axle position
         yaw = calc_egocar_yaw(pose)
-
-        # spline_pts = msg.spline_pts
-        # param = 1
-        # sin, cos = np.sin(yaw), np.cos(yaw)
-
-        # ax = [pose.position.x - param * cos, pose.position.x + param * cos] + [x.x for x in path[:spline_pts]]
-        # ay = [pose.position.y - param * sin, pose.position.y + param * sin] + [x.y for x in path[:spline_pts]]
-        # try:
-        # cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
-        # spline_path = self._xy_to_point2d(list(zip(cx, cy)))
-        # path = spline_path[15:] + path[spline_pts:]
-        # except IndexError:
-        #    ...
 
         msg.points = path
         local_path1 = []
@@ -132,7 +122,7 @@ class StanleyLateralController:
         front_axle_vec = [-np.cos(yaw + np.pi / 2), -np.sin(yaw + np.pi / 2)]
         error_front_axle = np.dot([dx[target_idx], dy[target_idx]], front_axle_vec)
 
-        return target_idx, error_front_axle
+        return target_idx, error_front_axle, msg.target_speed[target_idx]
 
     def _xy_to_point2d(self, points):
         liste = []
