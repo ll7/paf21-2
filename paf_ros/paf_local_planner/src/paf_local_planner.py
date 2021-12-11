@@ -319,7 +319,7 @@ class LocalPlanner:
         #    [x.y for x in pth[100:200:20]]
         # cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
         # return self._xy_to_point2d([[x, y] for x, y in zip(cx, cy)]) + pth[200:]
-        pth = pth[a:b:c] + pth[b:]
+        # pth = pth[a:b:c] + pth[b:]
         return pth
 
     def _xy_to_point2d(self, points):
@@ -367,7 +367,7 @@ class LocalPlanner:
     def _update_target_speed(self, signals: dict):
 
         if self.plannerisattheend():
-            self._target_speed = 10
+            self._target_speed = 50 / 3.6
             rospy.loginfo_throttle(5, "speed is zero")
         else:
             self._target_speed = min(50 / 3.6, self._target_speed)  # todo remove

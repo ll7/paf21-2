@@ -8,7 +8,6 @@ import numpy as np
 from geometry_msgs.msg import PoseStamped
 
 from paf_actor.helper_functions import calc_egocar_yaw, normalize_angle, calc_path_yaw
-from paf_actor.spline import calc_spline_course
 from paf_messages.msg import PafLocalPath, Point2D
 
 
@@ -60,7 +59,7 @@ class StanleyLateralController:
             speed = self.min_speed
 
         # compute cross track error correction
-        theta_d = np.arctan2(self.k * error_front_axle, speed)
+        theta_d = np.arctan2(self.k * error_front_axle / speed, speed)
 
         # compute steer
         delta = theta_e + theta_d
@@ -87,18 +86,18 @@ class StanleyLateralController:
         # Calc front axle position
         yaw = calc_egocar_yaw(pose)
 
-        spline_pts = msg.spline_pts
-        param = 1
-        sin, cos = np.sin(yaw), np.cos(yaw)
+        # spline_pts = msg.spline_pts
+        # param = 1
+        # sin, cos = np.sin(yaw), np.cos(yaw)
 
-        ax = [pose.position.x - param * cos, pose.position.x + param * cos] + [x.x for x in path[:spline_pts]]
-        ay = [pose.position.y - param * sin, pose.position.y + param * sin] + [x.y for x in path[:spline_pts]]
-        try:
-            cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
-            spline_path = self._xy_to_point2d(list(zip(cx, cy)))
-            path = spline_path[15:] + path[spline_pts:]
-        except IndexError:
-            ...
+        # ax = [pose.position.x - param * cos, pose.position.x + param * cos] + [x.x for x in path[:spline_pts]]
+        # ay = [pose.position.y - param * sin, pose.position.y + param * sin] + [x.y for x in path[:spline_pts]]
+        # try:
+        # cx, cy, _, _, _ = calc_spline_course(ax, ay, ds=0.1)
+        # spline_path = self._xy_to_point2d(list(zip(cx, cy)))
+        # path = spline_path[15:] + path[spline_pts:]
+        # except IndexError:
+        #    ...
 
         msg.points = path
         local_path1 = []

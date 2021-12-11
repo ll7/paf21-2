@@ -32,7 +32,7 @@ class GlobalPlanner:
 
     def __init__(self):
         self.scenario: Scenario
-        self.scenario, _ = CommonRoadFileReader("Town01.xml").open()
+        self.scenario, _ = CommonRoadFileReader("Town03.xml").open()
         self._position = [1e99, 1e99]
         self._yaw = 0
         self._routing_target = None
@@ -54,47 +54,62 @@ class GlobalPlanner:
         rospy.loginfo("[global planner] rerouting...")
         self._routing_provider()
 
+    @staticmethod
+    def dist(a, b):
+        x1, y1 = a
+        x2, y2 = b
+        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+    def _any_target_anywhere(self, p_home):
+        lanelets = self.scenario.lanelet_network.lanelets
+        lanelet_p = None
+        counter = 0
+        min_dist = 100
+        while counter < 100 and lanelet_p is None or self.dist(p_home, lanelet_p) < min_dist:
+            counter += 1
+            lanelet = np.random.choice(lanelets)
+            lanelet_p = np.random.choice(range(len(lanelet.center_vertices)))
+            lanelet_p = lanelet.center_vertices[lanelet_p]
+        if lanelet_p is None:
+            return None
+        return lanelet_p
+
     def _routing_provider(self, msg: PafRoutingRequest = None):
         if msg is None:
             msg = self._routing_target
         else:
             self._routing_target = msg
 
-        def dist(a, b):
-            x1, y1 = a
-            x2, y2 = b
-            return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-
         try:
             lanelet_id = self._find_closest_lanelet()[0]
             lanelet = self.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
-            position = lanelet.center_vertices[np.argmin([dist(a, (self._position)) for a in lanelet.center_vertices])]
+            position = lanelet.center_vertices[
+                np.argmin([self.dist(a, (self._position)) for a in lanelet.center_vertices])
+            ]
         except IndexError:
             rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
             return
 
-        if msg is not None:
-            routes = self._routes_from_objective(position, self._yaw, msg.target, return_shortest_only=True)
-            if len(routes) > 0:
-                rospy.loginfo_throttle(1, f"[global planner] publishing route to target {msg.target}")
-                self._last_route = routes[0].as_msg(msg.resolution)
-                self._routing_pub.publish(self._last_route)
-                return
         resolution = msg.resolution if msg is not None else 0
-        rospy.logwarn_throttle(
-            1, "[global planner] route planning failed, " "trying to find any straight route for now..."
-        )
-
-        ids = [lanelet_id]
-        for i in range(10):
-            lanelet = self.scenario.lanelet_network.find_lanelet_by_id(ids[-1])
-            choices = lanelet.successor
-            if len(choices) == 0:
-                rospy.logerr_throttle(1, "[global planner] unable to find successor lanelet")
+        route = None
+        if msg is None:
+            rospy.logwarn_throttle(1, "[global planner] route planning failed, " "trying to find any route for now...")
+            target = self._any_target_anywhere(position)
+            if target is None:
+                rospy.logerr_throttle(1, "[global planner] unable to create random target")
                 return
-            ids.append(np.random.choice(choices))
-        rospy.loginfo_throttle(1, "[global planner] publishing route to a target straight ahead")
-        self._last_route = self._route_from_ids(ids).as_msg(resolution)
+        else:
+            target = msg.target
+
+        routes = self._routes_from_objective(position, self._yaw, target, return_shortest_only=True)
+        if len(routes) > 0:
+            rospy.loginfo_throttle(1, f"[global planner] publishing route to target {target}")
+            route = routes[0].as_msg(resolution)
+        elif len(routes) == 0:
+            rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")
+            return
+
+        self._last_route = route
         self._routing_pub.publish(self._last_route)
 
     def _find_closest_lanelet(self, p=None):

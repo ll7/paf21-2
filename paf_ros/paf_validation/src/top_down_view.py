@@ -58,6 +58,7 @@ class TopDownRosNode(object):
             delta = rospy.Time.now().to_time() - t0
             if delta > 0:
                 rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / delta}")
+            rospy.loginfo_throttle(10, f"[top_down_view] loc={loc}")
             rate.sleep()
 
 
@@ -69,13 +70,16 @@ def main():
         actors = client.get_world().get_actors()
         for actor in actors:
             if "role_name" in actor.attributes and actor.attributes["role_name"] == search_name:
-                rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {actor.get_location()}")
+                loc = actor.get_location()
+                rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {loc}")
                 TopDownRosNode(client, actor).start()
                 return
         else:
             rospy.logwarn("ego vehicle not found, retrying")
             sleep(1)
 
+
+loc = 0
 
 if __name__ == "__main__":
     main()
