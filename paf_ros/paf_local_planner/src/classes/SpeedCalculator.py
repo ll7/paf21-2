@@ -17,13 +17,12 @@ class SpeedCalculator:
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
 
-    def __init__(self, distances: List[float], curvatures: List[float], index_start: int, index_end: int):
+    def __init__(self, distances: List[float], curvatures: List[float], index_start: int):
         self.deceleration_delta = self.MAX_DECELERATION * distances[1]  # in m/s per second
         self.step_size = distances[1]
         self.curvatures = curvatures
         self.distances = distances
         self.index_start = index_start
-        self.index_end = index_end
 
         self.continue_on_indices = []
 

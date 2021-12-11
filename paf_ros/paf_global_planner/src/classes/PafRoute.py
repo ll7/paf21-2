@@ -12,7 +12,7 @@ from commonroad.scenario.traffic_sign import (
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
-from paf_messages.msg import PafLaneletRoute, PafRoutingGraphNode, Point2D, PafTrafficSignal
+from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
 
 
 class PafRoute:
@@ -23,7 +23,7 @@ class PafRoute:
         self.route = route
 
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
-        self.graph = self._calc_lane_change_graph()
+        # self.graph = self._calc_lane_change_graph()
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
@@ -255,18 +255,20 @@ class PafRoute:
             every_nth = every_nth if every_nth != 0 else 1
         path_pts = self.route.reference_path[::every_nth]
         msg.distances = list(self.route.path_length[::every_nth])
+        msg.curvatures = list(self.route.path_curvature[::every_nth])
         msg.traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
         for x, y in path_pts:
             point = Point2D()
             point.x = x
             point.y = -y
             msg.points.append(point)
-        msg.graph = []
-        for key, (l, s, r) in self.graph.items():
-            node_msg = PafRoutingGraphNode()
-            node_msg.start = key
-            node_msg.left = -1 if l is None else l
-            node_msg.straight = -1 if s is None else s
-            node_msg.right = -1 if r is None else r
-            msg.graph.append(node_msg)
         return msg
+        # msg.graph = []
+        # for key, (l, s, r) in self.graph.items():
+        #     node_msg = PafRoutingGraphNode()
+        #     node_msg.start = key
+        #     node_msg.left = -1 if l is None else l
+        #     node_msg.straight = -1 if s is None else s
+        #     node_msg.right = -1 if r is None else r
+        #     msg.graph.append(node_msg)
+        # return msg
