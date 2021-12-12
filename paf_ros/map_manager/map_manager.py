@@ -102,9 +102,9 @@ class MapManager:
                 tags={Tag.URBAN},
             )
             # write CommonRoad data to xml file
-            writer.write_to_file("Town06Speedlimits.xml",
+            writer.write_to_file(self.map_file_path,
                                  OverwriteExistingFile.ALWAYS)
-            rospy.loginfo("MapManager: Wrote file Town06Speedlimits.xml")
+            rospy.loginfo("MapManager: Wrote file!")
         else:
             rospy.logerr("MapManager: scenario not available")
             rospy.logerr("MapManager: No file generated")
@@ -123,14 +123,14 @@ class MapManager:
 
     """
     The following methods are only for adding speedlimits to town06
-    """
+
 
     def _speed_signs_to_scenario(self, signs: list, speed: int):
-        """
+        
         Given a list of speed sing positions -> add speed signs to lanelets
         :param signs: list of speed sign positions
         :param speed: nomination of the sign (for example 50(kmh))
-        """
+        
         sign_added = False  # only true if a sign was added
         for sign in signs:
             mapped_lanelets = self._find_nearest_lanelet(sign.pos_as_point())
@@ -163,11 +163,11 @@ class MapManager:
                              str(sign.mark_id) + " - Orientation did not match")
 
     def _find_nearest_lanelet(self, goal: Point):
-        """
+        
         Given a Point (x,y,z) -> find nearest lanelet
         :param goal: point to which the nearest lanelet should be searched
         :return: nearest lanelet to point goal
-        """
+        
         nearest = None
         curr_radius = 1
         step_size = 0.5
@@ -183,13 +183,13 @@ class MapManager:
         return None
 
     def _add_sign_to_lanelet(self, lanelet_id: int, pos_index: int, typ: TrafficSignIDGermany, additional: list = []):
-        """
+        
         Adds a sign to given lanelet
         :param lanelet_id: id of the given lanelet
         :param pos_index: index of the position of the sign within the lanelet
         :param typ: type of the sign (used for creating the TrafficSign object of CommonRoads)
         :param additional: additional of the sign (used for creating the TrafficSign object of CommonRoads)
-        """
+        
         self.cur_mark_id += 1
         pos = self.scenario.lanelet_network.find_lanelet_by_id(
             lanelet_id).center_vertices[pos_index]
@@ -202,11 +202,11 @@ class MapManager:
             sign, lanelet_ids=deepcopy(id_set))
 
     def _get_all_fitting_neighbour_lanelets(self, lanelet_id: int) -> list:
-        """
+        
         Given a lanelet_id -> find all neighbouring lanelet to which are heading in the same direction
         :param lanelet_id: id of the lanelet under observation
         :return: list of fitting neighbouring lanelets
-        """
+        
         # get all right neighbours
         lane_under_obs = self.scenario.lanelet_network.find_lanelet_by_id(
             lanelet_id)
@@ -227,12 +227,12 @@ class MapManager:
 
     @staticmethod
     def _find_vertex_index(lanelet: Lanelet, pos: Point):
-        """
+        
         Get the index of the closest point of a lanelet to a given comparison point
         :param lanelet: the given lanelet
         :param pos: the given comparison point
         :return: the closest index
-        """
+        
         # compute distances (we are not using the sqrt for computational effort)
         point = [pos.x, pos.y]
         distance = (lanelet.center_vertices - point) ** 2.
@@ -241,12 +241,12 @@ class MapManager:
 
     @staticmethod
     def get_lanelet_orientation_at_index(lanelet: Lanelet, index: int):
-        """
+        
         Get the orientation of the given lanelet at a certain index
         :param lanelet: the given lanelet
         :param index: index
         :return: orientation (as yaw angle)
-        """
+        
         angles = list()
         # check for bounds
         if index >= len(lanelet.center_vertices)-3:
@@ -282,15 +282,17 @@ class MapManager:
             if angle_diff < 20:
                 return angles[i]
         return np.sum(angles) / len(angles)
+    """
 
 
 def main():
     manager = MapManager(True)
     manager._load_scenario()
-    # manager._delete_all_signs_other_than_stop_and_speed()
+    manager._delete_all_signs_other_than_stop_and_speed()
 
     # manager._generate_image_file()
 
+    """
     signs90 = []
     signs90.append(LandMarkPoint(x=-149, y=24, orientation=0, id=0))
     signs90.append(LandMarkPoint(x=108, y=-253, orientation=0, id=0))
@@ -374,6 +376,7 @@ def main():
     manager._speed_signs_to_scenario(signs60, 60)
     manager._speed_signs_to_scenario(signs40, 40)
     manager._speed_signs_to_scenario(signs30, 30)
+    """
 
     manager.generate_com_road_file()
 
