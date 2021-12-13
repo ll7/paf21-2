@@ -19,8 +19,8 @@ class SpeedCalculator:
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
 
     def __init__(self, distances: List[float], curvatures: List[float], index_start: int = 0, index_end=None):
-        self._deceleration_delta = self.MAX_DECELERATION * distances[1]  # in m/s per second
-        self._step_size = distances[1]
+        self._step_size = distances[1] if len(distances) > 0 else 1
+        self._deceleration_delta = self.MAX_DECELERATION * self._step_size  # in m/s per second
         self._index_start = index_start
         self._index_end = len(curvatures) - 1 if index_end is None else index_end
         self._curvatures = curvatures[index_start:index_end]

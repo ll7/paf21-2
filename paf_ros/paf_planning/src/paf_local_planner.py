@@ -4,6 +4,7 @@ from typing import List, Tuple, Dict
 
 from commonroad.scenario.traffic_sign import (
     TrafficLightState,
+    TrafficSignIDGermany,
 )
 
 import rospy
@@ -11,7 +12,7 @@ import numpy as np
 
 from geometry_msgs.msg import Pose
 from nav_msgs.msg import Odometry
-from paf_messages.msg import PafLocalPath, Point2D as Point, PafLaneletRoute
+from paf_messages.msg import PafLocalPath, Point2D as Point, PafLaneletRoute, PafTrafficSignal
 from classes.SpeedCalculator import SpeedCalculator
 from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion
@@ -123,9 +124,25 @@ class LocalPlanner:
         self._get_current_path()
         self._update_target_speed()
 
+    def _signal_debug_print(self, signals):
+        end_idx = self._current_point_index + len(self._local_path)
+        out = []
+        for s in signals:
+            if self._current_point_index <= s.index < end_idx:
+                try:
+                    n = TrafficSignIDGermany(s.type).name
+                except Exception:
+                    n = s.type
+                m = (s.index - self._current_point_index) * self._distances[1]
+                out.append(f"{n} ({m}m): {s.value}")
+        if len(out) > 0:
+            rospy.loginfo_throttle(20, f"Upcoming Traffic Signs: {', '.join(out)}")
+
     def _update_target_speed(self):
-        calc = SpeedCalculator(self._distances, self._curvatures, self._current_point_index)
-        signals = self._traffic_signals
+        end_idx = self._current_point_index + len(self._local_path)
+        calc = SpeedCalculator(self._distances, self._curvatures, self._current_point_index, end_idx)
+        signals: List[PafTrafficSignal] = self._traffic_signals
+        self._signal_debug_print(signals)
         speed = calc.get_curve_speed()
         speed = calc.add_speed_limits(speed, signals)
         speed = calc.add_stop_events(speed, signals, target_speed=2)

@@ -2,7 +2,7 @@
   <arg name='host' default='localhost'/>
   <arg name='port' default='2000'/>
 
-  <node pkg="paf_global_planner" type="paf_global_planner.py" name="paf_global_planner" output="screen">
+  <node pkg="paf_planning" type="paf_global_planner.py" name="paf_global_planner" output="screen">
     <param name="host" value="$(arg host)" />
     <param name="port" value="$(arg port)" />
   </node>
