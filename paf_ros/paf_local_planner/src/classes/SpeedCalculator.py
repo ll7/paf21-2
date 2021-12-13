@@ -38,20 +38,24 @@ class SpeedCalculator:
             speed[i] = np.clip(factor * self.MAX_SPEED, self.MIN_SPEED, self.MAX_SPEED)
         return speed
 
-    @staticmethod
-    def _linear_function(m, b, steps, step0=0):
-        return [m * x + b for x in range(step0, steps)]
+    def _linear_deceleration_function(self, target_speed):
+        m = -self._deceleration_delta
+        b = self.MAX_SPEED
+        delta_v = self.MAX_SPEED - target_speed
+        steps = int(delta_v / self._deceleration_delta)
+        return [m * x + b for x in range(steps)]
 
     def add_linear_deceleration(self, speed):
+
+        deceleration_fun = self._linear_deceleration_function
         accel = np.array(list(reversed([y - x for x, y in zip(speed, speed[1:])])))
         length = len(self._curvatures)
 
         for i, a in enumerate(accel):
             if a < -self._deceleration_delta:
                 j = length - 1 - i
-                delta_v = speed[j] - self.MAX_SPEED
-                k = j + int(delta_v / self._deceleration_delta)
-                lin = self._linear_function(-self._deceleration_delta, self.MAX_SPEED, j - k)
+                lin = deceleration_fun(speed[j])
+                k = j - len(lin)
                 n = 0
                 for n in reversed(range(k, j)):
                     if n == 0 or speed[n] < lin[n - k]:
