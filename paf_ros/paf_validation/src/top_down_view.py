@@ -4,7 +4,7 @@ import rospy
 
 from carla_birdeye_view.mask import PixelDimensions
 from time import sleep
-from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute
+from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute, PafTopDownViewPointSet
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -17,6 +17,7 @@ class TopDownRosNode(object):
     def __init__(self, _client, _actor):
         self.params = rospy.get_param("/top_down_view/")
         self.actor = _actor
+        self.point_sets = {}
         self.producer = TopDownView(
             _client,
             target_size=PixelDimensions(
@@ -31,11 +32,16 @@ class TopDownRosNode(object):
         rospy.init_node(self.params["node"], anonymous=True)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.update_obstacles)
-        rospy.Subscriber("/paf/paf_actor/path", PafLocalPath, self.update_local_path)
+        rospy.Subscriber("/paf/paf_local_planner/path", PafLocalPath, self.update_local_path)
         rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
+        rospy.Subscriber("/paf/paf_validation/points", PafTopDownViewPointSet, self._update_pt_set)
 
     def update_obstacles(self, msg: PafObstacleList):
         self.producer.update_obstacles(msg)
+
+    def _update_pt_set(self, msg: PafTopDownViewPointSet):
+        self.point_sets[msg.label] = (msg.points, msg.color)
+        self.producer.update_pts_sets(self.point_sets)
 
     def update_global_path(self, msg: PafLaneletRoute):
         path = [[point.x, point.y] for point in msg.points[::10]]

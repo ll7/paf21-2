@@ -1,3 +1,5 @@
+from typing import Dict, Tuple, List
+
 import cv2
 import carla
 import numpy as np
@@ -16,7 +18,7 @@ from carla_birdeye_view.mask import (
 
 from argparse import Namespace
 from enum import IntEnum
-from paf_messages.msg import PafObstacleList, PafObstacle
+from paf_messages.msg import PafObstacleList, PafObstacle, Point2D
 
 
 class MaskPriority(IntEnum):
@@ -84,7 +86,9 @@ class TopDownView(BirdViewProducer):
         self.center_on_agent = not show_whole_map
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
-        self.path_width_px = None
+        self.path_width_px = 10
+        self.pt_width_px = 20
+        self.point_sets = {}
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -94,7 +98,8 @@ class TopDownView(BirdViewProducer):
                 height=int((target_size_.height + 2 * MAP_BOUNDARY_MARGIN) / 2),
             )
         super(TopDownView, self).__init__(client, target_size, pixels_per_meter, BirdViewCropType.FRONT_AND_REAR_AREA)
-        self.set_path(width_px=10)
+        self.pt_width_px = int(np.ceil(self.pt_width_px / 10 * self._pixels_per_meter))
+        self.path_width_px = int(np.ceil(self.path_width_px / 10 * self._pixels_per_meter))
 
     def produce(self, agent_vehicle: carla.Actor) -> BirdView:
         """
@@ -139,11 +144,34 @@ class TopDownView(BirdViewProducer):
             masks[MaskPriority.PED_OBSTACLES] = self._create_obstacle_mask(self.obstacles_pedestrians, mask_obstacles)
         if self.obstacles_vehicles is not None:
             masks[MaskPriority.VEH_OBSTACLES] = self._create_obstacle_mask(self.obstacles_vehicles, mask_obstacles)
+
+        if len(self.point_sets) > 0:
+            pts_masks = []
+            for lbl, (points, color) in self.point_sets.items():
+                # mask = np.repeat(self.masks_generator.make_empty_mask()[:, :, np.newaxis], 3, axis=2)
+                mask = self.masks_generator.make_empty_mask()
+                for point in points:
+                    # point.y *= -1
+                    pixel = self.masks_generator.location_to_pixel(point)
+                    mask = cv2.rectangle(
+                        mask,
+                        (pixel.x - self.pt_width_px, pixel.y - self.pt_width_px),
+                        (pixel.x + self.pt_width_px, pixel.y + self.pt_width_px),
+                        COLOR_ON,
+                        -1,
+                    )
+                pts_masks.append(mask)
+            masks = np.append(masks, pts_masks, 0)
+            new_idx = list(range(len(MaskPriority), len(MaskPriority) + len(self.point_sets)))
+        else:
+            new_idx = []
+
         cropped_masks = self.apply_agent_following_transformation_to_masks(
             agent_vehicle,
             masks,
         )
         ordered_indices = [mask.value for mask in MaskPriority.bottom_to_top()]
+        ordered_indices += new_idx
         return cropped_masks[ordered_indices]
 
     def apply_agent_following_transformation_to_masks(
@@ -158,7 +186,7 @@ class TopDownView(BirdViewProducer):
         :return:
         """
         agent_transform = agent_vehicle.get_transform()
-        angle = (0 if self.north_is_up else agent_transform.rotation.yaw) + 90
+        angle = 0 if self.north_is_up else agent_transform.rotation.yaw + 90
 
         # same as super class below
         crop_with_car_in_the_center = masks
@@ -220,6 +248,9 @@ class TopDownView(BirdViewProducer):
             self.obstacles_vehicles = self._update_obstacles(msg)
         else:
             rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+
+    def update_pts_sets(self, point_sets: Dict[str, Tuple[List[Point2D], list]]):
+        self.point_sets = point_sets
 
     @staticmethod
     def _update_obstacles(msg: PafObstacleList) -> list:
@@ -301,6 +332,7 @@ class TopDownView(BirdViewProducer):
         :param birdview: masks list
         :return: rgb image
         """
+        # birdview = birdview[:len(MaskPriority)]
         _, h, w = birdview.shape
         rgb_canvas = np.zeros(shape=(h, w, 3), dtype=np.uint8)
 
@@ -314,6 +346,12 @@ class TopDownView(BirdViewProducer):
                 r, g, b = rgb_color
                 rgb_color = 255 - r, 255 - g, 255 - b
             rgb_canvas[self.nonzero_indices(birdview[mask_type])] = rgb_color
+        for i, (_, pts_set) in enumerate(self.point_sets.items()):
+            _, rgb_color = pts_set
+            if i + len(MaskPriority) > len(birdview) - 1:
+                break
+            nonzero = self.nonzero_indices(birdview[i + len(MaskPriority)])
+            rgb_canvas[nonzero] = rgb_color
         if not self.dark_mode:
             rgb_canvas = np.where(rgb_canvas.any(-1, keepdims=True), rgb_canvas, 255)
         return rgb_canvas

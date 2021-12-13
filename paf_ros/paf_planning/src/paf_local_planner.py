@@ -12,7 +12,7 @@ import numpy as np
 
 from geometry_msgs.msg import Pose
 from nav_msgs.msg import Odometry
-from paf_messages.msg import PafLocalPath, Point2D as Point, PafLaneletRoute, PafTrafficSignal
+from paf_messages.msg import PafLocalPath, Point2D as Point, PafLaneletRoute, PafTrafficSignal, PafTopDownViewPointSet
 from classes.SpeedCalculator import SpeedCalculator
 from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion
@@ -61,12 +61,7 @@ class LocalPlanner:
         # create and start the publisher for the local path
         self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         self._reroute_publisher = rospy.Publisher("/paf/paf_local_planner/reroute", Empty, queue_size=1)
-
-    # def _current_deceleration_distance(self, target_speed=0):
-    #     deceleration = self.CAR_DECELERATION - 9.81 * np.sin(self._current_pitch)
-    #     deceleration_time = (target_speed - self._current_speed) / deceleration
-    #     delay = self._current_speed / self.UPDATE_HZ
-    #     return 0.5 * (target_speed + self._current_speed) * deceleration_time + delay
+        self._sign_publisher = rospy.Publisher("/paf/paf_validation/points", PafTopDownViewPointSet, queue_size=1)
 
     def _process_global_path(self, msg: PafLaneletRoute):
         if len(self._distances) == 0 or len(msg.distances) == 0 or msg.distances[-1] != self._distances[-1]:
@@ -80,18 +75,18 @@ class LocalPlanner:
     def _get_current_path(self) -> Tuple[List[Point], Dict[str, Tuple[int, float]]]:
         if len(self._global_path) == 0:
             self._local_path = []
+            self._distances_delta = 0.01
             return
+        self._distances_delta = self._distances[-1] / len(self._distances)
         index = self._current_point_index
+        travel_dist = -1
+        index_end = -1
         try:
-            d_ref = self._distances[index]
-        except IndexError:
-            d_ref = 0
-        try:
-            delta = self._distances[index + 1] - d_ref
             travel_dist = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
-            index_end = int(np.ceil(travel_dist / delta)) + index
+            index_end = int(np.ceil(travel_dist / self._distances_delta)) + index
             _ = self._distances[index_end]
         except IndexError:
+            rospy.logwarn_throttle(10, f"[local planner] unable to transmit the next {travel_dist}m / {index_end}idxs")
             index_end = len(self._distances)
         current_path = self._global_path[index:index_end]
         self._local_path = current_path
@@ -102,11 +97,11 @@ class LocalPlanner:
         x2, y2 = b
         return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
-    def _closest_index_of_point_list(self, pts_list: List[Point], target_pt: Tuple[float, float]):
+    def _closest_index_of_point_list(self, pts_list: List[Point], target_pt: Tuple[float, float], acc=1):
 
         if len(self._global_path) == 0:
             return -1
-        return int(np.argmin([self._dist([p.x, p.y], target_pt) for p in pts_list]))
+        return int(acc * np.argmin([self._dist([p.x, p.y], target_pt) for p in pts_list[::acc]]))
 
     def _create_ros_msg(self):
         """create path message for ros
@@ -126,6 +121,13 @@ class LocalPlanner:
 
     def _signal_debug_print(self, signals):
         end_idx = self._current_point_index + len(self._local_path)
+
+        pts = PafTopDownViewPointSet()
+        pts.label = "signals"
+        pts.points = [self._global_path[s.index] for s in signals]
+        pts.color = [255, 0, 0]
+        self._sign_publisher.publish(pts)
+
         out = []
         for s in signals:
             if self._current_point_index <= s.index < end_idx:
@@ -133,7 +135,7 @@ class LocalPlanner:
                     n = TrafficSignIDGermany(s.type).name
                 except Exception:
                     n = s.type
-                m = (s.index - self._current_point_index) * self._distances[1]
+                m = self._distances[s.index] - self._distances[self._current_point_index]
                 m = np.round(m, 1)
                 str_signal = f"{n} ({m}m)"
                 if s.value >= 0:
@@ -143,7 +145,23 @@ class LocalPlanner:
         if len(out) > 0:
             rospy.loginfo_throttle(20, f"Upcoming Traffic Signs: {', '.join(out)}")
 
+    def _speed_debug_print(self, speeds, number_of_values=20):
+        if len(self._distances) == 0:
+            return
+        step = self._distances[-1] / len(self._distances)
+        delta_m = 1  # meter
+        delta_idx = int(delta_m / step)
+        n = number_of_values * delta_idx
+        out = []
+        for speed in speeds[:n:delta_idx]:
+            msg = f"{np.round(speed * 3.6, 1)}"
+            out.append(msg)
+        if len(out) > 0:
+            rospy.loginfo_throttle(20, f"Upcoming Speeds: {', '.join(out)}")
+
     def _update_target_speed(self):
+        if len(self._local_path) < 10:
+            return
         end_idx = self._current_point_index + len(self._local_path)
         calc = SpeedCalculator(self._distances, self._curvatures, self._current_point_index, end_idx)
         signals: List[PafTrafficSignal] = self._traffic_signals
@@ -153,7 +171,9 @@ class LocalPlanner:
         speed = calc.add_stop_events(speed, signals, target_speed=2)
         speed = calc.add_roll_events(speed, signals, target_speed=2)
         speed = calc.add_linear_deceleration(speed)
+        self._speed_debug_print(speed)
         self._target_speed = speed
+        pass
 
     def _can_continue_on_path(self, signal_type):
         if signal_type == "LIGHT":
@@ -215,7 +235,7 @@ class LocalPlanner:
         #         self._current_point_index = i + idx - 1
         #         break
         self._current_point_index = self._closest_index_of_point_list(
-            self._global_path[::100], (current_pos.x, current_pos.y)
+            self._global_path, (current_pos.x, current_pos.y), acc=100
         )
 
         # self._current_point_index -= 20

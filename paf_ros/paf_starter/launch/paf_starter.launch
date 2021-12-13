@@ -77,8 +77,8 @@
   <!--  Perception -->
   <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
 
-  <!--  Local Planning -->
-  <!-- <include file="$(find paf_planning)/launch/paf_local_planner.launch"/> -->
+    Local Planning
+   <include file="$(find paf_planning)/launch/paf_local_planner.launch"/>
 
   <!--  Global Planning -->
   <include file="$(find paf_planning)/launch/paf_global_planner.launch"/>
