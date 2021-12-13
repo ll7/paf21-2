@@ -82,6 +82,7 @@ class SpeedCalculator:
                     break
             f = n - k
             speed[n:j] = lin[f:]
+        speed[0] = speed[1]
         return speed
 
     def add_speed_limits(self, speed, traffic_signals: List[PafTrafficSignal]):

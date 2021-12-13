@@ -61,7 +61,9 @@ class LocalPlanner:
         # create and start the publisher for the local path
         self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         self._reroute_publisher = rospy.Publisher("/paf/paf_local_planner/reroute", Empty, queue_size=1)
-        self._sign_publisher = rospy.Publisher("/paf/paf_validation/points", PafTopDownViewPointSet, queue_size=1)
+        self._sign_publisher = rospy.Publisher(
+            "/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, queue_size=1
+        )
 
     def _process_global_path(self, msg: PafLaneletRoute):
         if len(self._distances) == 0 or len(msg.distances) == 0 or msg.distances[-1] != self._distances[-1]:
@@ -79,14 +81,11 @@ class LocalPlanner:
             return
         self._distances_delta = self._distances[-1] / len(self._distances)
         index = self._current_point_index
-        travel_dist = -1
-        index_end = -1
         try:
             travel_dist = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
             index_end = int(np.ceil(travel_dist / self._distances_delta)) + index
             _ = self._distances[index_end]
         except IndexError:
-            rospy.logwarn_throttle(10, f"[local planner] unable to transmit the next {travel_dist}m / {index_end}idxs")
             index_end = len(self._distances)
         current_path = self._global_path[index:index_end]
         self._local_path = current_path

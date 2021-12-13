@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List
+from typing import Dict
 
 import cv2
 import carla
@@ -18,7 +18,7 @@ from carla_birdeye_view.mask import (
 
 from argparse import Namespace
 from enum import IntEnum
-from paf_messages.msg import PafObstacleList, PafObstacle, Point2D
+from paf_messages.msg import PafObstacleList, PafObstacle, PafTopDownViewPointSet
 
 
 class MaskPriority(IntEnum):
@@ -87,8 +87,10 @@ class TopDownView(BirdViewProducer):
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
         self.path_width_px = 10
-        self.pt_width_px = 20
-        self.point_sets = {}
+        self.pt_width_px = 15
+        self.line_width_px = 10
+        self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
+        self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -100,6 +102,7 @@ class TopDownView(BirdViewProducer):
         super(TopDownView, self).__init__(client, target_size, pixels_per_meter, BirdViewCropType.FRONT_AND_REAR_AREA)
         self.pt_width_px = int(np.ceil(self.pt_width_px / 10 * self._pixels_per_meter))
         self.path_width_px = int(np.ceil(self.path_width_px / 10 * self._pixels_per_meter))
+        self.line_width_px = int(np.ceil(self.line_width_px / 10 * self._pixels_per_meter))
 
     def produce(self, agent_vehicle: carla.Actor) -> BirdView:
         """
@@ -146,33 +149,54 @@ class TopDownView(BirdViewProducer):
             masks[MaskPriority.VEH_OBSTACLES] = self._create_obstacle_mask(self.obstacles_vehicles, mask_obstacles)
 
         if len(self.point_sets) > 0:
-            pts_masks = []
-            for lbl, (points, color) in self.point_sets.items():
-                # mask = np.repeat(self.masks_generator.make_empty_mask()[:, :, np.newaxis], 3, axis=2)
-                mask = self.masks_generator.make_empty_mask()
-                for point in points:
-                    # point.y *= -1
-                    pixel = self.masks_generator.location_to_pixel(point)
-                    mask = cv2.rectangle(
-                        mask,
-                        (pixel.x - self.pt_width_px, pixel.y - self.pt_width_px),
-                        (pixel.x + self.pt_width_px, pixel.y + self.pt_width_px),
-                        COLOR_ON,
-                        -1,
-                    )
-                pts_masks.append(mask)
+            pts_masks = self._get_pts_sets_masks()
             masks = np.append(masks, pts_masks, 0)
-            new_idx = list(range(len(MaskPriority), len(MaskPriority) + len(self.point_sets)))
+        if len(self.line_sets) > 0:
+            lines_masks = self._get_line_sets_masks()
+            masks = np.append(masks, lines_masks, 0)
+
+        new_indices_count = len(self.point_sets) + len(self.line_sets)
+        if new_indices_count > 0:
+            new_indices = list(range(len(MaskPriority), len(MaskPriority) + new_indices_count))
         else:
-            new_idx = []
+            new_indices = []
 
         cropped_masks = self.apply_agent_following_transformation_to_masks(
             agent_vehicle,
             masks,
         )
         ordered_indices = [mask.value for mask in MaskPriority.bottom_to_top()]
-        ordered_indices += new_idx
+        ordered_indices += new_indices
         return cropped_masks[ordered_indices]
+
+    def _get_line_sets_masks(self):
+        lines_masks = []
+        for line_set in self.line_sets.values():
+            points = line_set.points
+            mask = self.masks_generator.make_empty_mask()
+            pixels = [self.masks_generator.location_to_pixel(point) for point in points]
+            pixels = np.array([[p.x, p.y] for p in pixels])
+            mask = cv2.polylines(mask, [pixels.reshape((-1, 1, 2))], False, COLOR_ON, self.line_width_px)
+            lines_masks.append(mask)
+        return lines_masks
+
+    def _get_pts_sets_masks(self):
+        pts_masks = []
+        for point_set in self.point_sets.values():
+            points = point_set.points
+            mask = self.masks_generator.make_empty_mask()
+            for point in points:
+                # point.y *= -1
+                pixel = self.masks_generator.location_to_pixel(point)
+                mask = cv2.rectangle(
+                    mask,
+                    (pixel.x - self.pt_width_px, pixel.y - self.pt_width_px),
+                    (pixel.x + self.pt_width_px, pixel.y + self.pt_width_px),
+                    COLOR_ON,
+                    -1,
+                )
+            pts_masks.append(mask)
+        return pts_masks
 
     def apply_agent_following_transformation_to_masks(
         self,
@@ -248,9 +272,6 @@ class TopDownView(BirdViewProducer):
             self.obstacles_vehicles = self._update_obstacles(msg)
         else:
             rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
-
-    def update_pts_sets(self, point_sets: Dict[str, Tuple[List[Point2D], list]]):
-        self.point_sets = point_sets
 
     @staticmethod
     def _update_obstacles(msg: PafObstacleList) -> list:
@@ -346,11 +367,20 @@ class TopDownView(BirdViewProducer):
                 r, g, b = rgb_color
                 rgb_color = 255 - r, 255 - g, 255 - b
             rgb_canvas[self.nonzero_indices(birdview[mask_type])] = rgb_color
-        for i, (_, pts_set) in enumerate(self.point_sets.items()):
-            _, rgb_color = pts_set
+
+        add_to_idx = len(MaskPriority)
+        for i, line_set in enumerate(self.line_sets.values()):
+            rgb_color = line_set.color
             if i + len(MaskPriority) > len(birdview) - 1:
                 break
-            nonzero = self.nonzero_indices(birdview[i + len(MaskPriority)])
+            nonzero = self.nonzero_indices(birdview[i + add_to_idx])
+            rgb_canvas[nonzero] = rgb_color
+        add_to_idx += len(self.line_sets)
+        for i, pts_set in enumerate(self.point_sets.values()):
+            rgb_color = pts_set.color
+            if i + len(MaskPriority) > len(birdview) - 1:
+                break
+            nonzero = self.nonzero_indices(birdview[i + add_to_idx])
             rgb_canvas[nonzero] = rgb_color
         if not self.dark_mode:
             rgb_canvas = np.where(rgb_canvas.any(-1, keepdims=True), rgb_canvas, 255)
