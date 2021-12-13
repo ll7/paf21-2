@@ -1,3 +1,4 @@
+import copy
 from typing import List
 import numpy as np
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany
@@ -17,12 +18,13 @@ class SpeedCalculator:
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
 
-    def __init__(self, distances: List[float], curvatures: List[float], index_start: int):
+    def __init__(self, distances: List[float], curvatures: List[float], index_start: int = 0, index_end=None):
         self.deceleration_delta = self.MAX_DECELERATION * distances[1]  # in m/s per second
         self.step_size = distances[1]
-        self.curvatures = curvatures
-        self.distances = distances
         self.index_start = index_start
+        self.index_end = len(curvatures) - 1 if index_end is None else index_end
+        self.curvatures = curvatures[index_start:index_end]
+        self.distances = distances[index_start:index_end]
 
         self.continue_on_indices = []
 
@@ -32,7 +34,7 @@ class SpeedCalculator:
         for i, curve in enumerate(self.curvatures):
             factor = 1 - curve * self.CURVE_FACTOR  # from 0 straightness to 1
             factor = np.clip(factor, 0, 1)
-            speed[i] = np.max([self.MIN_SPEED, factor * self.MAX_SPEED])
+            speed[i] = np.clip(factor * self.MAX_SPEED, self.MIN_SPEED, self.MAX_SPEED)
         return speed
 
     @staticmethod
@@ -46,20 +48,23 @@ class SpeedCalculator:
         for i, a in enumerate(accel):
             if a < -self.deceleration_delta:
                 j = length - 1 - i
-                k = j + int(a / self.deceleration_delta)
-                lin = self._linear_function(-self.deceleration_delta, -a + speed[j], j - k)
+                delta_v = speed[j] - self.MAX_SPEED
+                k = j + int(delta_v / self.deceleration_delta)
+                lin = self._linear_function(-self.deceleration_delta, self.MAX_SPEED, j - k)
                 n = 0
                 for n in reversed(range(k, j)):
                     if n == 0 or speed[n] < lin[n - k]:
                         break
-
                 f = n - k
                 speed[n:j] = lin[f:]
+                accel[n:j] = -self.deceleration_delta
         return speed
 
     def add_speed_limits(self, speed, traffic_signals: List[PafTrafficSignal]):
         for signal in traffic_signals:
             i = signal.index - self.index_start
+            if i > self.index_end:
+                return speed
             if signal.type == TrafficSignIDGermany.MAX_SPEED.value:
                 speed[i:] = np.clip(0, speed[i:], signal.value)
         return speed
@@ -69,6 +74,8 @@ class SpeedCalculator:
             events = self.QUICK_BRAKE_EVENTS
         for signal in traffic_signals:
             i = signal.index - self.index_start
+            if i > self.index_end:
+                return speed
             if signal.type in events:
                 i0, i1 = i - 1, i + 1
                 speed[i0:i1] = target_speed
@@ -77,27 +84,22 @@ class SpeedCalculator:
     def add_roll_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0):
         return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS)
 
-    def test(self, sign):
-        length = len(self.curvatures)
-
-        # speed = self.get_curve_speed()
-        speed = np.ones((length,)).astype(float) * self.MAX_SPEED
-        speed = self.add_speed_limits(speed, sign)
-        speed = self.add_stop_events(speed, sign)
-        speed = self.add_linear_deceleration(speed)
-
-        print(self.deceleration_delta)
-        print(self.MAX_DECELERATION)
+    def open_plt(self):
         plt.close()
-
-        accel = np.array(list(reversed([min(0, y - x) / self.step_size for x, y in zip(speed, speed[1:])])))
-        fig, (plt1, plt2) = plt.subplots(2)
-        plt1.plot([i * 0.01 for i in range(length)], [s * 3.6 for s in speed])
-        # plt1.plot([i * .01 for i in range(length)], [s * 3.6 for s in speed0])
+        num_plts = 2
+        fig, plts = plt.subplots(num_plts)
         plt.xlabel("Distanz in m")
-        plt2.plot([i * 0.01 for i in range(length - 1)], accel)
-        plt.show()
-        return speed
+        self.plts = plts if num_plts > 1 else [plts]
+
+    def add_to_plt(self, speed, add_accel=False):
+        speed = copy.deepcopy(speed)
+        length = len(self.curvatures)
+        x_values = [i * self.step_size for i in range(length)]
+        x_values = [i for i in range(length)]
+        if add_accel:
+            accel = np.array(list([np.clip((y - x) / self.step_size, -10, 10) for x, y in zip(speed, speed[1:])]))
+            self.plts[1].plot(x_values[:-1], accel)
+        self.plts[0].plot(x_values, [s * 3.6 for s in speed])
 
     # string type
     # int64 index
