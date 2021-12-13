@@ -54,15 +54,16 @@ class SpeedCalculator:
         for i, a in enumerate(accel):
             if a < -self._deceleration_delta:
                 j = length - 1 - i
-                lin = deceleration_fun(speed[j])
+                lin = deceleration_fun(speed[j + 1])
                 k = j - len(lin)
                 n = 0
                 for n in reversed(range(k, j)):
                     if n == 0 or speed[n] < lin[n - k]:
+                        n += 1
                         break
                 f = n - k
                 speed[n:j] = lin[f:]
-                accel[n:j] = -self._deceleration_delta
+                # accel[n:j] = -self._deceleration_delta
         return speed
 
     def add_speed_limits(self, speed, traffic_signals: List[PafTrafficSignal]):
@@ -102,7 +103,14 @@ class SpeedCalculator:
         x_values = [i * self._step_size for i in range(length)]
         x_values = [i for i in range(length)]
         if add_accel:
-            accel = np.array(list([np.clip((y - x) / self._step_size, -10, 10) for x, y in zip(speed, speed[1:])]))
+            accel = np.array(
+                list(
+                    [
+                        np.clip((y - x) / self._step_size, -2 * self.MAX_DECELERATION, 10)
+                        for x, y in zip(speed, speed[1:])
+                    ]
+                )
+            )
             self._plots[1].plot(x_values[:-1], accel)
         self._plots[0].plot(x_values, [s * 3.6 for s in speed])
 
