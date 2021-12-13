@@ -134,7 +134,12 @@ class LocalPlanner:
                 except Exception:
                     n = s.type
                 m = (s.index - self._current_point_index) * self._distances[1]
-                out.append(f"{n} ({m}m): {s.value}")
+                m = np.round(m, 1)
+                str_signal = f"{n} ({m}m)"
+                if s.value >= 0:
+                    v = np.round(s.value, 1)
+                    str_signal += f": {v}"
+                out.append(str_signal)
         if len(out) > 0:
             rospy.loginfo_throttle(20, f"Upcoming Traffic Signs: {', '.join(out)}")
 
