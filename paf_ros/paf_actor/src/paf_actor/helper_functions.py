@@ -17,10 +17,7 @@ def calc_path_yaw(path: Path, idx: int) -> float:
         float: [description]
     """
     if idx >= len(path) - 1:
-        # raise RuntimeError(
-        #    f"The path needs to be atlest 2 long. Given path: {
-        # path.poses} is currently only {len(path.poses) - idx} long")
-        return 0.0
+        raise RuntimeError("No target found")
 
     point_current = path[idx]
     point_next = path[idx + 1]
