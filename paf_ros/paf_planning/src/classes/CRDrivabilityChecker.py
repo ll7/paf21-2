@@ -16,7 +16,7 @@ from tf.transformations import euler_from_quaternion
 from commonroad.common.file_reader import CommonRoadFileReader
 import commonroad_dc.pycrcc as pycrcc
 from commonroad.visualization.mp_renderer import MPRenderer
-from commonroad.geometry.shape import Rectangle, Shape
+from commonroad.geometry.shape import Circle, Polygon, Rectangle, Shape
 from commonroad.scenario.obstacle import StaticObstacle, ObstacleType
 from commonroad.scenario.trajectory import State
 
@@ -80,10 +80,14 @@ class CRDriveabilityChecker(object):
             """
         if msg.type == "Pedestrians":
             self.obstacles_pedestrians = self._update_obstacles(msg)
+            self._add_all_pedestrians_to_cr(self.obstacles_pedestrians)
         elif msg.type == "Vehicles":
             self.obstacles_vehicles = self._update_obstacles(msg)
+            self._add_all_vehicles_to_cr(self.obstacles_vehicles)
         else:
             rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+
+        
 
 
     def _update_ego_vehicle_to_CRScenario(self):
@@ -108,40 +112,42 @@ class CRDriveabilityChecker(object):
         self.ego_vehicle = StaticObstacle(id, type, shape, initial_state)
         scenario.add_objects(self.ego_vehicle)
 
-    def _update_pedestrians_to_CRScenario(self):
-        """create new obstacle graphical representation for a pedestrian in CRScenario"
-        """
-        if (self.obstacles_pedestrians is not None):
-            scenario.remove_obstacle(self.ego_vehicle)
+    def _add_all_pedestrians_to_cr(self, pedestrians: PafObstacleList):
+        for obstacle in pedestrians:
+            id = scenario.generate_object_id()
+            self._add_pedestrian(id, obstacle)
 
-        id = self.ego_vehice_id
-        scenario.remove_obstacle
+    def _add_all_vehicles_to_cr(self, vehicles: PafObstacleList):
+        for obstacle in vehicles:
+            id = scenario.generate_object_id()
+            self._add_vehicle(id, obstacle)
+
+
+
+    def _add_obstactle(self, id, obstacle: PafObstacle, shape: Shape, type: ObstacleType) -> int:
+        orientation = 0
+        #actual position should be fixed, dummy implementation
+        position = np.array[obstacle.closest]
+        initial_state = State(position = position,
+                                       velocity = 0,
+                                       orientation = orientation,                                      
+                                       time_step = 0)
+        
+        obstacle = StaticObstacle(id, type, shape, initial_state)
+        scenario.add_objects(obstacle)
+        return id
+
+
+    def _add_pedestrian(self,id, obstacle: PafObstacle):
+        shape = Polygon(np.array[obstacle.closest, obstacle.bound_1, obstacle.bound_2])
+        type = ObstacleType.PEDESTRIAN
+        self._add_obstactle(self, id, obstacle, shape, type)
+
+    def _add_vehicle(self,id, obstacle: PafObstacle):
+        shape = Polygon(np.array[obstacle.closest, obstacle.bound_1, obstacle.bound_2])
         type = ObstacleType.PARKED_VEHICLE
-        shape = Rectangle(width = 2.0, length = 4.5)
-        position = [self._current_pose.position.x, self._current_pose.position.y]
-        orientation = 0
+        self._add_obstactle(self, id, obstacle, shape, type)
 
-        initial_state = State(position = position,
-                                       velocity = 0,
-                                       orientation = orientation,
-                                       
-                                       time_step = 0)
-        
-        self.ego_vehicle = StaticObstacle(id, type, shape, initial_state)
-        scenario.add_objects(self.ego_vehicle)
-
-
-    def _add_obstactle(self, id, position, shape: Shape, type: ObstacleType):
-        
-        orientation = 0
-        initial_state = State(position = position,
-                                       velocity = 0,
-                                       orientation = orientation,
-                                       
-                                       time_step = 0)
-        
-        obstactle = StaticObstacle(id, type, shape, initial_state)
-        scenario.add_objects(obstactle)
         
 
     #def _update_obstacles_to_CRScenario(self):
