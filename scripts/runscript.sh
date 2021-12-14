@@ -74,7 +74,7 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 }
 
 cd $paf_dir/scripts/ || exit
-echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality --manual-control)"
+echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart/-scr --build/-b --npcs/-n --low-quality/-lq --manual-control/-mc)"
 trap exit_program SIGINT
 
 CARLA_SKIP=0
@@ -85,16 +85,31 @@ for VAR in "$@"; do
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
   fi
+  if [ "$VAR" = "-scr" ]; then
+    CARLA_SKIP=1
+  fi
   if [ "$VAR" = "--manual-control" ]; then
+    ros_launch_args="$ros_launch_args manual_control:=true"
+  fi
+  if [ "$VAR" = "-mc" ]; then
     ros_launch_args="$ros_launch_args manual_control:=true"
   fi
   if [ "$VAR" = "--build" ]; then
     BUILD_ROS=1
   fi
+  if [ "$VAR" = "-b" ]; then
+    BUILD_ROS=1
+  fi
   if [ "$VAR" = "--npcs" ]; then
     NPCS=1
   fi
+  if [ "$VAR" = "-n" ]; then
+    NPCS=1
+  fi
   if [ "$VAR" = "--low-quality" ]; then
+    CARLA_ARGS="-quality-level=Low"
+  fi
+  if [ "$VAR" = "-lq" ]; then
     CARLA_ARGS="-quality-level=Low"
   fi
 done

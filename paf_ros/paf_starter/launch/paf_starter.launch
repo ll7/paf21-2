@@ -74,14 +74,18 @@
   <!--  Steering  -->
   <!--  <include file="$(find paf_actor)/launch/paf_actor.launch"/> -->
 
-  <!--  Perception -->
+  <!--  Perception  -->
   <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
 
-    Local Planning
-   <include file="$(find paf_planning)/launch/paf_local_planner.launch"/>
+  <!--  Local Planning  -->
+  <include file="$(find paf_planning)/launch/paf_local_planner.launch">
+    <arg name='town' value='$(arg town)'/>
+  </include>
 
-  <!--  Global Planning -->
-  <include file="$(find paf_planning)/launch/paf_global_planner.launch"/>
+  <!--  Global Planning  -->
+  <include file="$(find paf_planning)/launch/paf_global_planner.launch">
+    <arg name='town' value='$(arg town)'/>
+  </include>
 
 
 </launch>

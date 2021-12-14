@@ -8,4 +8,4 @@ img_size: {
 pixels_per_meter: 5
 north_is_up: false
 dark_mode: false
-show_whole_map: true
+show_whole_map: false

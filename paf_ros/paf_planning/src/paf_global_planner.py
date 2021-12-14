@@ -5,7 +5,6 @@ import rospy
 import numpy as np
 
 from typing import List
-from commonroad.common.file_reader import CommonRoadFileReader
 from commonroad.common.util import Interval, AngleInterval
 from commonroad.geometry.shape import Circle
 from commonroad.planning.goal import GoalRegion
@@ -19,6 +18,7 @@ from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest
 
 from classes.PafRoute import PafRoute
+from classes.MapManager import MapManager
 from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion
 
@@ -31,8 +31,7 @@ class GlobalPlanner:
     UPDATE_HZ = 1
 
     def __init__(self):
-        self.scenario: Scenario
-        self.scenario, _ = CommonRoadFileReader("Town03.xml").open()
+        self._scenario: Scenario = MapManager.get_current_scenario()
         self._position = [1e99, 1e99]
         self._yaw = 0
         self._routing_target = None
@@ -61,7 +60,7 @@ class GlobalPlanner:
         return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
     def _any_target_anywhere(self, p_home):
-        lanelets = self.scenario.lanelet_network.lanelets
+        lanelets = self._scenario.lanelet_network.lanelets
         lanelet_p = None
         counter = 0
         min_dist = 100
@@ -82,7 +81,7 @@ class GlobalPlanner:
 
         try:
             lanelet_id = self._find_closest_lanelet()[0]
-            lanelet = self.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
             position = lanelet.center_vertices[
                 np.argmin([self.dist(a, self._position) for a in lanelet.center_vertices])
             ]
@@ -116,12 +115,12 @@ class GlobalPlanner:
         if p is None:
             p = self._position
         p = np.array(p, dtype=float)
-        lanelets = self.scenario.lanelet_network.find_lanelet_by_position([p])[0]
+        lanelets = self._scenario.lanelet_network.find_lanelet_by_position([p])[0]
         if len(lanelets) > 0:
             return lanelets
         for radius in range(3, 100, 3):
             shape = Circle(radius=radius, center=p)
-            lanelets = self.scenario.lanelet_network.find_lanelet_by_shape(shape)
+            lanelets = self._scenario.lanelet_network.find_lanelet_by_shape(shape)
             if len(lanelets) > 0:
                 break
         return lanelets
@@ -177,7 +176,7 @@ class GlobalPlanner:
             target_circle_diameter,
             target_orientation_allowed_error,
         )
-        route_planner = RoutePlanner(self.scenario, planning_problem, backend=self.BACKEND)
+        route_planner = RoutePlanner(self._scenario, planning_problem, backend=self.BACKEND)
         routes, _ = route_planner.plan_routes().retrieve_all_routes()
         if return_shortest_only:
             if len(routes) == 0:
@@ -238,7 +237,7 @@ class GlobalPlanner:
         return PlanningProblem(1, initial_state, GoalRegion([target_state]))
 
     def _route_from_ids(self, lanelet_ids: List[int]):
-        return PafRoute(Route(self.scenario, None, lanelet_ids, RouteType.REGULAR))
+        return PafRoute(Route(self._scenario, None, lanelet_ids, RouteType.REGULAR))
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)
