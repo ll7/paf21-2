@@ -7,11 +7,11 @@ from paf_messages.msg import PafTrafficSignal, Point2D
 
 
 class SpeedCalculator:
-    MAX_SPEED = 100 / 3.6
+    MAX_SPEED = 250 / 3.6
     MIN_SPEED = 30 / 3.6
     CURVE_FACTOR = 2.2  # higher value = more drifting
 
-    MAX_DECELERATION = 15  # m/s^2, higher value = later and harder braking
+    MAX_DECELERATION = 10  # m/s^2, higher value = later and harder braking
 
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
