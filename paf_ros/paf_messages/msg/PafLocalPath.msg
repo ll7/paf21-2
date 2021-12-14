@@ -1,3 +1,3 @@
 Header header
-float64 target_speed
-geometry_msgs/Pose[] poses
+float32[] target_speed
+Point2D[] points

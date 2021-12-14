@@ -4,7 +4,7 @@ import rospy
 
 from carla_birdeye_view.mask import PixelDimensions
 from time import sleep
-from paf_messages.msg import PafObstacleList, PafLocalPath
+from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute, PafTopDownViewPointSet
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -17,6 +17,7 @@ class TopDownRosNode(object):
     def __init__(self, _client, _actor):
         self.params = rospy.get_param("/top_down_view/")
         self.actor = _actor
+        self.point_sets = {}
         self.producer = TopDownView(
             _client,
             target_size=PixelDimensions(
@@ -31,13 +32,26 @@ class TopDownRosNode(object):
         rospy.init_node(self.params["node"], anonymous=True)
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.update_obstacles)
-        rospy.Subscriber(rospy.get_param("local_path_topic"), PafLocalPath, self.update_local_path)
+        rospy.Subscriber("/paf/paf_local_planner/path", PafLocalPath, self.update_local_path)
+        rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
+        rospy.Subscriber("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, self._update_pt_set)
+        rospy.Subscriber("/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, self._update_line_set)
 
     def update_obstacles(self, msg: PafObstacleList):
         self.producer.update_obstacles(msg)
 
+    def _update_line_set(self, msg: PafTopDownViewPointSet):
+        self.producer.line_sets[msg.label] = msg
+
+    def _update_pt_set(self, msg: PafTopDownViewPointSet):
+        self.producer.point_sets[msg.label] = msg
+
+    def update_global_path(self, msg: PafLaneletRoute):
+        path = [[point.x, point.y] for point in msg.points[::10]]
+        self.producer.set_path(coordinate_list_global_path=path)
+
     def update_local_path(self, msg: PafLocalPath):
-        path = [[pose.position.x, pose.position.y] for pose in msg.poses]
+        path = [[point.x, point.y] for point in msg.points]
         self.producer.set_path(coordinate_list_local_path=path)
 
     def produce_map(self):
@@ -64,7 +78,8 @@ def main():
         actors = client.get_world().get_actors()
         for actor in actors:
             if "role_name" in actor.attributes and actor.attributes["role_name"] == search_name:
-                rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {actor.get_location()}")
+                loc = actor.get_location()
+                rospy.logwarn(f"Tracking {actor.type_id} ({actor.attributes['role_name']}) at {loc}")
                 TopDownRosNode(client, actor).start()
                 return
         else:

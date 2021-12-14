@@ -1,0 +1,3 @@
+<launch>
+  <node pkg="paf_validation" type="tensorboard_node.py" name="tensorboard"/>
+</launch>

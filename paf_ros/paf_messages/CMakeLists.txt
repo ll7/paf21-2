@@ -6,6 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs
   geometry_msgs
+  sensor_msgs
 )
 
 add_message_files(
@@ -14,11 +15,25 @@ add_message_files(
   PafLocalPath.msg
   PafObstacle.msg
   PafObstacleList.msg
+  Point2D.msg
+  PafLaneletRoute.msg
+  PafRoutingRequest.msg
+  PafRoutingGraphNode.msg
+  PafTrafficSignal.msg
+  PafLogImage.msg
+  PafLogScalar.msg
+  PafLogText.msg
+  PafTopDownViewPointSet.msg
 )
+
+#add_service_files(
+#  FILES
+#)
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
   geometry_msgs
 )
 
@@ -27,4 +42,5 @@ catkin_package(
   message_runtime
   std_msgs
   geometry_msgs
+  sensor_msgs
 )
