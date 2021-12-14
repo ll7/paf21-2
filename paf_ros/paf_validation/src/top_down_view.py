@@ -67,7 +67,6 @@ class TopDownRosNode(object):
             delta = rospy.Time.now().to_time() - t0
             if delta > 0:
                 rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / delta}")
-            rospy.loginfo_throttle(10, f"[top_down_view] loc={loc}")
             rate.sleep()
 
 
@@ -87,8 +86,6 @@ def main():
             rospy.logwarn("ego vehicle not found, retrying")
             sleep(1)
 
-
-loc = 0
 
 if __name__ == "__main__":
     main()
