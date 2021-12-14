@@ -41,6 +41,7 @@ class GlobalPlanner:
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider)
+        rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Empty, self._routing_provider_random)
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
 
@@ -73,6 +74,22 @@ class GlobalPlanner:
             return None
         return lanelet_p
 
+    def _find_closest_position_on_lanelet_network(self):
+        lanelet_id = self._find_closest_lanelet()[0]
+        lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+        position = lanelet.center_vertices[np.argmin([self.dist(a, self._position) for a in lanelet.center_vertices])]
+        return position
+
+    def _routing_provider_random(self, _: Empty):
+        msg = PafRoutingRequest()
+        try:
+            position = self._find_closest_position_on_lanelet_network()
+        except IndexError:
+            rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
+            return
+        msg.target = self._any_target_anywhere(position)
+        self._routing_provider(msg)
+
     def _routing_provider(self, msg: PafRoutingRequest = None):
         if msg is None:
             msg = self._routing_target
@@ -80,11 +97,7 @@ class GlobalPlanner:
             self._routing_target = msg
 
         try:
-            lanelet_id = self._find_closest_lanelet()[0]
-            lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
-            position = lanelet.center_vertices[
-                np.argmin([self.dist(a, self._position) for a in lanelet.center_vertices])
-            ]
+            position = self._find_closest_position_on_lanelet_network()
         except IndexError:
             rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
             return
