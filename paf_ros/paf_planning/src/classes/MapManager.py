@@ -8,7 +8,7 @@ class MapManager:
     def _get_town_path(rules=True):
         town = "UNKNOWN"
         try:
-            town = rospy.get_param("/town")
+            town = rospy.get_param("/carla/town")
         except KeyError:
             rospy.logerr("town parameter not set")
             exit(1)

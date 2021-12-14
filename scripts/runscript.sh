@@ -63,6 +63,12 @@ function start_terminal() { # opt:name, cmd
     gnome-terminal -- $1
   fi
 }
+function reduce_ros_log_noise() {
+  rosservice call /rviz/set_logger_level "logger: 'ros'
+level: 'Error'"
+  rosservice call /carla_ros_bridge/set_logger_level "logger: 'rosout'
+level: 'Error'"
+}
 function start_terminal_wait_until_it_stays_open() { # cmd, name
   echo $1
   STATUS=$(./subscripts/wait_for_window.sh "$2" open 3)
@@ -138,7 +144,7 @@ eval "$(cat ~/.bashrc | tail -n +10)"
 close_ros 2>/dev/null
 echo "starting main launcher..."
 start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
-
+reduce_ros_log_noise
 if ((NPCS)); then
   echo "spawning npcs..."
   gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py $npc_launch_args
@@ -152,10 +158,7 @@ fi
 
 echo "loaded the following nodes successfully:"
 rosnode list
-rosservice call /rviz/set_logger_level "logger: 'ros'
-level: 'Error'"
-rosservice call /carla_ros_bridge/set_logger_level "logger: 'rosout'
-level: 'Warn'"
+reduce_ros_log_noise
 echo ""
 echo "press ctrl+c to kill all ros terminals."
 
