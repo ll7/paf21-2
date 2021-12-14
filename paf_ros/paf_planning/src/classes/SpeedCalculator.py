@@ -9,7 +9,7 @@ from paf_messages.msg import PafTrafficSignal, Point2D
 class SpeedCalculator:
     MAX_SPEED = 100 / 3.6
     MIN_SPEED = 30 / 3.6
-    CURVE_FACTOR = 2.2  # higher value = more drifting
+    CURVE_FACTOR = 1.5  # higher value = more drifting
 
     MAX_DECELERATION = 10  # m/s^2, higher value = later and harder braking
 
