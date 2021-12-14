@@ -62,7 +62,7 @@ class LocalPlanner:
         self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         self._reroute_publisher = rospy.Publisher("/paf/paf_local_planner/reroute", Empty, queue_size=1)
         self._sign_publisher = rospy.Publisher(
-            "/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, queue_size=1
+            "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
 
     def _process_global_path(self, msg: PafLaneletRoute):
@@ -215,11 +215,9 @@ class LocalPlanner:
         self._current_pose = odometry.pose.pose
         # invert y-coordinate of odometry, because odometry sensor returns wrong values
         self._current_pose.position.y = -self._current_pose.position.y
+        self._set_current_point_index()
 
-        if len(self._global_path) <= self._current_point_index + 1:
-            self._current_point_index = 0
-
-        current_pos = self._current_pose.position
+    def _set_current_point_index(self):
 
         # todo marcos algo (unten) ist schlechter wenn fahrzeug abseits von globaler routen-linie
         # prev_dist = None
@@ -233,12 +231,14 @@ class LocalPlanner:
         #     else:
         #         self._current_point_index = i + idx - 1
         #         break
-        self._current_point_index = self._closest_index_of_point_list(
-            self._global_path, (current_pos.x, current_pos.y), acc=100
-        )
 
-        # self._current_point_index -= 20
-        # self._current_point_index = min(0, self._current_point_index)
+        if len(self._global_path) <= self._current_point_index + 1:
+            self._current_point_index = 0
+        else:
+            current_pos = self._current_pose.position
+            self._current_point_index = self._closest_index_of_point_list(
+                self._global_path, (current_pos.x, current_pos.y), acc=100
+            )
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)

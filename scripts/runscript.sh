@@ -20,7 +20,7 @@ function carla_available() {
 function _close_ros() {
   rosnode kill -a
   wmctrl -c "spawn_npc.py"
-  wmctrl -c ".launch"
+#  wmctrl -c ".launch"
   wmctrl -c " - RViz"
 }
 function exit_program() {
