@@ -155,7 +155,7 @@ class ObstacleDetectionNode(object):
             rate.sleep()
 
     @staticmethod
-    def _unit_vector(p1: list) -> float:
+    def _unit_vector(p1: list) -> list:
         """
         calculates the unit_vector 
         :param p1: vector 1 (x,y)
