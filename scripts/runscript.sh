@@ -76,18 +76,11 @@ level: 'Error'"
 }
 function start_terminal_wait_until_it_stays_open() { # cmd, name
   echo $1
-  i=0
   STATUS=$(./subscripts/wait_for_window.sh "$2" open 3)
   while [ "$STATUS" = "closed" ]; do
-    i=(i+1)
     start_terminal "$1"
     sleep 3
     STATUS=$(./subscripts/wait_for_window.sh "$2" open 3)
-    if ((i > 3)); then
-      echo "unable to start $2"
-      sleep 30
-      exit_program
-    fi
   done
 }
 

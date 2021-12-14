@@ -131,7 +131,7 @@ class GlobalPlanner:
         draw_msg.label = "planning_target"
         draw_msg.points = [Point2D(target[0], target[1])]
         draw_msg.color = 153, 0, 153
-        # self._target_on_map_pub.publish(draw_msg)
+        self._target_on_map_pub.publish(draw_msg)
 
     def _find_closest_lanelet(self, p=None):
         if p is None:
