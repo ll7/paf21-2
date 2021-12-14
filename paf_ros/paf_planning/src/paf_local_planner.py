@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import time
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 
 from commonroad.scenario.traffic_sign import (
     TrafficLightState,
@@ -27,12 +27,15 @@ class LocalPlanner:
     TRANSMIT_FRONT_SEC = 5
     DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
-    REPLAN_THROTTLE_SEC = 10
+    REPLAN_THROTTLE_SEC = 5
+    END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
 
     def __init__(self):
 
         rospy.init_node("local_path_node", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
+
+        self._rules_enabled = False
 
         self._current_pose = Pose()
         self._current_speed = 0
@@ -50,6 +53,7 @@ class LocalPlanner:
         self._following_distance = -1  # todo set following distance
         self._following_speed = -1  # todo set following speed
         self._distance_to_global_path = 0
+        self._is_at_end_of_route = True
 
         # local path params
         self._local_path = []
@@ -74,24 +78,25 @@ class LocalPlanner:
         self._global_path = msg.points
         self._distances = msg.distances
         self._curve_speed = np.array(msg.curve_speed)
+        self._curve_speed[-1] = self.END_OF_ROUTE_SPEED
         self._traffic_signals = msg.traffic_signals
-        self._local_plan_publisher.publish(self._create_ros_msg())
+        self._local_plan_publisher.publish(self._create_paf_local_path_msg())
 
-    def _get_current_path(self) -> Tuple[List[Point], Dict[str, Tuple[int, float]]]:
+    def _get_current_path(self, start_idx):
         if len(self._global_path) == 0:
             self._local_path = []
             self._distances_delta = 0.01
-            return
+            return 0, 0
         self._distances_delta = self._distances[-1] / len(self._distances)
-        index = self._current_point_index
         try:
             travel_dist = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
-            index_end = int(np.ceil(travel_dist / self._distances_delta)) + index
-            _ = self._distances[index_end]
+            end_idx = int(np.ceil(travel_dist / self._distances_delta)) + start_idx
+            _ = self._distances[end_idx]
         except IndexError:
-            index_end = len(self._distances)
-        current_path = self._global_path[index:index_end]
-        self._local_path = current_path
+            end_idx = len(self._distances)
+        self._local_path = self._global_path[start_idx:end_idx]
+        # rospy.logwarn(f"P {start_idx}-{end_idx} {end_idx-start_idx} {l1}")
+        return end_idx
 
     @staticmethod  # todo change to np.hypot()
     def _dist(a, b):
@@ -108,7 +113,7 @@ class LocalPlanner:
         idx = int(np.argmin(distances))
         return idx * acc, distances[idx]
 
-    def _create_ros_msg(self):
+    def _create_paf_local_path_msg(self, send_empty=False):
         """create path message for ros
         Returns:
             [type]: [description]
@@ -116,13 +121,14 @@ class LocalPlanner:
         self._get_current_trajectory()
         path_msg = PafLocalPath()
         path_msg.header.stamp = rospy.Time.now()
-        path_msg.target_speed = self._target_speed
-        path_msg.points = self._local_path
+        path_msg.target_speed = [] if send_empty else self._target_speed
+        path_msg.points = [] if send_empty else self._local_path
         return path_msg
 
     def _get_current_trajectory(self):
-        self._get_current_path()
-        self._update_target_speed()
+        index = self._set_current_point_index()
+        end_idx = self._get_current_path(index)
+        self._update_target_speed(index, end_idx)
 
     def _signal_debug_print(self, signals):
         end_idx = self._current_point_index + len(self._local_path)
@@ -164,22 +170,20 @@ class LocalPlanner:
         if len(out) > 0:
             rospy.loginfo_throttle(20, f"Upcoming Speeds: {', '.join(out)}")
 
-    def _update_target_speed(self):
-        if len(self._local_path) < 10 or len(self._global_path) == 0:
-            return
-        end_idx = self._current_point_index + len(self._local_path)
-        calc = SpeedCalculator(self._distances, self._current_point_index, end_idx)
+    def _update_target_speed(self, start_idx, end_idx):
+        if len(self._global_path) == 0:
+            return 0, 0
+        calc = SpeedCalculator(self._distances, start_idx, end_idx)
         signals: List[PafTrafficSignal] = self._traffic_signals
         self._signal_debug_print(signals)
-        start_idx = self._current_point_index
         speed = self._curve_speed[start_idx:end_idx]
-        # speed = calc.add_speed_limits(speed, signals)
-        # speed = calc.add_stop_events(speed, signals, target_speed=2)
-        # speed = calc.add_roll_events(speed, signals, target_speed=2)
+        if self._rules_enabled:
+            speed = calc.add_speed_limits(speed, signals)
+            speed = calc.add_stop_events(speed, signals, target_speed=2)
+            speed = calc.add_roll_events(speed, signals, target_speed=2)
         speed = calc.add_linear_deceleration(speed)
         self._speed_debug_print(speed)
         self._target_speed = speed
-        pass
 
     def _can_continue_on_path(self, signal_type):
         if signal_type == "LIGHT":
@@ -194,15 +198,7 @@ class LocalPlanner:
         return stop
 
     def _planner_at_end_of_route(self):
-        try:
-            pts = self._global_path[-1000::100]
-        except IndexError:
-            pts = self._global_path[::50]
-            if len(pts) == 0:
-                return True
-        pos = (self._current_pose.position.x, self._current_pose.position.y)
-        closest, _ = self._closest_index_of_point_list(pts, pos)
-        return closest == len(pts) - 1
+        return len(self._local_path) < 50
 
     def _odometry_updated(self, odometry: Odometry):
         """Odometry Update Callback"""
@@ -220,39 +216,24 @@ class LocalPlanner:
             ]
         )
         self._current_pose = odometry.pose.pose
-        # invert y-coordinate of odometry, because odometry sensor returns wrong values
-        self._current_pose.position.y = -self._current_pose.position.y
-        self._set_current_point_index()
+        self._current_pose.position.y = self._current_pose.position.y
 
     def _set_current_point_index(self):
-
-        # todo marcos algo (unten) ist schlechter wenn fahrzeug abseits von globaler routen-linie
-        # prev_dist = None
-        # calculate distance to current next point
-        # idx = self._current_point_index
-        # for i, _ in enumerate(self._global_path[idx:]):
-        #     next_point = self._global_path[i + idx]
-        #     distance = self._dist((current_pos.x, current_pos.y), (next_point.x, next_point.y))
-        #     if prev_dist is None or prev_dist > distance:
-        #         prev_dist = distance
-        #     else:
-        #         self._current_point_index = i + idx - 1
-        #         break
-
         if len(self._global_path) == 0:
             self._current_point_index = 0
-            return
-        current_pos = self._current_pose.position
-        start_idx = max(0, self._current_point_index - 100)
-        end_idx = min(len(self._global_path), self._current_point_index + 100)
-        pts = self._global_path[start_idx:end_idx]
-        ref = (current_pos.x, current_pos.y)
-        found_idx, distance = self._closest_index_of_point_list(pts, ref, acc=10)
-        if found_idx > 0 and distance < self.REPLANNING_THRES_DISTANCE_M:
-            self._current_point_index = found_idx + start_idx
         else:
-            found_idx, _ = self._closest_index_of_point_list(self._global_path, ref, acc=100)
-            self._current_point_index = found_idx
+            current_pos = self._current_pose.position
+            start_idx = max(0, self._current_point_index - 100)
+            end_idx = min(len(self._global_path), self._current_point_index + 100)
+            pts = self._global_path[start_idx:end_idx]
+            ref = (current_pos.x, current_pos.y)
+            found_idx, distance = self._closest_index_of_point_list(pts, ref, acc=10)
+            if found_idx > 0 and distance < self.REPLANNING_THRES_DISTANCE_M:
+                self._current_point_index = found_idx + start_idx
+            else:
+                found_idx, _ = self._closest_index_of_point_list(self._global_path, ref, acc=100)
+                self._current_point_index = found_idx
+        return self._current_point_index
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)
@@ -280,7 +261,7 @@ class LocalPlanner:
             self._reroute_random_publisher.publish(Empty())
 
     def _end_of_route_handling(self):
-        if self._current_speed < 2:
+        if self._current_speed < 5:
             self._send_random_global_path_request()  # todo remove in production
 
     def start(self):
@@ -288,13 +269,13 @@ class LocalPlanner:
         rate = rospy.Rate(self.UPDATE_HZ)
         while not rospy.is_shutdown():
             if not self._on_global_path():
+                self._local_plan_publisher.publish(self._create_paf_local_path_msg(send_empty=True))
                 self._send_global_path_request()
             elif self._planner_at_end_of_route():
                 self._end_of_route_handling()
             else:
                 rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
-
-            self._local_plan_publisher.publish(self._create_ros_msg())
+                self._local_plan_publisher.publish(self._create_paf_local_path_msg())
             rate.sleep()
 
 

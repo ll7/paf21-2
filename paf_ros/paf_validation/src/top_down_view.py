@@ -47,11 +47,11 @@ class TopDownRosNode(object):
         self.producer.point_sets[msg.label] = msg
 
     def update_global_path(self, msg: PafLaneletRoute):
-        path = [[point.x, point.y] for point in msg.points[::10]]
+        path = [[point.x, -point.y] for point in msg.points[::10]]
         self.producer.set_path(coordinate_list_global_path=path)
 
     def update_local_path(self, msg: PafLocalPath):
-        path = [[point.x, point.y] for point in msg.points]
+        path = [[point.x, -point.y] for point in msg.points]
         self.producer.set_path(coordinate_list_local_path=path)
 
     def produce_map(self):

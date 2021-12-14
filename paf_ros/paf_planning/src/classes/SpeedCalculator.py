@@ -5,15 +5,13 @@ from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 from paf_messages.msg import PafTrafficSignal, Point2D
 
-import matplotlib.pyplot as plt
-
 
 class SpeedCalculator:
-    MAX_SPEED = 250 / 3.6
+    MAX_SPEED = 100 / 3.6
     MIN_SPEED = 30 / 3.6
-    CURVE_FACTOR = 9
+    CURVE_FACTOR = 1.5  # higher value = more drifting
 
-    MAX_DECELERATION = 5  # m/s^2
+    MAX_DECELERATION = 10  # m/s^2, higher value = later and harder braking
 
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
@@ -54,7 +52,7 @@ class SpeedCalculator:
         speed = ((-0.03 * r) + (np.sqrt(((0.03 * r) * (0.03 * r)) + ((4 * r) * ((15 * (e / 100)) + 3.6))))) / 2
         if speed < 50:
             return -1
-        return speed * 0.44704
+        return speed * 0.44704 * SpeedCalculator.CURVE_FACTOR
 
     @staticmethod
     def _radius_to_speed_slow(curve_radius):
@@ -68,7 +66,7 @@ class SpeedCalculator:
         #         (.015 * curve_radius) ** 2 + 4 * curve_radius * np.sqrt(15 * super_elevation + 3.6)))
         if speed > 50:
             return -1
-        return speed * 0.44704  # mi/h to m/s
+        return speed * 0.44704 * SpeedCalculator.CURVE_FACTOR  # mi/h to m/s
 
     @staticmethod
     def _radius_to_speed(curve_radius):
@@ -125,7 +123,7 @@ class SpeedCalculator:
     def add_linear_deceleration(self, speed):
 
         deceleration_fun = self._linear_deceleration_function
-        time_steps = [self._step_size / dv for dv in speed]
+        time_steps = [self._step_size / dv if dv > 0 else 1e-6 for dv in speed]
         accel = np.array(list(reversed([(v2 - v1) / dt for v1, v2, dt in zip(speed, speed[1:], time_steps)])))
         length = len(accel)
         for i, a in enumerate(accel):
@@ -169,6 +167,9 @@ class SpeedCalculator:
         return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS)
 
     def plt_init(self):
+
+        import matplotlib.pyplot as plt
+
         plt.close()
         num_plts = 2
         fig, plts = plt.subplots(num_plts)
@@ -177,6 +178,9 @@ class SpeedCalculator:
 
     @staticmethod
     def plt_show():
+
+        import matplotlib.pyplot as plt
+
         plt.show()
 
     def plt_add(self, speed, add_accel=False):

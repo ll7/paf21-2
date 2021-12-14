@@ -262,7 +262,7 @@ class PafRoute:
         for x, y in path_pts:
             point = Point2D()
             point.x = x
-            point.y = -y
+            point.y = y
             msg.points.append(point)
         msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
         # msg.curvatures = list(self.route.path_curvature[::every_nth])

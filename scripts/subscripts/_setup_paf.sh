@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 if [[ -z ${paf_dir+z} ]]; then
   export paf_dir="$SCRIPT_DIR/../../"
