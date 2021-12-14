@@ -16,7 +16,7 @@ from tf.transformations import euler_from_quaternion
 from commonroad.common.file_reader import CommonRoadFileReader
 import commonroad_dc.pycrcc as pycrcc
 from commonroad.visualization.mp_renderer import MPRenderer
-from commonroad.geometry.shape import Rectangle
+from commonroad.geometry.shape import Rectangle, Shape
 from commonroad.scenario.obstacle import StaticObstacle, ObstacleType
 from commonroad.scenario.trajectory import State
 
@@ -107,6 +107,42 @@ class CRDriveabilityChecker(object):
         
         self.ego_vehicle = StaticObstacle(id, type, shape, initial_state)
         scenario.add_objects(self.ego_vehicle)
+
+    def _update_pedestrians_to_CRScenario(self):
+        """create new obstacle graphical representation for a pedestrian in CRScenario"
+        """
+        if (self.obstacles_pedestrians is not None):
+            scenario.remove_obstacle(self.ego_vehicle)
+
+        id = self.ego_vehice_id
+        scenario.remove_obstacle
+        type = ObstacleType.PARKED_VEHICLE
+        shape = Rectangle(width = 2.0, length = 4.5)
+        position = [self._current_pose.position.x, self._current_pose.position.y]
+        orientation = 0
+
+        initial_state = State(position = position,
+                                       velocity = 0,
+                                       orientation = orientation,
+                                       
+                                       time_step = 0)
+        
+        self.ego_vehicle = StaticObstacle(id, type, shape, initial_state)
+        scenario.add_objects(self.ego_vehicle)
+
+
+    def _add_obstactle(self, id, position, shape: Shape, type: ObstacleType):
+        
+        orientation = 0
+        initial_state = State(position = position,
+                                       velocity = 0,
+                                       orientation = orientation,
+                                       
+                                       time_step = 0)
+        
+        obstactle = StaticObstacle(id, type, shape, initial_state)
+        scenario.add_objects(obstactle)
+        
 
     #def _update_obstacles_to_CRScenario(self):
 
