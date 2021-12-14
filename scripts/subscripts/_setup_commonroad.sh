@@ -1,6 +1,7 @@
 #!/bin/bash
+set -e
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 if [[ -z ${paf_dir+z} ]]; then
-  SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
   export paf_dir="$SCRIPT_DIR/../../"
   sudo apt update
   sudo apt upgrade
@@ -14,7 +15,7 @@ conda deactivate 2>/dev/null
 
 # recommended not to install everything at once..
 install_search=0
-install_route_planner=0
+install_route_planner=1
 install_driveability_checker=0
 #install_collision_checker=0 # deprecated
 
@@ -24,7 +25,7 @@ if ((install_search)); then
   git clone https://gitlab.lrz.de/tum-cps/commonroad-search.git 2>/dev/null
   cd commonroad-search || exit 1
   git pull
-  ln -sfn ~/commonroad-tools/commonroad-search/SMP/ $paf_dir/
+  ln -sfn ~/commonroad-tools/commonroad-search/SMP/ "$paf_dir"
   pip install -r requirements.txt --no-dependencies
   sudo apt-get install imagemagick imagemagick-doc -y
 fi
@@ -34,7 +35,7 @@ if ((install_route_planner)); then
   git clone https://gitlab.lrz.de/tum-cps/commonroad-route-planner.git 2>/dev/null
   cd commonroad-route-planner || exit 1
   git pull
-  pip install . --  || (echo "python install failed" && exit 1)
+  pip install . -- || (echo "python install failed (route planner)" && exit 1)
 fi
 if ((install_driveability_checker)); then
   # commonroad drivability checker (obstacle avoidance - local planner)
@@ -45,9 +46,9 @@ if ((install_driveability_checker)); then
   git pull 1>/dev/null
   mkdir build 2>/dev/null
   cd build || exit 1
-  cmake -G "Unix Makefiles" -DENABLE_DOUBLE_PRECISION=ON -DBUILD_SHARED_LIBS=ON .. || (echo "build failed" && exit 1)
-  make || (echo "build failed" && exit 1)
-  sudo make install || (echo "build failed" && exit 1)
+  cmake -G "Unix Makefiles" -DENABLE_DOUBLE_PRECISION=ON -DBUILD_SHARED_LIBS=ON .. || (echo "build failed (libccd)" && exit 1)
+  make || (echo "build failed (libccd)" && exit 1)
+  sudo make install || (echo "build failed (libccd)" && exit 1)
   cd ~/commonroad-tools || exit 1
 
   git clone https://github.com/flexible-collision-library/fcl 2>/dev/null
@@ -56,9 +57,9 @@ if ((install_driveability_checker)); then
   sudo apt-get install libboost-dev libboost-thread-dev libboost-test-dev libboost-filesystem-dev libeigen3-dev -y
   mkdir build 2>/dev/null
   cd build || exit 1
-  cmake .. || (echo "build failed" && exit 1)
-  make || (echo "build failed" && exit 1)
-  sudo make install || (echo "build failed" && exit 1)
+  cmake .. || (echo "build failed 1 (fcl)" && exit 1)
+  make || (echo "build failed 2 (fcl)" && exit 1)
+  sudo make install || (echo "build failed 3 (fcl)" && exit 1)
 
   cd ~/commonroad-tools || exit 1
   git clone https://gitlab.lrz.de/tum-cps/commonroad-drivability-checker.git 2>/dev/null
@@ -69,15 +70,17 @@ if ((install_driveability_checker)); then
   cd third_party/libs11n || exit
   mkdir build 2>/dev/null
   cd build || exit 1
-  cmake .. -DCMAKE_BUILD_TYPE=Release
-  make
-  sudo make install
+  cmake .. -DCMAKE_BUILD_TYPE=Release || (echo "build failed 1 (libs11n)" && exit 1)
+  make || (echo "build failed 2 (libs11n)" && exit 1)
+  sudo make install || (echo "build failed 3 (libs11n)" && exit 1)
 
   cd ~/commonroad-tools || exit 1
   cd commonroad-drivability-checker || exit 1
+  # shellcheck disable=SC2005
+  # shellcheck disable=SC2046
   py_version="$(echo $(python --version) | cut -d' ' -f 2)"
   bash build.sh -e "$(which python)" -v "$py_version" -i -j 2
-  sudo python setup.py install
+  sudo python setup.py install || (echo "python install failed (drivability checker)" && exit 1)
 fi
 #if ((install_collision_checker)); then # version 2019.1 deprecated !
 #  # commonroad collision checker

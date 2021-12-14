@@ -1,6 +1,12 @@
 local_path_topic: /paf/paf_local_planner/path
 obstacles_topic: /paf/paf_perception/obstacles
 score_topic: /paf/paf_validation/score
+rerouting_request: /paf/paf_local_planner/reroute
+global_path_topic: /paf/paf_global_planner/routing_response
+teleport_topic: /paf/paf_starter/teleport
+routing_request: /paf/paf_starter/routing_request
+
+deceleration_g_factor: 8
 
 semantic_tags:
   "0": "Unlabeled"

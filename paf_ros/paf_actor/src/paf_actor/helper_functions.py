@@ -16,12 +16,14 @@ def calc_path_yaw(path: Path, idx: int) -> float:
     Returns:
         float: [description]
     """
-    if idx >= len(path.poses) - 1:
-        # this should probably throw an exception
+    if idx >= len(path) - 1:
+        # raise RuntimeError(
+        #    f"The path needs to be atlest 2 long. Given path: {
+        # path.poses} is currently only {len(path.poses) - idx} long")
         return 0.0
 
-    point_current = path.poses[idx].pose.position
-    point_next = path.poses[idx + 1].pose.position
+    point_current = path[idx]
+    point_next = path[idx + 1]
     angle = math.atan2(point_next.y - point_current.y, point_next.x - point_current.x)
     return normalize_angle(angle)
 

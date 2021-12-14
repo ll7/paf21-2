@@ -1,3 +1,5 @@
+from typing import Dict
+
 import cv2
 import carla
 import numpy as np
@@ -16,7 +18,7 @@ from carla_birdeye_view.mask import (
 
 from argparse import Namespace
 from enum import IntEnum
-from paf_messages.msg import PafObstacleList, PafObstacle
+from paf_messages.msg import PafObstacleList, PafObstacle, PafTopDownViewPointSet
 
 
 class MaskPriority(IntEnum):
@@ -84,7 +86,11 @@ class TopDownView(BirdViewProducer):
         self.center_on_agent = not show_whole_map
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
-        self.path_width_px = None
+        self.path_width_px = 10
+        self.pt_width_px = 15
+        self.line_width_px = 10
+        self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
+        self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -94,7 +100,9 @@ class TopDownView(BirdViewProducer):
                 height=int((target_size_.height + 2 * MAP_BOUNDARY_MARGIN) / 2),
             )
         super(TopDownView, self).__init__(client, target_size, pixels_per_meter, BirdViewCropType.FRONT_AND_REAR_AREA)
-        self.set_path(width_px=10)
+        self.pt_width_px = int(np.ceil(self.pt_width_px / 10 * self._pixels_per_meter))
+        self.path_width_px = int(np.ceil(self.path_width_px / 10 * self._pixels_per_meter))
+        self.line_width_px = int(np.ceil(self.line_width_px / 10 * self._pixels_per_meter))
 
     def produce(self, agent_vehicle: carla.Actor) -> BirdView:
         """
@@ -139,12 +147,56 @@ class TopDownView(BirdViewProducer):
             masks[MaskPriority.PED_OBSTACLES] = self._create_obstacle_mask(self.obstacles_pedestrians, mask_obstacles)
         if self.obstacles_vehicles is not None:
             masks[MaskPriority.VEH_OBSTACLES] = self._create_obstacle_mask(self.obstacles_vehicles, mask_obstacles)
+
+        if len(self.point_sets) > 0:
+            pts_masks = self._get_pts_sets_masks()
+            masks = np.append(masks, pts_masks, 0)
+        if len(self.line_sets) > 0:
+            lines_masks = self._get_line_sets_masks()
+            masks = np.append(masks, lines_masks, 0)
+
+        new_indices_count = len(self.point_sets) + len(self.line_sets)
+        if new_indices_count > 0:
+            new_indices = list(range(len(MaskPriority), len(MaskPriority) + new_indices_count))
+        else:
+            new_indices = []
+
         cropped_masks = self.apply_agent_following_transformation_to_masks(
             agent_vehicle,
             masks,
         )
         ordered_indices = [mask.value for mask in MaskPriority.bottom_to_top()]
+        ordered_indices += new_indices
         return cropped_masks[ordered_indices]
+
+    def _get_line_sets_masks(self):
+        lines_masks = []
+        for line_set in self.line_sets.values():
+            points = line_set.points
+            mask = self.masks_generator.make_empty_mask()
+            pixels = [self.masks_generator.location_to_pixel(point) for point in points]
+            pixels = np.array([[p.x, p.y] for p in pixels])
+            mask = cv2.polylines(mask, [pixels.reshape((-1, 1, 2))], False, COLOR_ON, self.line_width_px)
+            lines_masks.append(mask)
+        return lines_masks
+
+    def _get_pts_sets_masks(self):
+        pts_masks = []
+        for point_set in self.point_sets.values():
+            points = point_set.points
+            mask = self.masks_generator.make_empty_mask()
+            for point in points:
+                # point.y *= -1
+                pixel = self.masks_generator.location_to_pixel(point)
+                mask = cv2.rectangle(
+                    mask,
+                    (pixel.x - self.pt_width_px, pixel.y - self.pt_width_px),
+                    (pixel.x + self.pt_width_px, pixel.y + self.pt_width_px),
+                    COLOR_ON,
+                    -1,
+                )
+            pts_masks.append(mask)
+        return pts_masks
 
     def apply_agent_following_transformation_to_masks(
         self,
@@ -158,7 +210,7 @@ class TopDownView(BirdViewProducer):
         :return:
         """
         agent_transform = agent_vehicle.get_transform()
-        angle = (0 if self.north_is_up else agent_transform.rotation.yaw) + 90
+        angle = 0 if self.north_is_up else agent_transform.rotation.yaw + 90
 
         # same as super class below
         crop_with_car_in_the_center = masks
@@ -301,6 +353,7 @@ class TopDownView(BirdViewProducer):
         :param birdview: masks list
         :return: rgb image
         """
+        # birdview = birdview[:len(MaskPriority)]
         _, h, w = birdview.shape
         rgb_canvas = np.zeros(shape=(h, w, 3), dtype=np.uint8)
 
@@ -314,6 +367,21 @@ class TopDownView(BirdViewProducer):
                 r, g, b = rgb_color
                 rgb_color = 255 - r, 255 - g, 255 - b
             rgb_canvas[self.nonzero_indices(birdview[mask_type])] = rgb_color
+
+        add_to_idx = len(MaskPriority)
+        for i, line_set in enumerate(self.line_sets.values()):
+            rgb_color = line_set.color
+            if i + len(MaskPriority) > len(birdview) - 1:
+                break
+            nonzero = self.nonzero_indices(birdview[i + add_to_idx])
+            rgb_canvas[nonzero] = rgb_color
+        add_to_idx += len(self.line_sets)
+        for i, pts_set in enumerate(self.point_sets.values()):
+            rgb_color = pts_set.color
+            if i + len(MaskPriority) > len(birdview) - 1:
+                break
+            nonzero = self.nonzero_indices(birdview[i + add_to_idx])
+            rgb_canvas[nonzero] = rgb_color
         if not self.dark_mode:
             rgb_canvas = np.where(rgb_canvas.any(-1, keepdims=True), rgb_canvas, 255)
         return rgb_canvas
