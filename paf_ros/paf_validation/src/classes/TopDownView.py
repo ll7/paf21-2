@@ -188,8 +188,7 @@ class TopDownView(BirdViewProducer):
             points = point_set.points
             mask = self.masks_generator.make_empty_mask()
             for point in points:
-                point.y *= -1
-                pixel = self.masks_generator.location_to_pixel(point)
+                pixel = self.masks_generator.location_to_pixel(Namespace(**{"x": point.x, "y": -point.y}))
                 mask = cv2.rectangle(
                     mask,
                     (pixel.x - self.pt_width_px, pixel.y - self.pt_width_px),
