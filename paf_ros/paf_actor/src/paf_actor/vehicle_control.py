@@ -12,7 +12,7 @@ from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
-from paf_messages.msg import PafLocalPath, Point2D, PafLogScalar
+from paf_messages.msg import PafLocalPath, PafLogScalar
 
 
 class VehicleController:
@@ -211,13 +211,6 @@ class VehicleController:
         """
         # rospy.loginfo(
         #    f"INHALT VON LOCAL_PATH with speed {local_path.target_speed}")
-        local_path1 = []
-        for p in local_path.points:
-            p1 = Point2D()
-            p1.x = p.x
-            p1.y = -p.y
-            local_path1.append(p1)
-        local_path.points = local_path1
         self._route = local_path
 
     def __emergency_break_received(self, do_emergency_break: bool):

@@ -89,18 +89,12 @@ class StanleyLateralController:
         # Calc front axle position
         yaw = calc_egocar_yaw(pose)
 
-        msg.points = path
-        local_path1 = []
-        for p in path:
-            p1 = Point2D()
-            p1.x = p.x
-            p1.y = -p.y
-            local_path1.append(p1)
-        path_g = local_path1
-
-        pth = PafLocalPath()
-        pth.points = path_g
-        self._local_plan_publisher.publish(pth)
+        # msg.points = path
+        # local_path1 = []
+        #
+        # pth = PafLocalPath()
+        # pth.points = path_g
+        # self._local_plan_publisher.publish(pth)
 
         fx, fy = 0, 0
         if is_reverse:

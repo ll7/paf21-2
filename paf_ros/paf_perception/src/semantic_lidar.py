@@ -56,7 +56,7 @@ class SemanticLidarNode(object):
         :param msg:
         """
         t0 = rospy.Time.now().to_time()
-        self.xy_position = np.array([msg.pose.pose.position.x, -msg.pose.pose.position.y])
+        self.xy_position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
         current_pose = msg.pose.pose
         quaternion = (
             current_pose.orientation.x,
@@ -72,10 +72,10 @@ class SemanticLidarNode(object):
         time = rospy.Time.now().to_time()
         delta = time - t0
         if delta > 0:
-            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={1 / delta}")
         delta = time - self.frame_time_odo
         if delta > 0:
-            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current odo fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current odo fps={1 / delta}")
         self.frame_time_odo = time
 
     def _transform_to_relative_world_pos(self, leftwards: float, backwards: float) -> tuple:
@@ -86,7 +86,7 @@ class SemanticLidarNode(object):
         :return: x,y in world coordinates relative to ego_vehicle x,y
         """
         x = leftwards + self.SENSOR_X_OFFSET
-        y = -backwards
+        y = backwards
         x, y = x * self.cos - y * self.sin, y * self.cos + x * self.sin
         return x, y
 
@@ -105,10 +105,10 @@ class SemanticLidarNode(object):
         time = rospy.Time.now().to_time()
         delta = time - t0
         if delta > 0:
-            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max lidar fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max lidar fps={1 / delta}")
         delta = time - self.frame_time_lidar
         if delta > 0:
-            rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={1 / delta}")
         self.frame_time_lidar = time
 
     def _process_sorted_points_calculate_bounds(self, sorted_points: dict) -> dict:
@@ -239,8 +239,6 @@ class SemanticLidarNode(object):
                 if obstacle.speed_known:
                     obstacle.speed = speed
                 obstacles.obstacles.append(obstacle)
-                # if speed is not None and speed > 5:
-                #     rospy.logwarn_throttle(1, f"{np.round(speed * 3.6, 1)} km/h")
             self._obstacle_publisher.publish(obstacles)
 
     @staticmethod

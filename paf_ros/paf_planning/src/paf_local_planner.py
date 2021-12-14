@@ -216,8 +216,7 @@ class LocalPlanner:
             ]
         )
         self._current_pose = odometry.pose.pose
-        # invert y-coordinate of odometry, because odometry sensor returns wrong values
-        self._current_pose.position.y = -self._current_pose.position.y
+        self._current_pose.position.y = self._current_pose.position.y
 
     def _set_current_point_index(self):
         if len(self._global_path) == 0:
