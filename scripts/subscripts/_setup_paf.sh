@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 if [[ -z ${paf_dir+z} ]]; then
   export paf_dir="$SCRIPT_DIR/../../"
@@ -16,7 +15,7 @@ pip install --upgrade numpy --no-dependencies
 echo "setting up commonroad..."
 sleep 3
 
-bash "$SCRIPT_DIR/_setup_commonroad.sh" || (echo "commonroad install failed" && exit 1)
+bash "$SCRIPT_DIR/_setup_commonroad.sh" || (echo "commonroad install failed")
 
 echo "creating symlinks for paf_dir=$paf_dir and map_dir..."
 mkdir -p ~/.ros/

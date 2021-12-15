@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 if [[ -z ${paf_dir+z} ]]; then
   export paf_dir="$SCRIPT_DIR/../../"
@@ -12,10 +11,9 @@ pip install commonroad-io
 mkdir ~/commonroad-tools 2>/dev/null
 cd ~/commonroad-tools || exit 1
 conda deactivate 2>/dev/null
-
 # recommended not to install everything at once..
 install_search=0
-install_route_planner=0
+install_route_planner=1
 install_driveability_checker=1
 #install_collision_checker=0 # deprecated
 

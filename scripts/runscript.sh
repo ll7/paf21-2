@@ -3,7 +3,7 @@
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
 ros_launch_args="town:=Town03 spawn_point:=-80,0,0,0,0,0 validation:=true"
-npc_launch_args="-n 0 -w 800" # n=vehicles, w=pedestrians
+npc_launch_args="-n 50 -w 50" # n=vehicles, w=pedestrians
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 export paf_dir="$SCRIPT_DIR/../"
