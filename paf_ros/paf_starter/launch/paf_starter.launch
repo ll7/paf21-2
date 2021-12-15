@@ -6,7 +6,7 @@
   <rosparam file="$(find paf_starter)/global_parameters.yaml" command="load"/>
 
   <!-- Paf args -->
-  <arg name='manual_control' default='false'/>
+  <arg name='manual_control' default='true'/>
   <arg name='validation' default='true'/>
 
   <!-- Ego vehicle -->
