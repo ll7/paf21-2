@@ -7,11 +7,11 @@ from paf_messages.msg import PafTrafficSignal, Point2D
 
 
 class SpeedCalculator:
-    MAX_SPEED = 100 / 3.6
-    MIN_SPEED = 20 / 3.6
+    MAX_SPEED = 250 / 3.6
+    MIN_SPEED = 25 / 3.6
     CURVE_FACTOR = 2  # higher value = more drifting
-    MAX_DECELERATION = 10  # m/s^2, higher value = later and harder braking
-
+    MAX_DECELERATION = 15  # m/s^2, higher value = later and harder braking
+    FULL_VS_HALF_DECEL_FRACTION = 0.9
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
 
@@ -114,11 +114,19 @@ class SpeedCalculator:
     def _linear_deceleration_function(self, target_speed):
         b = self.MAX_SPEED
         delta_v = self.MAX_SPEED - target_speed
-        braking_distance = self._get_deceleration_distance(self.MAX_SPEED, target_speed)
 
+        frac = self.FULL_VS_HALF_DECEL_FRACTION
+
+        braking_distance = self._get_deceleration_distance(self.MAX_SPEED, target_speed)
         steps = np.ceil(braking_distance / self._step_size)
         m = -delta_v / steps
-        return [m * x + b for x in range(int(steps))]  # in m/s
+        y1 = [m * x + b for x in range(int(steps * frac))]
+
+        steps = np.ceil(braking_distance * 4 / self._step_size)
+        m = -delta_v / steps
+        y2 = [m * x + y1[-1] for x in range(int(steps * (1 - frac)))]
+
+        return y1 + y2
 
     def add_linear_deceleration(self, speed):
 

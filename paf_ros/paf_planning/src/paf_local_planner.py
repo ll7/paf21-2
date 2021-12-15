@@ -29,7 +29,7 @@ class LocalPlanner:
     DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
-    END_OF_ROUTE_SPEED = -2  # todo remove slowdown at end of route
+    END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
 
     def __init__(self):
 
@@ -171,8 +171,8 @@ class LocalPlanner:
         speed = self._curve_speed[start_idx:end_idx]
         if self._rules_enabled:
             # speed = calc.add_speed_limits(speed, signals)
-            speed = calc.add_stop_events(speed, signals, target_speed=0, buffer_m=5)
-            speed = calc.add_roll_events(speed, signals, target_speed=0, buffer_m=5)
+            speed = calc.add_stop_events(speed, signals, target_speed=1, buffer_m=0.5)
+            speed = calc.add_roll_events(speed, signals, target_speed=1, buffer_m=0.5)
         if self._current_speed < 1e-3 and self._allowed_from_stop():
             rospy.sleep(1)
             speed = calc.remove_stop_event(speed, buffer_m=10)
@@ -231,7 +231,6 @@ class LocalPlanner:
             else:
                 found_idx, distance = closest_index_of_point_list(self._global_path, ref, acc=100)
                 self._current_point_index = found_idx
-            rospy.logwarn_throttle(10, f"{found_idx} {distance}")
         return self._current_point_index
 
     def _on_global_path(self):

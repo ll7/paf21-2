@@ -2,8 +2,8 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-ros_launch_args="spawn_point:=15,70,0,0,0,90 validation:=true"
-#ros_launch_args="validation:=true"
+#ros_launch_args="spawn_point:=15,70,0,0,0,90 validation:=true"
+ros_launch_args="validation:=true"
 npc_launch_args="-n 50 -w 50" # n=vehicles, w=pedestrians
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
