@@ -4,7 +4,7 @@ from commonroad_route_planner.route import Route, RouteType
 import rospy
 import numpy as np
 
-from typing import List
+from typing import List, Tuple
 from commonroad.common.util import Interval, AngleInterval
 from commonroad.geometry.shape import Circle
 from commonroad.planning.goal import GoalRegion
@@ -16,11 +16,10 @@ from commonroad_route_planner.route_planner import RoutePlanner
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D
-
+from classes.HelperFunctions import dist
 from classes.PafRoute import PafRoute
 from classes.MapManager import MapManager
 from std_msgs.msg import Empty
-from tf.transformations import euler_from_quaternion
 
 
 class GlobalPlanner:
@@ -33,7 +32,7 @@ class GlobalPlanner:
     def __init__(self):
         self._scenario: Scenario = MapManager.get_current_scenario()
         self._position = [1e99, 1e99]
-        self._yaw = 0
+        # self._yaw = 0
         self._routing_target = None
         self._last_route = None
 
@@ -57,18 +56,12 @@ class GlobalPlanner:
         rospy.loginfo("[global planner] rerouting...")
         self._routing_provider()
 
-    @staticmethod
-    def dist(a, b):
-        x1, y1 = a
-        x2, y2 = b
-        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-
     def _any_target_anywhere(self, p_home):
         lanelets = self._scenario.lanelet_network.lanelets
         lanelet_p = None
         counter = 0
         min_dist = 100
-        while counter < 100 and lanelet_p is None or self.dist(p_home, lanelet_p) < min_dist:
+        while counter < 100 and lanelet_p is None or dist(p_home, lanelet_p) < min_dist:
             counter += 1
             lanelet = np.random.choice(lanelets)
             lanelet_p = np.random.choice(range(len(lanelet.center_vertices)))
@@ -77,33 +70,45 @@ class GlobalPlanner:
             return None
         return lanelet_p
 
-    def _find_closest_position_on_lanelet_network(self) -> np.ndarray:
+    def _find_closest_position_on_lanelet_network(self) -> Tuple[np.ndarray, float]:
         lanelet_id = self._find_closest_lanelet()[0]
         lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
-        position = lanelet.center_vertices[np.argmin([self.dist(a, self._position) for a in lanelet.center_vertices])]
-        return position
+        idx = np.argmin([dist(a, self._position) for a in lanelet.center_vertices])
+        if idx == len(lanelet.center_vertices) - 1:
+            idx -= 1
+        position = lanelet.center_vertices[idx]
+        draw_msg = PafTopDownViewPointSet()
+        draw_msg.label = "planning_target"
+        draw_msg.points = [Point2D(position[0], position[1])]
+        draw_msg.color = 153, 0, 153
+        self._target_on_map_pub.publish(draw_msg)
+        norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
+        norm1 = norm / dist(norm, [0, 0])
+        yaw = np.arccos(np.dot([0, 1], norm1)) + np.pi / 2
+        return position, float(yaw)
 
     def _routing_provider_random(self, _: Empty):
         msg = PafRoutingRequest()
         try:
-            position = self._find_closest_position_on_lanelet_network()
+            position, yaw = self._find_closest_position_on_lanelet_network()
         except IndexError:
             rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
             return
         msg.target = self._any_target_anywhere(position)
-        self._routing_provider(msg)
+        self._routing_provider(msg, position, yaw)
 
-    def _routing_provider(self, msg: PafRoutingRequest = None):
+    def _routing_provider(self, msg: PafRoutingRequest = None, position=None, yaw=None):
         if msg is None:
             msg = self._routing_target
         else:
             self._routing_target = msg
 
-        try:
-            position = self._find_closest_position_on_lanelet_network()
-        except IndexError:
-            rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
-            return
+        if position is None or yaw is None:
+            try:
+                position, yaw = self._find_closest_position_on_lanelet_network()
+            except IndexError:
+                rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
+                return
 
         resolution = msg.resolution if msg is not None else 0
         route = None
@@ -115,23 +120,22 @@ class GlobalPlanner:
                 return
         else:
             target = msg.target
-
-        routes = self._routes_from_objective(position, self._yaw, target, return_shortest_only=True)
+        routes = self._routes_from_objective(position, yaw, target, return_shortest_only=True)
         if len(routes) > 0:
             rospy.loginfo_throttle(1, f"[global planner] publishing route to target {target}")
-            route = routes[0].as_msg(resolution)
+            route = routes[0].as_msg(resolution, position, target)
         elif len(routes) == 0:
             rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")
             return
 
         self._last_route = route
-        self._routing_pub.publish(self._last_route)
+        self._routing_pub.publish(route)
 
         draw_msg = PafTopDownViewPointSet()
         draw_msg.label = "planning_target"
         draw_msg.points = [Point2D(target[0], target[1])]
         draw_msg.color = 153, 0, 153
-        # self._target_on_map_pub.publish(draw_msg)
+        self._target_on_map_pub.publish(draw_msg)
 
     def _find_closest_lanelet(self, p=None):
         if p is None:
@@ -156,14 +160,14 @@ class GlobalPlanner:
     def _odometry_provider(self, odometry: Odometry):
         pose = odometry.pose.pose
         self._position = pose.position.x, pose.position.y
-        _, _, self._yaw = euler_from_quaternion(
-            [
-                odometry.pose.pose.orientation.x,
-                odometry.pose.pose.orientation.y,
-                odometry.pose.pose.orientation.z,
-                odometry.pose.pose.orientation.w,
-            ]
-        )
+        # _, _, self._yaw = euler_from_quaternion(
+        #     [
+        #         odometry.pose.pose.orientation.x,
+        #         odometry.pose.pose.orientation.y,
+        #         odometry.pose.pose.orientation.z,
+        #         odometry.pose.pose.orientation.w,
+        #     ]
+        # )
 
     def _routes_from_objective(
         self,

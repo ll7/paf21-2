@@ -8,10 +8,9 @@ from paf_messages.msg import PafTrafficSignal, Point2D
 
 class SpeedCalculator:
     MAX_SPEED = 100 / 3.6
-    MIN_SPEED = 25 / 3.6
-    CURVE_FACTOR = 1.5  # higher value = more drifting
-
-    MAX_DECELERATION = 6  # m/s^2, higher value = later and harder braking
+    MIN_SPEED = 20 / 3.6
+    CURVE_FACTOR = 2  # higher value = more drifting
+    MAX_DECELERATION = 10  # m/s^2, higher value = later and harder braking
 
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
@@ -30,17 +29,18 @@ class SpeedCalculator:
 
         pass
 
-    def _get_deceleration_distance(self, delta_v):
+    def _get_deceleration_distance(self, v_0, v_target):
         # s = 1/2 * d_v * t
         # a = d_v / d_t
         # => s = d_v^2 / 2a
-        return delta_v ** 2 / (2 * self.MAX_DECELERATION)
+        return (v_0 ** 2 - v_target ** 2) / (2 * self.MAX_DECELERATION)
 
-    def _get_deceleration_delta_v(self, braking_distance):
-        # s = 1/2 * d_v * t
-        # a = d_v / d_t
-        # d_v = sqrt( 2 * a * s ) / step_size
-        return np.sqrt(2 * self.MAX_DECELERATION * braking_distance)
+    #
+    # def _get_deceleration_delta_v(self, braking_distance):
+    #     # s = 1/2 * d_v * t
+    #     # a = d_v / d_t
+    #     # d_v = sqrt( 2 * a * s ) / step_size
+    #     return np.sqrt(2 * self.MAX_DECELERATION * braking_distance)
 
     @staticmethod
     def _radius_to_speed_fast(curve_radius):
@@ -114,7 +114,7 @@ class SpeedCalculator:
     def _linear_deceleration_function(self, target_speed):
         b = self.MAX_SPEED
         delta_v = self.MAX_SPEED - target_speed
-        braking_distance = self._get_deceleration_distance(delta_v)
+        braking_distance = self._get_deceleration_distance(self.MAX_SPEED, target_speed)
 
         steps = np.ceil(braking_distance / self._step_size)
         m = -delta_v / steps
@@ -122,7 +122,6 @@ class SpeedCalculator:
 
     def add_linear_deceleration(self, speed):
 
-        deceleration_fun = self._linear_deceleration_function
         time_steps = [self._step_size / dv if dv > 0 else 1e-6 for dv in speed]
         accel = np.array(list(reversed([(v2 - v1) / dt for v1, v2, dt in zip(speed, speed[1:], time_steps)])))
         length = len(accel)
@@ -130,7 +129,7 @@ class SpeedCalculator:
             if a > -self.MAX_DECELERATION:
                 continue
             j = length - i
-            lin = deceleration_fun(speed[j])
+            lin = self._linear_deceleration_function(speed[j])
             k = j - len(lin)
             n = 0
             for n in reversed(range(k, j)):
@@ -139,7 +138,10 @@ class SpeedCalculator:
                     break
             f = n - k
             speed[n:j] = lin[f:]
-        speed[0] = speed[1]
+        try:
+            speed[0] = speed[1]
+        except IndexError:
+            pass
         return speed
 
     def add_speed_limits(self, speed, traffic_signals: List[PafTrafficSignal]):
@@ -151,7 +153,8 @@ class SpeedCalculator:
                 speed[i:] = np.clip(0, speed[i:], signal.value)
         return speed
 
-    def add_stop_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None):
+    def add_stop_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None, buffer_m=1):
+        buffer_idx = int(buffer_m / self._step_size)
         if events is None:
             events = self.QUICK_BRAKE_EVENTS
         for signal in traffic_signals:
@@ -159,19 +162,26 @@ class SpeedCalculator:
             if i > self._index_end:
                 return speed
             if signal.type in events:
-                i0, i1 = i - 1, i + 1
+                i0, i1 = i - buffer_idx, i + 1
                 speed[i0:i1] = target_speed
         return speed
 
-    def add_roll_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0):
-        return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS)
+    def remove_stop_event(self, speed, start_idx=0, buffer_m=5, speed_limit=None):
+        buffer_idx = int(buffer_m / self._step_size)
+        if speed_limit is None:
+            speed_limit = self.MAX_SPEED
+        end_idx = start_idx + buffer_idx
+        speed[start_idx:end_idx] = speed_limit
+        return speed
 
-    def plt_init(self):
+    def add_roll_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, buffer_m=1):
+        return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS, buffer_m)
 
+    def plt_init(self, add_accel=False):
         import matplotlib.pyplot as plt
 
+        num_plts = 2 if add_accel else 1
         plt.close()
-        num_plts = 2
         fig, plts = plt.subplots(num_plts)
         plt.xlabel("Distanz in m")
         self._plots = plts if num_plts > 1 else [plts]
@@ -183,9 +193,10 @@ class SpeedCalculator:
 
         plt.show()
 
-    def plt_add(self, speed, add_accel=False):
+    def plt_add(self, speed):
         speed = copy.deepcopy(speed)
         length = len(speed)
+        add_accel = len(self._plots) == 2
         # x_values = [self._step_size / dv for dv in speed]
         x_values = [i * self._step_size for i in range(length)]
         # x_values = [i for i in range(length)]

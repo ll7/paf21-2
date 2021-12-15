@@ -44,11 +44,11 @@ class VehicleController:
         self._end_time = None
 
         # speed controller parameters
-        args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
+        args_longitudinal = {"K_P": 1, "K_D": 0.0, "K_I": 0.1}
         # distance control parameters
         args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
         # Stanley control parameters
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2.9, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 5, "max_steer": 60.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
         self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
@@ -79,6 +79,10 @@ class VehicleController:
         )
 
         self.target_speed_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        self.target_speed_error_log_publisher: rospy.Publisher = rospy.Publisher(
             "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
         )
 
@@ -118,6 +122,12 @@ class VehicleController:
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
 
         msg = PafLogScalar()
+        msg.section = "ACTOR speed error"
+        msg.value = (self._target_speed - self._current_speed) * 3.6
+
+        self.target_speed_error_log_publisher.publish(msg)
+
+        msg = PafLogScalar()
         msg.section = "ACTOR speed"
         msg.value = self._current_speed * 3.6
 
@@ -126,6 +136,7 @@ class VehicleController:
         msg = PafLogScalar()
         msg.section = "ACTOR target_speed"
         msg.value = self._target_speed * 3.6
+        msg.step_as_distance = False
 
         self.target_speed_log_publisher.publish(msg)
 
@@ -162,7 +173,7 @@ class VehicleController:
             control.throttle = np.clip(throttle, 0.0, 1.0)
             control.brake = 0.0
         else:
-            control.brake = -np.clip(throttle, -1.0, 0.0)
+            control.brake = -np.clip(throttle * 5, -1.0, 0.0)
             control.throttle = 0.0
         control.steer = steering
         control.hand_brake = False

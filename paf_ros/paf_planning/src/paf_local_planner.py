@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import time
-from typing import List, Tuple
+from typing import List
 
 from commonroad.scenario.traffic_sign import (
     TrafficLightState,
@@ -12,8 +12,9 @@ import numpy as np
 
 from geometry_msgs.msg import Pose
 from nav_msgs.msg import Odometry
-from paf_messages.msg import PafLocalPath, Point2D as Point, PafLaneletRoute, PafTrafficSignal, PafTopDownViewPointSet
+from paf_messages.msg import PafLocalPath, PafLaneletRoute, PafTrafficSignal, PafTopDownViewPointSet
 from classes.SpeedCalculator import SpeedCalculator
+from classes.HelperFunctions import dist, closest_index_of_point_list
 from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion
 
@@ -28,7 +29,7 @@ class LocalPlanner:
     DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
-    END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
+    END_OF_ROUTE_SPEED = -2  # todo remove slowdown at end of route
 
     def __init__(self):
 
@@ -98,21 +99,6 @@ class LocalPlanner:
         # rospy.logwarn(f"P {start_idx}-{end_idx} {end_idx-start_idx} {l1}")
         return end_idx
 
-    @staticmethod  # todo change to np.hypot()
-    def _dist(a, b):
-        x1, y1 = a
-        x2, y2 = b
-        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-
-    def _closest_index_of_point_list(self, pts_list: List[Point], target_pt: Tuple[float, float], acc: int = 1):
-        if len(pts_list) == 0:
-            return -1, -1
-        distances = [self._dist([p.x, p.y], target_pt) for p in pts_list[::acc]]
-        if len(distances) == 0:
-            return len(pts_list) - 1
-        idx = int(np.argmin(distances))
-        return idx * acc, distances[idx]
-
     def _create_paf_local_path_msg(self, send_empty=False):
         """create path message for ros
         Returns:
@@ -135,7 +121,11 @@ class LocalPlanner:
 
         pts = PafTopDownViewPointSet()
         pts.label = "signals"
-        pts.points = [self._global_path[s.index] for s in signals]
+        pts.points = [
+            self._global_path[s.index]
+            for s in signals
+            if s.type in (SpeedCalculator.QUICK_BRAKE_EVENTS + SpeedCalculator.ROLLING_EVENTS)
+        ]
         pts.color = [255, 0, 0]
         self._sign_publisher.publish(pts)
 
@@ -151,12 +141,14 @@ class LocalPlanner:
                 str_signal = f"{n} ({m}m)"
                 if s.value >= 0:
                     v = np.round(s.value, 1)
+                    if n == "MAX_SPEED":
+                        v = np.round(v * 3.6, 1)
                     str_signal += f": {v}"
                 out.append(str_signal)
         if len(out) > 0:
-            rospy.loginfo_throttle(20, f"Upcoming Traffic Signs: {', '.join(out)}")
+            rospy.loginfo_throttle(2, f"Upcoming Traffic Signs: {', '.join(out)}")
 
-    def _speed_debug_print(self, speeds, number_of_values=20):
+    def _speed_debug_print(self, speeds, number_of_values=100):
         if len(self._distances) == 0:
             return
         step = self._distances[-1] / len(self._distances)
@@ -168,7 +160,7 @@ class LocalPlanner:
             msg = f"{np.round(speed * 3.6, 1)}"
             out.append(msg)
         if len(out) > 0:
-            rospy.loginfo_throttle(20, f"Upcoming Speeds: {', '.join(out)}")
+            rospy.loginfo_throttle(1, f"Upcoming Speeds: {', '.join(out)}")
 
     def _update_target_speed(self, start_idx, end_idx):
         if len(self._global_path) == 0:
@@ -178,12 +170,18 @@ class LocalPlanner:
         self._signal_debug_print(signals)
         speed = self._curve_speed[start_idx:end_idx]
         if self._rules_enabled:
-            speed = calc.add_speed_limits(speed, signals)
-            speed = calc.add_stop_events(speed, signals, target_speed=2)
-            speed = calc.add_roll_events(speed, signals, target_speed=2)
+            # speed = calc.add_speed_limits(speed, signals)
+            speed = calc.add_stop_events(speed, signals, target_speed=0, buffer_m=5)
+            speed = calc.add_roll_events(speed, signals, target_speed=0, buffer_m=5)
+        if self._current_speed < 1e-3 and self._allowed_from_stop():
+            rospy.sleep(1)
+            speed = calc.remove_stop_event(speed, buffer_m=10)
         speed = calc.add_linear_deceleration(speed)
-        self._speed_debug_print(speed)
+        # self._speed_debug_print(speed)
         self._target_speed = speed
+
+    def _allowed_from_stop(self):
+        return True  # todo
 
     def _can_continue_on_path(self, signal_type):
         if signal_type == "LIGHT":
@@ -223,23 +221,24 @@ class LocalPlanner:
             self._current_point_index = 0
         else:
             current_pos = self._current_pose.position
-            start_idx = max(0, self._current_point_index - 100)
-            end_idx = min(len(self._global_path), self._current_point_index + 100)
+            start_idx = max(0, self._current_point_index - 300)
+            end_idx = min(len(self._global_path), self._current_point_index + 300)
             pts = self._global_path[start_idx:end_idx]
             ref = (current_pos.x, current_pos.y)
-            found_idx, distance = self._closest_index_of_point_list(pts, ref, acc=10)
-            if found_idx > 0 and distance < self.REPLANNING_THRES_DISTANCE_M:
+            found_idx, distance = closest_index_of_point_list(pts, ref, acc=30)
+            if found_idx > 0 and distance < self.REPLANNING_THRES_DISTANCE_M * 5:
                 self._current_point_index = found_idx + start_idx
             else:
-                found_idx, _ = self._closest_index_of_point_list(self._global_path, ref, acc=100)
+                found_idx, distance = closest_index_of_point_list(self._global_path, ref, acc=100)
                 self._current_point_index = found_idx
+            rospy.logwarn_throttle(10, f"{found_idx} {distance}")
         return self._current_point_index
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)
         i = self._current_point_index
         try:
-            self._distance_to_global_path = self._dist(p, (self._global_path[i].x, self._global_path[i].y))
+            self._distance_to_global_path = dist(p, (self._global_path[i].x, self._global_path[i].y))
             return self._distance_to_global_path < self.REPLANNING_THRES_DISTANCE_M
         except IndexError:
             return False
@@ -268,11 +267,11 @@ class LocalPlanner:
 
         rate = rospy.Rate(self.UPDATE_HZ)
         while not rospy.is_shutdown():
-            if not self._on_global_path():
+            if self._planner_at_end_of_route():
+                self._end_of_route_handling()
+            elif not self._on_global_path():
                 self._local_plan_publisher.publish(self._create_paf_local_path_msg(send_empty=True))
                 self._send_global_path_request()
-            elif self._planner_at_end_of_route():
-                self._end_of_route_handling()
             else:
                 rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
                 self._local_plan_publisher.publish(self._create_paf_local_path_msg())
