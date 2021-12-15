@@ -6,6 +6,6 @@ img_size: {
   height: 500
 }
 pixels_per_meter: 5
-north_is_up: false
+north_is_up: true
 dark_mode: false
 show_whole_map: false
