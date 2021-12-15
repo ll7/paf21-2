@@ -55,10 +55,10 @@ RGB_BY_MASK = {  # (red, green, blue)
     MaskPriority.CENTERLINES: RGB.CHOCOLATE,
     MaskPriority.LANES: RGB.WHITE,
     MaskPriority.ROAD: RGB.DIM_GRAY,
-    MaskPriority.LOCAL_PATH: (255, 0, 0),
-    MaskPriority.GLOBAL_PATH: (0, 0, 255),
-    MaskPriority.PED_OBSTACLES: (255, 0, 0),
-    MaskPriority.VEH_OBSTACLES: (0, 0, 255),
+    MaskPriority.LOCAL_PATH: (51, 102, 255),
+    MaskPriority.GLOBAL_PATH: (0, 0, 102),
+    MaskPriority.PED_OBSTACLES: (204, 102, 0),
+    MaskPriority.VEH_OBSTACLES: (153, 0, 51),
 }
 
 
@@ -174,7 +174,9 @@ class TopDownView(BirdViewProducer):
         for line_set in self.line_sets.values():
             points = line_set.points
             mask = self.masks_generator.make_empty_mask()
-            pixels = [self.masks_generator.location_to_pixel(point) for point in points]
+            pixels = [
+                self.masks_generator.location_to_pixel(Namespace(**{"x": point.x, "y": -point.y})) for point in points
+            ]
             pixels = np.array([[p.x, p.y] for p in pixels])
             mask = cv2.polylines(mask, [pixels.reshape((-1, 1, 2))], False, COLOR_ON, self.line_width_px)
             lines_masks.append(mask)
@@ -186,8 +188,7 @@ class TopDownView(BirdViewProducer):
             points = point_set.points
             mask = self.masks_generator.make_empty_mask()
             for point in points:
-                # point.y *= -1
-                pixel = self.masks_generator.location_to_pixel(point)
+                pixel = self.masks_generator.location_to_pixel(Namespace(**{"x": point.x, "y": -point.y}))
                 mask = cv2.rectangle(
                     mask,
                     (pixel.x - self.pt_width_px, pixel.y - self.pt_width_px),
@@ -210,7 +211,10 @@ class TopDownView(BirdViewProducer):
         :return:
         """
         agent_transform = agent_vehicle.get_transform()
-        angle = 0 if self.north_is_up else agent_transform.rotation.yaw + 90
+
+        # TODO remove this line
+        angle = 0
+        # angle = 0 if self.north_is_up else agent_transform.rotation.yaw + 90
 
         # same as super class below
         crop_with_car_in_the_center = masks
@@ -287,7 +291,7 @@ class TopDownView(BirdViewProducer):
             #     continue
             obs_pts = []
             for x, y in [obs.bound_1, obs.bound_2, obs.closest]:
-                obs_pts.append(Namespace(**{"x": x, "y": y}))
+                obs_pts.append(Namespace(**{"x": x, "y": -y}))
             ret.append(obs_pts)
         return ret
 

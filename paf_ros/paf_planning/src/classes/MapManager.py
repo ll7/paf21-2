@@ -1,3 +1,5 @@
+from os.path import expanduser
+
 from commonroad.common.file_reader import CommonRoadFileReader
 
 import rospy
@@ -18,5 +20,6 @@ class MapManager:
 
     @staticmethod
     def get_current_scenario():
-        scenario, _ = CommonRoadFileReader(MapManager._get_town_path()).open()
+        pth = MapManager._get_town_path()
+        scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{pth}")).open()
         return scenario

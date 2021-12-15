@@ -13,6 +13,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
+from .SpeedCalculator import SpeedCalculator
 
 
 class PafRoute:
@@ -253,15 +254,19 @@ class PafRoute:
         else:
             every_nth = int(np.round(len(self.route.path_length) / self.route.path_length[-1] / resolution))
             every_nth = every_nth if every_nth != 0 else 1
+
         path_pts = self.route.reference_path[::every_nth]
         msg.distances = list(self.route.path_length[::every_nth])
-        msg.curvatures = list(self.route.path_curvature[::every_nth])
         msg.traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
+
         for x, y in path_pts:
             point = Point2D()
             point.x = x
-            point.y = -y
+            point.y = y
             msg.points.append(point)
+        msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
+        # msg.curvatures = list(self.route.path_curvature[::every_nth])
+
         return msg
         # msg.graph = []
         # for key, (l, s, r) in self.graph.items():

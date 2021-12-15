@@ -30,7 +30,6 @@ class TensorBoardNode:
         return n
 
     def _log_scalar(self, msg: PafLogScalar):
-        rospy.logwarn("logging float")
         step = msg.step if msg.step >= 0 else self._get_step_from_cur_time()
         descr = None if msg.description == "" else msg.description
         with self.writer.as_default():
@@ -38,7 +37,6 @@ class TensorBoardNode:
         self.writer.flush()
 
     def _log_text(self, msg: PafLogText):
-        rospy.logwarn("logging text")
         step = msg.step if msg.step >= 0 else self._get_step_from_cur_time()
         descr = None if msg.description == "" else msg.description
         with self.writer.as_default():
@@ -46,7 +44,6 @@ class TensorBoardNode:
         self.writer.flush()
 
     def _log_image(self, msg: PafLogImage):
-        rospy.logwarn("logging img")
         step = msg.step if msg.step >= 0 else self._get_step_from_cur_time()
         img: np.array = self.bridge.imgmsg_to_cv2(msg.image, desired_encoding="rgb8")
         # new_size = (100, 100)

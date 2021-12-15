@@ -22,9 +22,6 @@ from commonroad.common.file_writer import OverwriteExistingFile
 # generate path of the file to be opened
 file_path = "/home/imech154/paf21-2/maps/Rules/Town03.xml"
 
-# read in the scenario and planning problem set
-scenario, planning_problem_set = CommonRoadFileReader(file_path).open()
-
 
 class CRDriveabilityChecker(object):
     def __init__(self):
@@ -33,16 +30,21 @@ class CRDriveabilityChecker(object):
         odometry_topic = f"/carla/{role_name}/odometry"
         obstacle_topic = rospy.get_param("obstacles_topic")
 
-        self.obstacles_pedestrians = None
-        self.obstacles_vehicles = None
+        self.paf_obstacles_pedestrians = None
+        self.paf_obstacles_vehicles = None
 
-        self.ego_vehicle_id = scenario.generate_object_id()
         self.ego_vehicle = None
+        self.cr_obstacles_pedestrians = []
+        self.cr_obstacles_vehicles = []
 
         rospy.logwarn(odometry_topic)
         rospy.logwarn(obstacle_topic)
         rospy.Subscriber(odometry_topic, Odometry, self._odometry_updated)
         rospy.Subscriber(obstacle_topic, PafObstacleList, self._obstacle_list_updated)
+
+        # read in the scenario and planning problem set
+        self.scenario, self.planning_problem_set = CommonRoadFileReader(file_path).open()
+        self.ego_vehicle_id = self.scenario.generate_object_id()
 
     def _odometry_updated(self, odo: Odometry):
         """
@@ -61,21 +63,33 @@ class CRDriveabilityChecker(object):
         # self._overwrite_file()
 
     def _obstacle_list_updated(self, msg: PafObstacleList):
+        # clear obstacles
+
         # add all obstacle from obstacle list to commonroad-scenario
         """
         Update obstacle mask
         :param msg: msg from Obstacle topic
         """
         if msg.type == "Pedestrians":
-            self.obstacles_pedestrians = msg.obstacles
-            self._add_all_pedestrians_to_cr(self.obstacles_pedestrians)
-            # self._overwrite_file()
+            # clear pedestrians
+            for cr_obstacle in self.cr_obstacles_pedestrians:
+                self.scenario.remove_obstacle(cr_obstacle)
+            self.cr_obstacles_pedestrians = []
+
+            self.paf_obstacles_pedestrians = msg.obstacles
+            self._add_all_pedestrians_to_cr(self.paf_obstacles_pedestrians)
         elif msg.type == "Vehicles":
-            self.obstacles_vehicles = msg.obstacles
-            self._add_all_vehicles_to_cr(self.obstacles_vehicles)
-            # self._overwrite_file()
+            # clear vehicles
+            for cr_obstacle in self.cr_obstacles_vehicles:
+                self.scenario.remove_obstacle(cr_obstacle)
+            self.vehicles = []
+
+            self.paf_obstacles_vehicles = msg.obstacles
+            self._add_all_vehicles_to_cr(self.paf_obstacles_vehicles)
         else:
             rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to node")
+
+        self._overwrite_file()
 
     def _update_obstacles(self, msg: PafObstacleList) -> Obstacle:
         """get the obstacle information from the Obstacle topic without the type"""
@@ -84,7 +98,7 @@ class CRDriveabilityChecker(object):
     def _update_ego_vehicle_to_CRScenario(self):
         """create a new ego vehicel graphical representation"""
         if self.ego_vehicle is not None:
-            scenario.remove_obstacle(self.ego_vehicle)
+            self.scenario.remove_obstacle(self.ego_vehicle)
 
         id = self.ego_vehicle_id
         type = ObstacleType.PARKED_VEHICLE
@@ -95,28 +109,29 @@ class CRDriveabilityChecker(object):
         initial_state = State(position=position, velocity=0, orientation=orientation, time_step=0)
 
         self.ego_vehicle = StaticObstacle(id, type, shape, initial_state)
-        scenario.add_objects(self.ego_vehicle)
+        self.scenario.add_objects(self.ego_vehicle)
 
     def _add_all_pedestrians_to_cr(self, pedestrians: PafObstacleList):
         for obstacle in pedestrians:
-            id = scenario.generate_object_id()
+            id = self.scenario.generate_object_id()
             self._add_pedestrian(id, obstacle)
 
     def _add_all_vehicles_to_cr(self, vehicles: PafObstacleList):
         for obstacle in vehicles:
-            id = scenario.generate_object_id()
+            id = self.scenario.generate_object_id()
             self._add_vehicle(id, obstacle)
 
     def _add_obstacle(self, id, obstacle: PafObstacle, shape: Shape, type: ObstacleType, position: np.ndarray):
         initial_state = State(position=np.array([0.0, 0.0]), velocity=0, orientation=0, time_step=0)
         obstacle = StaticObstacle(id, type, shape, initial_state)
-        scenario.add_objects(obstacle)
+        self.scenario.add_objects(obstacle)
 
     def _add_pedestrian(self, id, obstacle: PafObstacle):
         shape = Circle(0.35, np.array(obstacle.closest))
         position = np.array(obstacle.closest)
         type = ObstacleType.PEDESTRIAN
         self._add_obstacle(id, obstacle, shape, type, position)
+        self.cr_obstacles_pedestrians.append(obstacle)
 
     def _add_vehicle(self, id, obstacle: PafObstacle):
         vertices = np.array([obstacle.closest, obstacle.bound_1, obstacle.bound_2])
@@ -125,6 +140,7 @@ class CRDriveabilityChecker(object):
         position = np.array(obstacle.closest)
         type = ObstacleType.PARKED_VEHICLE
         self._add_obstacle(id, obstacle, shape, type, position)
+        self.cr_obstacles_vehicles.append(obstacle)
 
     # def _update_obstacles_to_CRScenario(self):
 
@@ -135,8 +151,8 @@ class CRDriveabilityChecker(object):
         tags = {}
 
         # write new scenario
-        fw = CommonRoadFileWriter(scenario, planning_problem_set, author, affiliation, source, tags)
-        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew.xml", OverwriteExistingFile.ALWAYS)
+        fw = CommonRoadFileWriter(self.scenario, self.planning_problem_set, author, affiliation, source, tags)
+        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew4.xml", OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)
