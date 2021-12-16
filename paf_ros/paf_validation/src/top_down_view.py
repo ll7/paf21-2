@@ -7,6 +7,7 @@ from time import sleep
 from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute, PafTopDownViewPointSet
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 
 
@@ -36,9 +37,13 @@ class TopDownRosNode(object):
         rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
         rospy.Subscriber("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, self._update_pt_set)
         rospy.Subscriber("/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, self._update_line_set)
+        rospy.Subscriber("/paf/paf_validation/speed_text", String, self._update_speed_str)
 
     def update_obstacles(self, msg: PafObstacleList):
         self.producer.update_obstacles(msg)
+
+    def _update_speed_str(self, msg: String):
+        self.producer.speed_text = msg.data
 
     def _update_line_set(self, msg: PafTopDownViewPointSet):
         self.producer.line_sets[msg.label] = msg

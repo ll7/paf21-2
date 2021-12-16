@@ -64,13 +64,13 @@ RGB_BY_MASK = {  # (red, green, blue)
 
 class TopDownView(BirdViewProducer):
     def __init__(
-        self,
-        client: carla.Client,
-        target_size: PixelDimensions = None,
-        pixels_per_meter: int = 6,
-        north_is_up=True,
-        show_whole_map=True,
-        dark_mode=True,
+            self,
+            client: carla.Client,
+            target_size: PixelDimensions = None,
+            pixels_per_meter: int = 6,
+            north_is_up=True,
+            show_whole_map=True,
+            dark_mode=True,
     ):
         """
         Image Producer
@@ -91,6 +91,7 @@ class TopDownView(BirdViewProducer):
         self.line_width_px = 10
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
+        self.speed_text = "-/-/-"
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -200,9 +201,9 @@ class TopDownView(BirdViewProducer):
         return pts_masks
 
     def apply_agent_following_transformation_to_masks(
-        self,
-        agent_vehicle: carla.Actor,
-        masks: np.ndarray,
+            self,
+            agent_vehicle: carla.Actor,
+            masks: np.ndarray,
     ) -> np.ndarray:
         """
         Cropping and rotating of output masks
@@ -230,12 +231,13 @@ class TopDownView(BirdViewProducer):
         else:
             raise NotImplementedError
         assert (
-            vslice.start > 0 and hslice.start > 0
+                vslice.start > 0 and hslice.start > 0
         ), "Trying to access negative indexes is not allowed, check for calculation errors!"
         return rotated[:, vslice, hslice]
 
     def set_path(
-        self, coordinate_list_global_path: list = None, coordinate_list_local_path: list = None, width_px: float = None
+            self, coordinate_list_global_path: list = None, coordinate_list_local_path: list = None,
+            width_px: float = None
     ):
         """
         Setter for global path, local path and path width
@@ -325,10 +327,10 @@ class TopDownView(BirdViewProducer):
         return mask
 
     def _render_actors_masks(
-        self,
-        agent_vehicle: carla.Actor,
-        segregated_actors: SegregatedActors,
-        masks: np.ndarray,
+            self,
+            agent_vehicle: carla.Actor,
+            segregated_actors: SegregatedActors,
+            masks: np.ndarray,
     ) -> np.ndarray:
         """
         Create Actor masks (uses new MaskPriority class, else same as super class)
@@ -385,6 +387,13 @@ class TopDownView(BirdViewProducer):
             rgb_canvas[nonzero] = rgb_color
         if not self.dark_mode:
             rgb_canvas = np.where(rgb_canvas.any(-1, keepdims=True), rgb_canvas, 255)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        org = (50, 50)
+        fontScale = 1
+        color = (255, 0, 0)
+        thickness = 2
+        rgb_canvas = cv2.putText(rgb_canvas, self.speed_text, org, font,
+                                 fontScale, color, thickness, cv2.LINE_AA)
         return rgb_canvas
 
     @staticmethod

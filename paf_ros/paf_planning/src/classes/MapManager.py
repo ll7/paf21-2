@@ -18,8 +18,9 @@ class MapManager:
             try:
                 town = rospy.get_param("/carla/town")
             except KeyError:
-                rospy.logerr("town parameter not set")
-                exit(1)
+                # rospy.logerr("town parameter not set")
+                # exit(1)
+                town = "Town03"
         rule = "Rules" if rules else "noRules"
         town = f"maps/{rule}/{town}.xml"
         return town

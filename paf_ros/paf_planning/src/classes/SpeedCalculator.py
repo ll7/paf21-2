@@ -108,7 +108,11 @@ class SpeedCalculator:
     @staticmethod
     def get_curve_speed(path: List[Point2D]):
         curve_radius_list = SpeedCalculator._get_curve_radius_list(path)
-        speed1 = [SpeedCalculator._radius_to_speed(r) for r in curve_radius_list]
+        speed1 = []
+        for r in curve_radius_list[::10]:
+            speed1 += [SpeedCalculator._radius_to_speed(r)] * 10
+        while len(path) < len(speed1):
+            speed1 += [speed1[-1]]
         return speed1
 
     def _linear_deceleration_function(self, target_speed):

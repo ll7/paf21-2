@@ -21,7 +21,7 @@ from classes.HelperFunctions import (
     xy_from_distance_and_angle,
 )
 from classes.Spline import calc_spline_course
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, String
 from tf.transformations import euler_from_quaternion
 
 
@@ -80,6 +80,7 @@ class LocalPlanner:
         self._sign_publisher = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
+        self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", String, queue_size=1)
 
     def _process_global_path(self, msg: PafLaneletRoute):
         if len(self._distances) == 0 or len(msg.distances) == 0 or msg.distances[-1] != self._distances[-1]:
@@ -208,8 +209,11 @@ class LocalPlanner:
     def _get_current_trajectory(self):
         index, distance = self._set_current_point_index()
         is_new_message = self._planner_at_end_of_route(self._local_path) or index + 300 > self._local_path_end_index
+        rospy.logerr_throttle(1,
+                              f"{self._planner_at_end_of_route(self._local_path)}/{index + 300 - self._local_path_end_index} > 0")
         if is_new_message:
             self._get_current_path(index, distance)
+            rospy.logerr_throttle(1, "local planner is replanning")
         return self._local_path, self._target_speed, is_new_message
 
     def _signal_debug_print(self, signals):
@@ -331,7 +335,16 @@ class LocalPlanner:
             else:
                 found_idx, distance = closest_index_of_point_list(self._global_path, ref, acc=100)
                 self._current_point_index = found_idx
+        self._publish_speed_msg()
         return self._current_point_index, distance
+
+    def _publish_speed_msg(self):
+        if len(self._target_speed) == 0:
+            return
+        msg = String(
+            f"{np.round(self._current_speed * 3.6)}/"
+            f"{np.round(self._target_speed[self._current_point_index]) * 3.6} km/h")
+        self._speed_msg_publisher.publish(msg)
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)
