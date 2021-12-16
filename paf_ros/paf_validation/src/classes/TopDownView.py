@@ -394,14 +394,20 @@ class TopDownView(BirdViewProducer):
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         scale = 0.5
-        color = (0, 0, 102)
+        color1 = (0, 0, 102)
+        color2 = (255, 0, 0)
         thickness = 1
         y0, dy = 50, 20
         text = ["current", "target", "limit"]
-        for i, (line, lbl) in enumerate(zip(self.speed_text, text)):
+        limit = self.speed_text[2]
+        for i, (speed, lbl) in enumerate(zip(self.speed_text, text)):
+            if i == 0 and speed > limit:
+                color = color2
+            else:
+                color = color1
             y = y0 + i * dy
-            line = f"{lbl}: {line} kmh"
-            rgb_canvas = cv2.putText(rgb_canvas, line, (50, y), font, scale, color, thickness, cv2.LINE_AA)
+            speed = f"{lbl}: {speed} kmh"
+            rgb_canvas = cv2.putText(rgb_canvas, speed, (50, y), font, scale, color, thickness, cv2.LINE_AA)
         return rgb_canvas
 
     @staticmethod

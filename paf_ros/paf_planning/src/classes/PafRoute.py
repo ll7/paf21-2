@@ -12,7 +12,8 @@ from commonroad.scenario.traffic_sign import (
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
-from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
+import rospy
+from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafSpeedMsg
 from .HelperFunctions import closest_index_of_point_list
 from .SpeedCalculator import SpeedCalculator
 
@@ -23,9 +24,14 @@ class PafRoute:
     def __init__(self, route: CommonroadRoute, traffic_sign_country: Country = Country.GERMANY):
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
-
+        self.rules_enabled = rospy.get_param("rules_enabled", False)
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
+        rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._last_known_target_update)
+        self._last_known_target_speed = 1000
         # self.graph = self._calc_lane_change_graph()
+
+    def _last_known_target_update(self, msg: PafSpeedMsg):
+        self._last_known_target_speed = msg.limit / 3.6
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
@@ -217,7 +223,7 @@ class PafRoute:
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             try:
                 paf_sign.value = float(sign.traffic_sign_elements[0].additional_values[0])
-                if paf_sign.type == TrafficSignIDGermany.MAX_SPEED:
+                if paf_sign.type == TrafficSignIDGermany.MAX_SPEED.value:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
                 paf_sign.value = -1.0
@@ -278,7 +284,10 @@ class PafRoute:
                     break
                 msg.traffic_signals.append(m)
         msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
-        # msg.curvatures = list(self.route.path_curvature[::every_nth])
+        if self.rules_enabled:
+            msg.curve_speed = SpeedCalculator.add_speed_limits(
+                msg.curve_speed, msg.traffic_signals, self._last_known_target_speed
+            )
 
         return msg
         # msg.graph = []

@@ -97,7 +97,7 @@ class GlobalPlanner:
         msg.target = self._any_target_anywhere(position)
         self._routing_provider(msg, position, yaw)
 
-        rospy.loginfo_throttle(10, "[global planner] sucess")
+        rospy.loginfo_throttle(10, "[global planner] success")
 
     def _routing_provider(self, msg: PafRoutingRequest = None, position=None, yaw=None):
         if msg is None:
@@ -270,9 +270,7 @@ class GlobalPlanner:
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)
         while not rospy.is_shutdown():
-            if self._last_route is None:
-                self._reroute_provider()
-            else:
+            if self._last_route is not None:
                 self._routing_pub.publish(self._last_route)
             rate.sleep()
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import time
-from typing import List
 
 from commonroad.scenario.traffic_sign import (
     TrafficLightState,
@@ -50,7 +49,7 @@ class LocalPlanner:
         rospy.init_node("local_path_node", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
-        self._rules_enabled = False
+        self._rules_enabled = rospy.get_param("rules_enabled", False)
 
         self._current_pose = Pose()
         self._current_speed = 0
@@ -222,14 +221,15 @@ class LocalPlanner:
             self._end_of_route_handling()
             self._local_path = []
             self._target_speed = []
+            self._global_path = []
             is_new_message = True
-        elif (
+        elif len(self._global_path) > 0 and (
             last_local_reroute - self._last_local_reroute > self.REPLAN_THROTTLE_SEC / 2
             or index + 300 > self._local_path_end_index
         ):
             self._get_current_path(index, distance)
             is_new_message = True
-            rospy.loginfo_throttle(1, "local planner is replanning")
+            rospy.loginfo_throttle(10, "local planner is replanning")
             self._last_local_reroute = last_local_reroute
         else:
             is_new_message = False
@@ -285,13 +285,12 @@ class LocalPlanner:
         if len(self._global_path) == 0:
             return 0
         calc = SpeedCalculator(self._distances, start_idx, end_idx)
-        signals: List[PafTrafficSignal] = self._traffic_signals
-        self._signal_debug_print(signals)
+        self._signal_debug_print(self._traffic_signals)
         speed = self._curve_speed[start_idx:end_idx]
         if self._rules_enabled:
-            # speed = calc.add_speed_limits(speed, signals)
-            speed = calc.add_stop_events(speed, signals, target_speed=1, buffer_m=0.5)
-            speed = calc.add_roll_events(speed, signals, target_speed=1, buffer_m=0.5)
+            ...
+            # speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=1, buffer_m=0.5)
+            # speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=1, buffer_m=0.5)
         if self._current_speed < 1e-3 and self._allowed_from_stop():
             rospy.sleep(1)
             speed = calc.remove_stop_event(speed, buffer_m=10)
@@ -318,8 +317,8 @@ class LocalPlanner:
 
     def _planner_at_end_of_route(self, pth=None):
         if pth is not None:
-            return len(pth) < 50
-        self._is_at_end_of_route = self._local_path_end_index - self._current_point_index < 50
+            return len(pth) < 100
+        self._is_at_end_of_route = self._local_path_end_index - self._current_point_index < 100
         return self._is_at_end_of_route
 
     def _odometry_updated(self, odometry: Odometry):
@@ -366,8 +365,8 @@ class LocalPlanner:
                 if sign.index > idx:
                     break
                 if sign.type == TrafficSignIDGermany.MAX_SPEED.value:
-                    limit = np.round(sign.value)
-            target = speed[idx + 100] * 3.6
+                    limit = np.round(sign.value * 3.6)
+            target = np.round(speed[idx] * 3.6)
             if limit != self._speed_msg.limit or target != self._speed_msg.target:
                 self._speed_msg.limit = int(limit)
                 self._speed_msg.target = int(target)
