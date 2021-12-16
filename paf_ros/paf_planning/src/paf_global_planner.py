@@ -16,7 +16,7 @@ from commonroad_route_planner.route_planner import RoutePlanner
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D
-from classes.HelperFunctions import dist
+from classes.HelperFunctions import dist, get_angle_between_vectors
 from classes.PafRoute import PafRoute
 from classes.MapManager import MapManager
 from std_msgs.msg import Empty
@@ -83,9 +83,7 @@ class GlobalPlanner:
         draw_msg.color = 153, 0, 153
         self._target_on_map_pub.publish(draw_msg)
         norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
-        norm1 = norm / dist(norm, [0, 0])
-        yaw = np.arccos(np.dot([0, 1], norm1)) + np.pi / 2
-        return position, float(yaw)
+        return position, float(get_angle_between_vectors(norm))
 
     def _routing_provider_random(self, _: Empty):
         msg = PafRoutingRequest()

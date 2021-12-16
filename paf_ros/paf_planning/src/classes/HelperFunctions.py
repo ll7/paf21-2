@@ -41,6 +41,25 @@ def get_linear_deceleration_distance(v_0, v_target, a):
     return (v_0 ** 2 - v_target ** 2) / (2 * a)
 
 
+def xy_from_distance_and_angle(point, distance, angle):
+    if hasattr(point, "x"):
+        point = [point.x, point.y]
+    x = point[0] + distance * np.cos(angle)
+    y = point[1] - distance * np.sin(angle)
+    return x, y
+
+
+def get_angle_between_vectors(v1, v2=None, is_normed=False):
+    if not is_normed:
+        v1 = v1 / dist(v1, [0, 0])
+        if v2 is not None:
+            v2 = v2 / dist(v2, [0, 0])
+    if v2 is None:
+        v2 = [0, 1]
+    yaw = np.arccos(np.dot(v2, v1)) + np.pi / 2
+    return yaw
+
+
 def get_linear_deceleration_delta_v(braking_distance, a):
     # s = 1/2 * d_v * t
     # a = d_v / d_t
