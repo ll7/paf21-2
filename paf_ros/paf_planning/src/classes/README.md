@@ -13,7 +13,7 @@ Für die manuelle Modifikation der Kartendaten (Hinzufügen von Schildern, Ampel
 
   - Lanelets können beim Erstellen eines Elements nicht durch Klick referenziert werden --> Auswahl der ID über Drop-Down-Menü
   - Wenn zu einem Schild kein Lanelet referenziert wurde, kann die XML nicht mehr geöffnet werden (vorher keine Fehlermeldung)
-  - Referenzierte Lanelets eines ausgewählten Elements werden in der GUI nicht in die Drop-Down-Menüs übernommen 
+  - Referenzierte Lanelets eines ausgewählten Elements werden in der GUI nicht in die Drop-Down-Menüs übernommen
   - Referenzierte Lanelets können nicht gelöscht/verändert werden, alle Veränderungen werden lediglich hinzugefügt
   - Das "Additional Value" Textfeld des ersten Traffic-Sign-Elements ist buggy, um einen Wert (z.B. für ein Speedlimit) eintragen zu können empfiehlt es sich, ein zweites Traffic-Sign-Element zu erstellen und das erste nachträglich zu löschen
   - Wenn mehrere Traffic-Sign-Elements auf einmal eingetragen werden, kann in der GUI nur das letzte in der Liste gelöscht werden

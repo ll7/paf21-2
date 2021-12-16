@@ -1,10 +1,7 @@
-#!/usr/bin/env python
-
 from commonroad.planning.planning_problem import PlanningProblemSet
-from commonroad.scenario.lanelet import Lanelet
 from commonroad.scenario.scenario import Scenario
-from commonroad.scenario.traffic_sign import TrafficSign, TrafficSignElement, TrafficSignIDGermany
 from commonroad.common.file_reader import CommonRoadFileReader
+
 
 class MapManager:
     def __init__(self, init_rospy: bool = False):
@@ -26,7 +23,7 @@ class MapManager:
             5: "DEU_Town05-1_1_T-1.xml",
             6: "DEU_Town06-1_1_T-1.xml",
             7: "DEU_Town07-1_1_T-1.xml",
-            10: "DEU_Town10HD-1_1_T-1.xml"
+            10: "DEU_Town10HD-1_1_T-1.xml",
         }
 
         if rules:
@@ -35,14 +32,7 @@ class MapManager:
             self.map_file_path = "Maps/No Rules/" + map_files.get(map_number)
 
         # read in the scenario and planning problem set
-        self.scenario, self.planning_problem_set = CommonRoadFileReader(
-        self.map_file_path).open()
+        self.scenario, self.planning_problem_set = CommonRoadFileReader(self.map_file_path).open()
 
     def get_scenario(self):
         return self.scenario
-
-def main():
-    manager = MapManager(True)
-
-if __name__ == "__main__":
-    main()
