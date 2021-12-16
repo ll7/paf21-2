@@ -11,7 +11,8 @@ class SpeedCalculator:
     MIN_SPEED = 35 / 3.6
     CURVE_FACTOR = 2  # higher value = more drifting
     MAX_DECELERATION = 40  # m/s^2, higher value = later and harder braking
-    FULL_VS_HALF_DECEL_FRACTION = 0.95  # percentage of max_deceleration (last x% meters, max/2 is used)
+    # percentage of max_deceleration (last x% meters, max/2 is used)
+    FULL_VS_HALF_DECEL_FRACTION = 0.95
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
 
@@ -108,11 +109,7 @@ class SpeedCalculator:
     @staticmethod
     def get_curve_speed(path: List[Point2D]):
         curve_radius_list = SpeedCalculator._get_curve_radius_list(path)
-        speed1 = []
-        for r in curve_radius_list[::10]:
-            speed1 += [SpeedCalculator._radius_to_speed(r)] * 10
-        while len(path) < len(speed1):
-            speed1 += [speed1[-1]]
+        speed1 = [SpeedCalculator._radius_to_speed(r) for r in curve_radius_list]
         return speed1
 
     def _linear_deceleration_function(self, target_speed):
