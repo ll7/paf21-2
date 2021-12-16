@@ -6,7 +6,7 @@ from commonroad.common.file_reader import CommonRoadFileReader
 
 class MapManager:
     @staticmethod
-    def get_scenario(rules=True):
+    def get_current_scenario(rules=True):
         """
         Loads the commonroad scenario with or without traffic rules of town with number map_number
 
