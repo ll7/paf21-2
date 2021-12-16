@@ -218,11 +218,13 @@ class LocalPlanner:
     def _get_current_trajectory(self):
         index, distance = self._set_current_point_index()
         last_local_reroute = rospy.Time.now().to_time()
-        if self._planner_at_end_of_route(self._local_path):
+        if len(self._local_path) > 0 and self._planner_at_end_of_route(self._local_path):
             self._end_of_route_handling()
-            return
-        if (
-            last_local_reroute - self._last_local_reroute > self.REPLAN_THROTTLE_SEC
+            self._local_path = []
+            self._target_speed = []
+            is_new_message = True
+        elif (
+            last_local_reroute - self._last_local_reroute > self.REPLAN_THROTTLE_SEC / 2
             or index + 300 > self._local_path_end_index
         ):
             self._get_current_path(index, distance)
