@@ -12,7 +12,14 @@ import numpy as np
 
 from geometry_msgs.msg import Pose
 from nav_msgs.msg import Odometry
-from paf_messages.msg import PafLocalPath, PafLaneletRoute, PafTrafficSignal, PafTopDownViewPointSet, Point2D
+from paf_messages.msg import (
+    PafLocalPath,
+    PafLaneletRoute,
+    PafTrafficSignal,
+    PafTopDownViewPointSet,
+    Point2D,
+    PafSpeedMsg,
+)
 from classes.SpeedCalculator import SpeedCalculator
 from classes.HelperFunctions import (
     dist,
@@ -21,7 +28,7 @@ from classes.HelperFunctions import (
     xy_from_distance_and_angle,
 )
 from classes.Spline import calc_spline_course
-from std_msgs.msg import Empty, String
+from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion
 
 
@@ -63,6 +70,8 @@ class LocalPlanner:
         self._following_speed = -1  # todo set following speed
         self._distance_to_global_path = 0
         self._is_at_end_of_route = True
+        self._last_local_reroute = rospy.Time.now().to_time()
+        self._speed_msg = PafSpeedMsg()
 
         # local path params
         self._local_path = []
@@ -80,7 +89,7 @@ class LocalPlanner:
         self._sign_publisher = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
-        self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", String, queue_size=1)
+        self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", PafSpeedMsg, queue_size=1)
 
     def _process_global_path(self, msg: PafLaneletRoute):
         if len(self._distances) == 0 or len(msg.distances) == 0 or msg.distances[-1] != self._distances[-1]:
@@ -208,12 +217,18 @@ class LocalPlanner:
 
     def _get_current_trajectory(self):
         index, distance = self._set_current_point_index()
-        is_new_message = self._planner_at_end_of_route(self._local_path) or index + 300 > self._local_path_end_index
-        rospy.logerr_throttle(1,
-                              f"{self._planner_at_end_of_route(self._local_path)}/{index + 300 - self._local_path_end_index} > 0")
-        if is_new_message:
+        last_local_reroute = rospy.Time.now().to_time()
+        if (
+            self._planner_at_end_of_route(self._local_path)
+            or last_local_reroute - self._last_local_reroute > self.REPLAN_THROTTLE_SEC
+            or index + 300 > self._local_path_end_index
+        ):
             self._get_current_path(index, distance)
-            rospy.logerr_throttle(1, "local planner is replanning")
+            is_new_message = True
+            rospy.loginfo_throttle(1, "local planner is replanning")
+            self._last_local_reroute = last_local_reroute
+        else:
+            is_new_message = False
         return self._local_path, self._target_speed, is_new_message
 
     def _signal_debug_print(self, signals):
@@ -279,6 +294,7 @@ class LocalPlanner:
         speed = calc.add_linear_deceleration(speed)
         # self._speed_debug_print(speed)
         self._target_speed = speed
+        self._publish_speed_msg(start_idx, self._curve_speed)
         return speed
 
     def _allowed_from_stop(self):
@@ -330,21 +346,30 @@ class LocalPlanner:
             pts = self._global_path[start_idx:end_idx]
             ref = (current_pos.x, current_pos.y)
             found_idx, distance = closest_index_of_point_list(pts, ref, acc=30)
-            if found_idx > 0 and distance < self.REPLANNING_THRES_DISTANCE_M * 5:
+            if found_idx > 0 and distance < self.REPLANNING_THRES_DISTANCE_M * 1:
                 self._current_point_index = found_idx + start_idx
             else:
                 found_idx, distance = closest_index_of_point_list(self._global_path, ref, acc=100)
                 self._current_point_index = found_idx
-        self._publish_speed_msg()
         return self._current_point_index, distance
 
-    def _publish_speed_msg(self):
-        if len(self._target_speed) == 0:
-            return
-        msg = String(
-            f"{np.round(self._current_speed * 3.6)}/"
-            f"{np.round(self._target_speed[self._current_point_index]) * 3.6} km/h")
-        self._speed_msg_publisher.publish(msg)
+    def _publish_speed_msg(self, idx, speed):
+        # idx = self._current_point_index + 100
+        try:
+            limit = self._speed_msg.limit
+            sign: PafTrafficSignal
+            for sign in self._traffic_signals:
+                if sign.index > idx:
+                    break
+                if sign.type == TrafficSignIDGermany.MAX_SPEED.value:
+                    limit = np.round(sign.value)
+            target = speed[idx + 100] * 3.6
+            if limit != self._speed_msg.limit or target != self._speed_msg.target:
+                self._speed_msg.limit = int(limit)
+                self._speed_msg.target = int(target)
+                self._speed_msg_publisher.publish(self._speed_msg)
+        except IndexError:
+            pass
 
     def _on_global_path(self):
         p = (self._current_pose.position.x, self._current_pose.position.y)

@@ -9,7 +9,7 @@ from paf_messages.msg import PafTrafficSignal, Point2D
 class SpeedCalculator:
     MAX_SPEED = 250 / 3.6
     MIN_SPEED = 35 / 3.6
-    CURVE_FACTOR = 3  # higher value = more drifting
+    CURVE_FACTOR = 2  # higher value = more drifting
     MAX_DECELERATION = 40  # m/s^2, higher value = later and harder braking
     FULL_VS_HALF_DECEL_FRACTION = 0.95  # percentage of max_deceleration (last x% meters, max/2 is used)
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
@@ -111,8 +111,7 @@ class SpeedCalculator:
         speed1 = []
         for r in curve_radius_list[::10]:
             speed1 += [SpeedCalculator._radius_to_speed(r)] * 10
-        while len(path) < len(speed1):
-            speed1 += [speed1[-1]]
+        speed1 += [speed1[-1] for _ in range(len(path) - len(speed1))]
         return speed1
 
     def _linear_deceleration_function(self, target_speed):
