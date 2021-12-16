@@ -16,10 +16,19 @@ add_message_files(
   PafObstacle.msg
   PafObstacleList.msg
   Point2D.msg
+  PafLaneletRoute.msg
+  PafRoutingRequest.msg
+  PafRoutingGraphNode.msg
+  PafTrafficSignal.msg
   PafLogImage.msg
   PafLogScalar.msg
   PafLogText.msg
+  PafTopDownViewPointSet.msg
 )
+
+#add_service_files(
+#  FILES
+#)
 
 generate_messages(
   DEPENDENCIES
