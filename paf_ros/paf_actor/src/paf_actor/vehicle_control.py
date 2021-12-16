@@ -44,7 +44,7 @@ class VehicleController:
         self._end_time = None
 
         # speed controller parameters
-        args_longitudinal = {"K_P": 1, "K_D": 0.0, "K_I": 0.1}
+        args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
         # distance control parameters
         args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
         # Stanley control parameters
@@ -173,12 +173,16 @@ class VehicleController:
             control.throttle = np.clip(throttle, 0.0, 1.0)
             control.brake = 0.0
         else:
-            control.brake = -np.clip(throttle * 5, -1.0, 0.0)
+            control.brake = -np.clip(throttle, -1.0, 0.0)
             control.throttle = 0.0
         control.steer = steering
         control.hand_brake = False
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
+
+        if control.brake > 0 and self._current_speed > 1e-1:
+            control.reverse = not self._is_reverse
+            control.throttle = control.brake
 
         if self._emergency_mode:
             control.hand_brake = True  # True
