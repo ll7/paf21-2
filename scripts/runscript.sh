@@ -178,7 +178,7 @@ fi
 echo "loaded the following nodes successfully:"
 rosnode list
 reduce_ros_log_noise
-gnome-terminal --title="rqt_console" -- rqt_console
+#gnome-terminal --title="rqt_console" -- rqt_console
 echo ""
 echo "press ctrl+c to kill all ros terminals."
 
