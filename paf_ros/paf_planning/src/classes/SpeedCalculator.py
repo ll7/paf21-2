@@ -11,7 +11,8 @@ class SpeedCalculator:
     MIN_SPEED = 35 / 3.6
     CURVE_FACTOR = 2  # higher value = more drifting
     MAX_DECELERATION = 40  # m/s^2, higher value = later and harder braking
-    FULL_VS_HALF_DECEL_FRACTION = 0.95  # percentage of max_deceleration (last x% meters, max/2 is used)
+    # percentage of max_deceleration (last x% meters, max/2 is used)
+    FULL_VS_HALF_DECEL_FRACTION = 0.95
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
 

@@ -1,7 +1,6 @@
 ## Credits:
 
 [PSAF 2: WS 20/21 (Acting package)](https://github.com/ll7/psaf2/tree/main/Acting)
-[Spline Logic](https://github.com/AtsushiSakai/PythonRobotics/blob/master/PathPlanning/CubicSpline/cubic_spline_planner.py)
 ## launch command
 
 
