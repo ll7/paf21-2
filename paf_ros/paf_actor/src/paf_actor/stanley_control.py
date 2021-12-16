@@ -2,7 +2,6 @@
 A file that contains the Stanley Lateral Controller (inspired by PSAF WS20/21 2)
 """
 import rospy
-from typing import Tuple
 
 import numpy as np
 from geometry_msgs.msg import PoseStamped
@@ -69,7 +68,7 @@ class StanleyLateralController:
 
         return np.clip(delta, -self.max_steer, self.max_steer), target_speed
 
-    def calc_target_index(self, msg: PafLocalPath, pose: PoseStamped, is_reverse: bool) -> Tuple[int, float]:
+    def calc_target_index(self, msg: PafLocalPath, pose: PoseStamped, is_reverse: bool):
         """
         Calculates the index of the closest Point on the Path relative to the front axle
 
@@ -83,7 +82,7 @@ class StanleyLateralController:
             error_front_axle [float]: Distance from front axle to target point
         """
         path = msg.points
-        if len(path) == 0:
+        if len(path) == 0 or len(msg.target_speed) == 0:
             return 0, 0, 0
 
         # Calc front axle position
@@ -116,7 +115,7 @@ class StanleyLateralController:
         front_axle_vec = [-np.cos(yaw + np.pi / 2), -np.sin(yaw + np.pi / 2)]
         error_front_axle = np.dot([dx[target_idx], dy[target_idx]], front_axle_vec)
 
-        return target_idx, error_front_axle, msg.target_speed[target_idx]
+        return target_idx, error_front_axle, msg.target_speed[min([target_idx, len(msg.target_speed) - 1])]
 
     def _xy_to_point2d(self, points):
         liste = []

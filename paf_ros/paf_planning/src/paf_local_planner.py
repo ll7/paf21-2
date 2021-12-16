@@ -36,7 +36,7 @@ class LocalPlanner:
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
     END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
-    MAX_ANGULAR_ERROR = np.deg2rad(45)
+    MAX_ANGULAR_ERROR = np.deg2rad(20)
 
     def __init__(self):
 
@@ -89,7 +89,7 @@ class LocalPlanner:
         self._curve_speed = np.array(msg.curve_speed)
         self._curve_speed[-1] = self.END_OF_ROUTE_SPEED
         self._traffic_signals = msg.traffic_signals
-        self._local_plan_publisher.publish(self._create_paf_local_path_msg())
+        self._create_paf_local_path_msg()
 
     def _get_track_angle(self, index):
         if len(self._global_path) == 0:
@@ -161,49 +161,55 @@ class LocalPlanner:
         if len(self._global_path) == 0:
             self._local_path = []
             self._distances_delta = 0.01
-            return
+            return self._local_path, self._target_speed
         track_angle = self._get_track_angle(start_idx)
         track_err = track_angle - self._current_yaw
         while track_err > np.pi:
             track_err -= 2 * np.pi
-        if self.REPLANNING_THRES_DISTANCE_M > distance > 3 or (
-            self.REPLANNING_THRES_DISTANCE_M < distance and np.abs(track_err) > self.MAX_ANGULAR_ERROR
-        ):
+        if self.REPLANNING_THRES_DISTANCE_M > distance > 3 or np.abs(track_err) > self.MAX_ANGULAR_ERROR:
             # self._get_turning_path_to(start_idx, track_angle, track_err, distance)
             rospy.logwarn_throttle(10, f"off track! deg={np.rad2deg(track_err)}, d={distance}")
             # self._local_path = []
-            self._target_speed = [3 for _ in self._local_path]
+            # self._target_speed = [3 for _ in self._local_path]
             # return
 
         self._distances_delta = self._distances[-1] / len(self._distances)
         try:
             travel_dist = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
             end_idx = int(np.ceil(travel_dist / self._distances_delta)) + start_idx
-            _ = self._distances[end_idx]  # index error check
         except IndexError:
             end_idx = len(self._distances)
+
+        end_idx = min(end_idx, len(self._global_path) - 1)
         self._local_path = self._global_path[start_idx:end_idx]
         self._local_path_end_index = end_idx - 1
-        self._update_target_speed(start_idx, end_idx)
+        sp = self._update_target_speed(start_idx, end_idx)
+        return self._local_path, sp
 
     def _create_paf_local_path_msg(self, send_empty=False):
         """create path message for ros
         Returns:
             [type]: [description]
         """
-        self._get_current_trajectory()
-        path_msg = PafLocalPath()
-        path_msg.header.stamp = rospy.Time.now()
-        path_msg.target_speed = [] if send_empty else self._target_speed
-        path_msg.points = [] if send_empty else self._local_path
+        pth, speeds, is_new_msg = self._get_current_trajectory()
 
-        while len(path_msg.target_speed) < len(path_msg.points):
-            path_msg.target_speed.append(path_msg.target_speed[-1])
-        return path_msg
+        if is_new_msg:
+            path_msg = PafLocalPath()
+            path_msg.header.stamp = rospy.Time.now()
+            path_msg.target_speed = [] if send_empty else list(speeds)
+            path_msg.points = [] if send_empty else pth
+
+            while 0 < len(path_msg.target_speed) < len(path_msg.points):  # threading issue
+                path_msg.target_speed.append(path_msg.target_speed[-1])
+
+            self._local_plan_publisher.publish(path_msg)
 
     def _get_current_trajectory(self):
         index, distance = self._set_current_point_index()
-        self._get_current_path(index, distance)
+        is_new_message = self._planner_at_end_of_route(self._local_path) or index + 300 > self._local_path_end_index
+        if is_new_message:
+            self._get_current_path(index, distance)
+        return self._local_path, self._target_speed, is_new_message
 
     def _signal_debug_print(self, signals):
         end_idx = self._current_point_index + len(self._local_path)
@@ -253,7 +259,7 @@ class LocalPlanner:
 
     def _update_target_speed(self, start_idx, end_idx):
         if len(self._global_path) == 0:
-            return 0, 0
+            return 0
         calc = SpeedCalculator(self._distances, start_idx, end_idx)
         signals: List[PafTrafficSignal] = self._traffic_signals
         self._signal_debug_print(signals)
@@ -268,6 +274,7 @@ class LocalPlanner:
         speed = calc.add_linear_deceleration(speed)
         # self._speed_debug_print(speed)
         self._target_speed = speed
+        return speed
 
     def _allowed_from_stop(self):
         return True  # todo
@@ -284,9 +291,10 @@ class LocalPlanner:
         rospy.loginfo_throttle(5, stop)
         return stop
 
-    def _planner_at_end_of_route(self):
-        self._is_at_end_of_route = len(self._local_path) < 50
-        rospy.logwarn_throttle(1, f"idx rem = {self._local_path_end_index - self._current_point_index}")
+    def _planner_at_end_of_route(self, pth=None):
+        if pth is not None:
+            return len(pth) < 50
+        self._is_at_end_of_route = self._local_path_end_index - self._current_point_index < 50
         return self._is_at_end_of_route
 
     def _odometry_updated(self, odometry: Odometry):
@@ -360,11 +368,11 @@ class LocalPlanner:
             if self._planner_at_end_of_route():
                 self._end_of_route_handling()
             elif not self._on_global_path():
-                self._local_plan_publisher.publish(self._create_paf_local_path_msg(send_empty=True))
+                self._create_paf_local_path_msg(send_empty=True)
                 self._send_global_path_request()
             else:
                 rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
-                self._local_plan_publisher.publish(self._create_paf_local_path_msg())
+                self._create_paf_local_path_msg()
             rate.sleep()
 
 
