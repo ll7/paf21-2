@@ -13,6 +13,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
+from .HelperFunctions import closest_index_of_point_list
 from .SpeedCalculator import SpeedCalculator
 
 
@@ -245,7 +246,7 @@ class PafRoute:
 
         return sorted(traffic_signals, key=lambda elem: elem.index)
 
-    def as_msg(self, resolution=0):
+    def as_msg(self, resolution=0, start_pt=None, target=None):
         msg = PafLaneletRoute()
         msg.lanelet_ids = self.route.list_ids_lanelets
         msg.points = []
@@ -257,13 +258,25 @@ class PafRoute:
 
         path_pts = self.route.reference_path[::every_nth]
         msg.distances = list(self.route.path_length[::every_nth])
-        msg.traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
+        traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
 
-        for x, y in path_pts:
+        for (x, y) in path_pts:
             point = Point2D()
             point.x = x
-            point.y = -y
+            point.y = y
             msg.points.append(point)
+        if target is not None:
+            idx, _ = closest_index_of_point_list(msg.points, target)
+            msg.points = msg.points[: idx + 50]
+        if start_pt is not None:
+            idx, _ = closest_index_of_point_list(msg.points, start_pt)
+            idx = max(0, idx - 50)
+            msg.points = msg.points[idx:]
+            for m in traffic_signals:
+                m.index -= idx
+                if m.index >= len(msg.points):
+                    break
+                msg.traffic_signals.append(m)
         msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
         # msg.curvatures = list(self.route.path_curvature[::every_nth])
 

@@ -12,7 +12,7 @@ from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
-from paf_messages.msg import PafLocalPath, Point2D, PafLogScalar
+from paf_messages.msg import PafLocalPath, PafLogScalar
 
 
 class VehicleController:
@@ -48,7 +48,7 @@ class VehicleController:
         # distance control parameters
         args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
         # Stanley control parameters
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2.9, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 3, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
         self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
@@ -79,6 +79,10 @@ class VehicleController:
         )
 
         self.target_speed_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        self.target_speed_error_log_publisher: rospy.Publisher = rospy.Publisher(
             "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
         )
 
@@ -113,9 +117,15 @@ class VehicleController:
             steering = 0.0
             self._is_reverse = False
             self._target_speed = 0.0
-            rospy.logerr_throttle(1, "[Acting] No next points")
+            rospy.loginfo_throttle(10, "[Actor] waiting for new local path")
 
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
+
+        msg = PafLogScalar()
+        msg.section = "ACTOR speed error"
+        msg.value = (self._target_speed - self._current_speed) * 3.6
+
+        self.target_speed_error_log_publisher.publish(msg)
 
         msg = PafLogScalar()
         msg.section = "ACTOR speed"
@@ -126,6 +136,7 @@ class VehicleController:
         msg = PafLogScalar()
         msg.section = "ACTOR target_speed"
         msg.value = self._target_speed * 3.6
+        msg.step_as_distance = False
 
         self.target_speed_log_publisher.publish(msg)
 
@@ -169,6 +180,10 @@ class VehicleController:
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
 
+        if control.brake > 0 and self._current_speed > 1e-1:
+            control.reverse = not self._is_reverse
+            control.throttle = control.brake
+
         if self._emergency_mode:
             control.hand_brake = True  # True
             control.steer = np.rad2deg(30.0)
@@ -211,13 +226,6 @@ class VehicleController:
         """
         # rospy.loginfo(
         #    f"INHALT VON LOCAL_PATH with speed {local_path.target_speed}")
-        local_path1 = []
-        for p in local_path.points:
-            p1 = Point2D()
-            p1.x = p.x
-            p1.y = -p.y
-            local_path1.append(p1)
-        local_path.points = local_path1
         self._route = local_path
 
     def __emergency_break_received(self, do_emergency_break: bool):
