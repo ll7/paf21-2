@@ -7,13 +7,13 @@ from commonroad.visualization.mp_renderer import MPRenderer
 
 # generate path of the file to be opened
 # file_path = os.path.join("..", "CR_Test.xml")
-file_path = "/home/imech154/paf21-2/paf_ros/paf_test_Sebi/CR_Test.xml"
+file_path = "/home/imech154/paf21-2/maps/Rules/Town03.xml"
 
 # read in the scenario and planning problem set
 scenario, planning_problem_set = CommonRoadFileReader(file_path).open()
 
 # plot the scenario for 40 time step, here each time step corresponds to 0.1 second
-for i in range(0, 40):
+for i in range(0, 3):
     plt.figure(figsize=(25, 10))
     rnd = MPRenderer()
     # plot the scenario at different time step
