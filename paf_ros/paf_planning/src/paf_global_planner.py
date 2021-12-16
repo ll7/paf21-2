@@ -16,10 +16,11 @@ from commonroad_route_planner.route_planner import RoutePlanner
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D
-from classes.HelperFunctions import dist, get_angle_between_vectors
+from classes.HelperFunctions import dist
 from classes.PafRoute import PafRoute
 from classes.MapManager import MapManager
 from std_msgs.msg import Empty
+from tf.transformations import euler_from_quaternion
 
 
 class GlobalPlanner:
@@ -32,7 +33,7 @@ class GlobalPlanner:
     def __init__(self):
         self._scenario: Scenario = MapManager.get_current_scenario()
         self._position = [1e99, 1e99]
-        # self._yaw = 0
+        self._yaw = 0
         self._routing_target = None
         self._last_route = None
 
@@ -77,13 +78,13 @@ class GlobalPlanner:
         if idx == len(lanelet.center_vertices) - 1:
             idx -= 1
         position = lanelet.center_vertices[idx]
-        draw_msg = PafTopDownViewPointSet()
-        draw_msg.label = "planning_target"
-        draw_msg.points = [Point2D(position[0], position[1])]
-        draw_msg.color = 153, 0, 153
-        self._target_on_map_pub.publish(draw_msg)
-        norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
-        return position, float(get_angle_between_vectors(norm))
+        # draw_msg = PafTopDownViewPointSet()
+        # draw_msg.label = "planning_target"
+        # draw_msg.points = [Point2D(position[0], position[1])]
+        # draw_msg.color = 153, 0, 153
+        # self._target_on_map_pub.publish(draw_msg)
+        # norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
+        return position, self._yaw  # , float(get_angle_between_vectors(norm))
 
     def _routing_provider_random(self, _: Empty):
         msg = PafRoutingRequest()
@@ -158,14 +159,14 @@ class GlobalPlanner:
     def _odometry_provider(self, odometry: Odometry):
         pose = odometry.pose.pose
         self._position = pose.position.x, pose.position.y
-        # _, _, self._yaw = euler_from_quaternion(
-        #     [
-        #         odometry.pose.pose.orientation.x,
-        #         odometry.pose.pose.orientation.y,
-        #         odometry.pose.pose.orientation.z,
-        #         odometry.pose.pose.orientation.w,
-        #     ]
-        # )
+        _, _, self._yaw = euler_from_quaternion(
+            [
+                odometry.pose.pose.orientation.x,
+                odometry.pose.pose.orientation.y,
+                odometry.pose.pose.orientation.z,
+                odometry.pose.pose.orientation.w,
+            ]
+        )
 
     def _routes_from_objective(
         self,
