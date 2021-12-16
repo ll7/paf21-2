@@ -36,7 +36,7 @@ class LocalPlanner:
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
     END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
-    MAX_ANGULAR_ERROR = np.deg2rad(20)
+    MAX_ANGULAR_ERROR = np.deg2rad(45)
 
     def __init__(self):
 
@@ -177,10 +177,11 @@ class LocalPlanner:
         try:
             travel_dist = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
             end_idx = int(np.ceil(travel_dist / self._distances_delta)) + start_idx
+            _ = self._distances[end_idx]  # index error check
         except IndexError:
             end_idx = len(self._distances)
 
-        end_idx = min(end_idx, len(self._global_path) - 1)
+        end_idx = min(end_idx, len(self._global_path))
         self._local_path = self._global_path[start_idx:end_idx]
         self._local_path_end_index = end_idx - 1
         sp = self._update_target_speed(start_idx, end_idx)

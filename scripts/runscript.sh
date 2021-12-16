@@ -104,6 +104,12 @@ NPCS=0
 CARLA_ARGS=""
 TOWN_ARGS="town:=Town03"
 for VAR in "$@"; do
+  if [ "$VAR" = "-h" ]; then
+    exit
+  fi
+  if [ "$VAR" = "--help" ]; then
+    exit
+  fi
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
   fi
