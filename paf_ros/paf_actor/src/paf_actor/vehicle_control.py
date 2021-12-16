@@ -107,11 +107,11 @@ class VehicleController:
 
         # self.__init_test_szenario()
         try:
-            steering, self._target_speed = self.__calculate_steering()
+            steering, self._target_speed, distance = self.__calculate_steering()
             self._is_reverse = self._target_speed < 0.0
             self._target_speed = abs(self._target_speed)
 
-            throttle: float = self.__calculate_throttle(dt)
+            throttle: float = self.__calculate_throttle(dt, distance)
         except RuntimeError:
             throttle = -1.0
             steering = 0.0
@@ -192,7 +192,7 @@ class VehicleController:
             control.reverse = not self._is_reverse
         return control
 
-    def __calculate_throttle(self, dt: float) -> float:
+    def __calculate_throttle(self, dt: float, distance: float) -> float:
         """
         Calculate the throttle for the vehicle
 
@@ -203,8 +203,12 @@ class VehicleController:
             float: the throttle to use
         """
         # perform pid control step with distance and speed controllers
+        target_speed = self._target_speed
 
-        lon: float = self._lon_controller.run_step(self._target_speed, self._current_speed, dt)
+        if distance >= 0.5 and self._current_speed > 10:
+            target_speed = max(10, self._current_speed * (1 - 1e-8))
+
+        lon: float = self._lon_controller.run_step(target_speed, self._current_speed, dt)
 
         return lon
 

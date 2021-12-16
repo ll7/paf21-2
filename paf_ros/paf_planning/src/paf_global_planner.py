@@ -87,6 +87,7 @@ class GlobalPlanner:
 
     def _routing_provider_random(self, _: Empty):
         msg = PafRoutingRequest()
+        rospy.loginfo_throttle(10, "[global planner] sending new route..")
         try:
             position, yaw = self._find_closest_position_on_lanelet_network()
         except IndexError:
@@ -94,6 +95,8 @@ class GlobalPlanner:
             return
         msg.target = self._any_target_anywhere(position)
         self._routing_provider(msg, position, yaw)
+
+        rospy.loginfo_throttle(10, "[global planner] sucess")
 
     def _routing_provider(self, msg: PafRoutingRequest = None, position=None, yaw=None):
         if msg is None:
