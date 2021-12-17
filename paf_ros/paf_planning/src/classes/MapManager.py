@@ -20,7 +20,7 @@ class MapManager:
 
         Args:
             rules (bool): Defines which driving mode the map should be loaded for
-
+            map_name (str): Defines the name of the town. None loads the current carla town
         Returns:
             Scenario: CommonRoad-Scenario of current town
         """
