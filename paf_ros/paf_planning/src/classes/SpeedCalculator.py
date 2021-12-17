@@ -11,7 +11,9 @@ class SpeedCalculator:
     MIN_SPEED = 35 / 3.6
     CURVE_FACTOR = 2  # higher value = more drifting
     MAX_DECELERATION = 40  # m/s^2, higher value = later and harder braking
-    # percentage of max_deceleration (last x% meters, max/2 is used)
+    SPEED_LIMIT_MULTIPLIER = 1
+
+    # percentage of max_deceleration (last x% meters, MAX_DECELERATION/2 is used)
     FULL_VS_HALF_DECEL_FRACTION = 0.94
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
@@ -158,14 +160,30 @@ class SpeedCalculator:
 
     @staticmethod
     def add_speed_limits(speed, traffic_signals: List[PafTrafficSignal], last_known_target_speed=1000):
-        speed_limit = np.ones_like(speed) * last_known_target_speed
+
+        # Town01
+        # {30.0: 8}
+        # Town02
+        # {30.0: 8}
+        # Town03
+        # {30.0: 9}
+        # Town04
+        # {30.0: 27, 90.0: 32, 60.0: 24, 40.0: 1}
+        # Town05
+        # {30.0: 18}
+        # Town06
+        # {40.0: 58, 60.0: 47, 30.0: 21, 90.0: 14}
+        # Town07
+        # {30.0: 23, 40.0: 9}
+
+        speed_limit = np.ones_like(speed) * last_known_target_speed * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
         traffic_signals = sorted(traffic_signals, key=lambda x: x.index)
         for signal in traffic_signals:
             i = signal.index
             if i < 0 or i >= len(speed):
                 continue
             if signal.type == TrafficSignIDGermany.MAX_SPEED.value:
-                speed_limit[i:] = signal.value
+                speed_limit[i:] = signal.value * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
         return np.clip(speed, 0, speed_limit)
 
     def add_stop_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None, buffer_m=1):

@@ -13,7 +13,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
 import rospy
-from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafSpeedMsg
+from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
 from .HelperFunctions import closest_index_of_point_list
 from .SpeedCalculator import SpeedCalculator
 
@@ -25,13 +25,9 @@ class PafRoute:
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
         self.rules_enabled = rospy.get_param("rules_enabled", False)
+        rospy.logwarn(f"[global planner] Rules are {'en' if self.rules_enabled else 'dis'}abled!")
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
-        rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._last_known_target_update)
-        self._last_known_target_speed = 1000
         # self.graph = self._calc_lane_change_graph()
-
-    def _last_known_target_update(self, msg: PafSpeedMsg):
-        self._last_known_target_speed = msg.limit / 3.6
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
@@ -252,7 +248,7 @@ class PafRoute:
 
         return sorted(traffic_signals, key=lambda elem: elem.index)
 
-    def as_msg(self, resolution=0, start_pt=None, target=None):
+    def as_msg(self, resolution=0, start_pt=None, target=None, last_known_target_speed=1000):
         msg = PafLaneletRoute()
         msg.lanelet_ids = self.route.list_ids_lanelets
         msg.points = []
@@ -286,7 +282,7 @@ class PafRoute:
         msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
         if self.rules_enabled:
             msg.curve_speed = SpeedCalculator.add_speed_limits(
-                msg.curve_speed, msg.traffic_signals, self._last_known_target_speed
+                msg.curve_speed, msg.traffic_signals, last_known_target_speed
             )
 
         return msg

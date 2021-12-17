@@ -15,7 +15,7 @@ from commonroad_route_planner.route_planner import RoutePlanner
 
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
-from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D
+from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D, PafSpeedMsg
 from classes.HelperFunctions import dist
 from classes.PafRoute import PafRoute
 from classes.MapManager import MapManager
@@ -47,11 +47,20 @@ class GlobalPlanner:
 
         rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
 
+        rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._last_known_target_update)
+        self._last_known_target_speed = 1000
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
         self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)
         self._target_on_map_pub = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
+
+    def _last_known_target_update(self, msg: PafSpeedMsg):
+        limit = msg.limit / 3.6
+        if limit <= 0 or limit == self._last_known_target_speed:
+            return
+        self._last_known_target_speed = limit
+        rospy.loginfo_throttle(1, f"last known limit: {msg.limit}")
 
     def _reroute_provider(self, _: Empty = None):
         rospy.loginfo("[global planner] rerouting...")
@@ -125,7 +134,7 @@ class GlobalPlanner:
         routes = self._routes_from_objective(position, yaw, target, return_shortest_only=True)
         if len(routes) > 0:
             rospy.loginfo_throttle(1, f"[global planner] publishing route to target {target}")
-            route = routes[0].as_msg(resolution, position, target)
+            route = routes[0].as_msg(resolution, position, target, self._last_known_target_speed)
         elif len(routes) == 0:
             rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")
             return

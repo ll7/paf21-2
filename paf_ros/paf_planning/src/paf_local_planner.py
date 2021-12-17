@@ -49,7 +49,8 @@ class LocalPlanner:
         rospy.init_node("local_path_node", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
-        self._rules_enabled = rospy.get_param("rules_enabled", False)
+        self.rules_enabled = rospy.get_param("rules_enabled", False)
+        rospy.logwarn(f"[local planner] Rules are {'en' if self.rules_enabled else 'dis'}abled!")
 
         self._current_pose = Pose()
         self._current_speed = 0
@@ -248,6 +249,12 @@ class LocalPlanner:
         pts.color = [255, 0, 0]
         self._sign_publisher.publish(pts)
 
+        pts = PafTopDownViewPointSet()
+        pts.label = "speed_signs"
+        pts.points = [self._global_path[s.index] for s in signals if s.type == TrafficSignIDGermany.MAX_SPEED.value]
+        pts.color = (255, 204, 0)
+        self._sign_publisher.publish(pts)
+
         out = []
         for s in signals:
             if self._current_point_index <= s.index < end_idx:
@@ -359,13 +366,14 @@ class LocalPlanner:
     def _publish_speed_msg(self, idx, speed):
         # idx = self._current_point_index + 100
         try:
-            limit = self._speed_msg.limit
+            limit = self._speed_msg.limit if self._speed_msg.limit > 0 else 250
             sign: PafTrafficSignal
             for sign in self._traffic_signals:
                 if sign.index > idx:
                     break
                 if sign.type == TrafficSignIDGermany.MAX_SPEED.value:
                     limit = np.round(sign.value * 3.6)
+                    rospy.logerr_throttle(1, f"{TrafficSignIDGermany(sign.type).name} {limit}")
             target = np.round(speed[idx] * 3.6)
             if limit != self._speed_msg.limit or target != self._speed_msg.target:
                 self._speed_msg.limit = int(limit)

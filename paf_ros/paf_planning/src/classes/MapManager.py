@@ -1,3 +1,6 @@
+from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry
+from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
+
 import rospy
 from os.path import expanduser
 
@@ -105,3 +108,25 @@ class MapManager:
 
         plt.margins(0, 0)
         plt.show()
+
+    @staticmethod
+    def speed_sign_checker():
+        for i in range(1, 9):
+            town = f"Town0{i}"
+            if i == 8:
+                town = "Town10HD"
+            scenario = MapManager.get_current_scenario(map_name=town)
+            sig = TrafficSigInterpreter(SupportedTrafficSignCountry.GERMANY, scenario.lanelet_network)
+            limits = [
+                (sig.speed_limit(frozenset([lanelet.lanelet_id]))) for lanelet in scenario.lanelet_network.lanelets
+            ]
+            limits_d = {}
+            for limit in limits:
+                if limit is None:
+                    limit = "no limit"
+                if limit not in limits_d:
+                    limits_d[limit] = 1
+                else:
+                    limits_d[limit] += 1
+            print(town)
+            print(limits_d)
