@@ -21,7 +21,7 @@ echo "creating symlinks for paf_dir=$paf_dir and map_dir..."
 mkdir -p ~/.ros/
 cd "$paf_dir" || exit 1
 ln -sfn "$paf_dir/paf_ros/" ~/carla-ros-bridge/catkin_ws/src/
-ln -sfn "$paf_dir/Maps/" ~/.ros/
+ln -sfn "$paf_dir/maps/" ~/.ros/
 echo "setup/cleanup build..."
 sleep 1
 ./scripts/build_ros.sh --clean --no-build || exit 1
