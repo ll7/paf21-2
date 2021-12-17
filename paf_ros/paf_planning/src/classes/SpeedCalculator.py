@@ -7,6 +7,7 @@ from paf_messages.msg import PafTrafficSignal, Point2D
 
 
 class SpeedCalculator:
+    CITY_SPEED_LIMIT = 50 / 3.6
     MAX_SPEED = 250 / 3.6
     MIN_SPEED = 35 / 3.6
     CURVE_FACTOR = 2  # higher value = more drifting
@@ -121,7 +122,7 @@ class SpeedCalculator:
         b = self.MAX_SPEED
         delta_v = self.MAX_SPEED - target_speed
 
-        frac = self.FULL_VS_HALF_DECEL_FRACTION
+        frac = 1 if target_speed < self.MIN_SPEED else self.FULL_VS_HALF_DECEL_FRACTION
 
         braking_distance = self._get_deceleration_distance(self.MAX_SPEED, target_speed)
         steps = np.ceil(braking_distance / self._step_size)
@@ -132,7 +133,9 @@ class SpeedCalculator:
         m = -delta_v / steps
         y2 = [m * x + y1[-1] for x in range(int(steps * (1 - frac)))]
 
-        return y1 + y2
+        speed = y1 + y2
+
+        return speed
 
     def add_linear_deceleration(self, speed):
 
@@ -161,21 +164,6 @@ class SpeedCalculator:
     @staticmethod
     def add_speed_limits(speed, traffic_signals: List[PafTrafficSignal], last_known_target_speed=1000):
 
-        # Town01
-        # {30.0: 8}
-        # Town02
-        # {30.0: 8}
-        # Town03
-        # {30.0: 9}
-        # Town04
-        # {30.0: 27, 90.0: 32, 60.0: 24, 40.0: 1}
-        # Town05
-        # {30.0: 18}
-        # Town06
-        # {40.0: 58, 60.0: 47, 30.0: 21, 90.0: 14}
-        # Town07
-        # {30.0: 23, 40.0: 9}
-
         speed_limit = np.ones_like(speed) * last_known_target_speed * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
         traffic_signals = sorted(traffic_signals, key=lambda x: x.index)
         for signal in traffic_signals:
@@ -184,20 +172,27 @@ class SpeedCalculator:
                 continue
             if signal.type == TrafficSignIDGermany.MAX_SPEED.value:
                 speed_limit[i:] = signal.value * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
+            if signal.type in SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS:
+                speed_limit[i:] = SpeedCalculator.CITY_SPEED_LIMIT
         return np.clip(speed, 0, speed_limit)
 
-    def add_stop_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None, buffer_m=1):
+    def add_stop_events(
+        self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None, buffer_m=0, shift_m=0
+    ):
         buffer_idx = int(buffer_m / self._step_size)
+        shift_idx = int(shift_m / self._step_size)
+        speed_limit = np.ones_like(speed) * 1000
         if events is None:
             events = self.QUICK_BRAKE_EVENTS
         for signal in traffic_signals:
             i = signal.index - self._index_start
-            if i > self._index_end:
-                return speed
+            if i < 0 or i >= len(speed):
+                continue
             if signal.type in events:
-                i0, i1 = i - buffer_idx, i + 1
-                speed[i0:i1] = target_speed
-        return speed
+                i0, i1 = i + shift_idx, i + buffer_idx + shift_idx
+                i1 += 1  # i1 is excluded otherwise
+                speed_limit[i0:i1] = target_speed
+        return np.clip(speed, 0, speed_limit)
 
     def remove_stop_event(self, speed, start_idx=0, buffer_m=5, speed_limit=None):
         buffer_idx = int(buffer_m / self._step_size)
@@ -207,8 +202,8 @@ class SpeedCalculator:
         speed[start_idx:end_idx] = speed_limit
         return speed
 
-    def add_roll_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, buffer_m=1):
-        return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS, buffer_m)
+    def add_roll_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, buffer_m=0, shift_m=0):
+        return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS, buffer_m, shift_m)
 
     def plt_init(self, add_accel=False):
         import matplotlib.pyplot as plt

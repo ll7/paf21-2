@@ -231,7 +231,7 @@ class LocalPlanner:
         ):
             self._get_current_path(index, distance)
             is_new_message = True
-            rospy.loginfo_throttle(10, "local planner is replanning")
+            rospy.loginfo_throttle(30, "[local planner] local planner is replanning")
             self._last_local_reroute = last_local_reroute
         else:
             is_new_message = False
@@ -273,7 +273,7 @@ class LocalPlanner:
                     str_signal += f": {v}"
                 out.append(str_signal)
         if len(out) > 0:
-            rospy.loginfo_throttle(2, f"Upcoming Traffic Signs: {', '.join(out)}")
+            rospy.loginfo_throttle(2, f"[local planner] Upcoming Traffic Signs: {', '.join(out)}")
 
     def _speed_debug_print(self, speeds, number_of_values=100):
         if len(self._distances) == 0:
@@ -287,7 +287,7 @@ class LocalPlanner:
             msg = f"{np.round(speed * 3.6, 1)}"
             out.append(msg)
         if len(out) > 0:
-            rospy.loginfo_throttle(1, f"Upcoming Speeds: {', '.join(out)}")
+            rospy.loginfo_throttle(1, f"[local planner] Upcoming Speeds: {', '.join(out)}")
 
     def _update_target_speed(self, start_idx, end_idx):
         if len(self._global_path) == 0:
@@ -296,10 +296,11 @@ class LocalPlanner:
         self._signal_debug_print(self._traffic_signals)
         speed = self._curve_speed[start_idx:end_idx]
         if self.rules_enabled:
-            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=0.5)
-            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=0.5)
-        if self._current_speed < 1e-3 and self._allowed_from_stop():
+            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=1, shift_m=1)
+            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=1, shift_m=1)
+        if self._current_speed < 0.1 and self._allowed_from_stop():
             rospy.sleep(1)
+            rospy.logwarn_throttle(20, "[local planner] continuing from stop")
             speed = calc.remove_stop_event(speed, buffer_m=10)
 
         pts = PafTopDownViewPointSet()
@@ -380,7 +381,8 @@ class LocalPlanner:
                     break
                 if sign.type == TrafficSignIDGermany.MAX_SPEED.value:
                     limit = sign.value
-                    # rospy.logerr_throttle(1, f"{TrafficSignIDGermany(sign.type).name} {limit*3.6}")
+                if sign.type in SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS:
+                    limit = SpeedCalculator.CITY_SPEED_LIMIT
             target = speed[idx]
             if limit != self._speed_msg.limit or target != self._speed_msg.target:
                 self._speed_msg.limit = limit
