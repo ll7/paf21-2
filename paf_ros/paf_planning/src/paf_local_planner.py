@@ -243,9 +243,7 @@ class LocalPlanner:
         pts = PafTopDownViewPointSet()
         pts.label = "signals"
         pts.points = [
-            self._global_path[s.index]
-            for s in signals
-            if s.type in (SpeedCalculator.QUICK_BRAKE_EVENTS + SpeedCalculator.ROLLING_EVENTS)
+            self._global_path[s.index] for s in signals if s.type in SpeedCalculator.SPEED_LIMIT_RESTORE_EVENTS
         ]
         pts.color = [255, 0, 0]
         self._sign_publisher.publish(pts)
@@ -298,18 +296,19 @@ class LocalPlanner:
         if self.rules_enabled:
             speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=1)
             speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=1)
-        if self._current_speed < 0.1 and self._allowed_from_stop():
+
+        if self._current_speed < 1 and self._allowed_from_stop():
             rospy.sleep(2)
-            rospy.logwarn_throttle(20, "[local planner] continuing from stop")
+            rospy.logwarn_throttle(5, "[local planner] continuing from stop")
             speed = calc.remove_stop_event(speed, buffer_m=10)
 
+        speed = calc.add_linear_deceleration(speed)
         # pts = PafTopDownViewPointSet()
         # pts.label = "low_speed"
         # pts.points = [self._global_path[i + start_idx] for i, s in enumerate(speed) if s < 0.1]
         # pts.color = (255, 0, 255)
         # self._sign_publisher.publish(pts)
 
-        speed = calc.add_linear_deceleration(speed)
         # self._speed_debug_print(speed)
         self._target_speed = speed
         self._publish_speed_msg(start_idx, self._curve_speed)
@@ -381,7 +380,7 @@ class LocalPlanner:
                     break
                 if sign.type == TrafficSignIDGermany.MAX_SPEED.value:
                     limit = sign.value
-                if sign.type in SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS:
+                if sign.type in SpeedCalculator.SPEED_LIMIT_RESTORE_EVENTS:
                     limit = SpeedCalculator.CITY_SPEED_LIMIT
             target = speed[idx]
             if limit != self._speed_msg.limit or target != self._speed_msg.target:

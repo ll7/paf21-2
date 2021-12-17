@@ -18,6 +18,7 @@ class SpeedCalculator:
     FULL_VS_HALF_DECEL_FRACTION = 0.94
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
+    SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + QUICK_BRAKE_EVENTS + ROLLING_EVENTS
 
     def __init__(self, distances: List[float], index_start: int = 0, index_end=None):
         # step size is assumed constant but has a variance of +/- 1mm
@@ -132,6 +133,7 @@ class SpeedCalculator:
         steps = np.ceil(braking_distance * 4 / self._step_size)
         m = -delta_v / steps
         y2 = [m * x + y1[-1] for x in range(int(steps * (1 - frac)))]
+        y2 = [y for y in y2 if np.abs(y) > 5]
 
         speed = y1 + y2
 
@@ -172,7 +174,7 @@ class SpeedCalculator:
                 continue
             if signal.type == TrafficSignIDGermany.MAX_SPEED.value:
                 speed_limit[i:] = signal.value * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
-            if signal.type in SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS:
+            if signal.type in SpeedCalculator.SPEED_LIMIT_RESTORE_EVENTS:
                 speed_limit[i:] = SpeedCalculator.CITY_SPEED_LIMIT
         return np.clip(speed, 0, speed_limit)
 
