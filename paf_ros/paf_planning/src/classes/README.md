@@ -6,7 +6,7 @@ Die MapManager-Klasse aus der map_manager.py dient zum Laden und halten der Map-
 
 ## Erstellen und modifizieren von Kartendaten
 
-Für die Umwandlung der Kartendaten aus dem in Carla bereitgestellten OpenDrive-Format in ein CommonRoad-Szenario wurde das (veraltete) Opendrive2lanelet-Tool aus der CommonRoad-Toolbox verwendet. Der neuere CommonRoad-Scenario-Designer konnte keine zufriedenstellenden Ergebnisse liefern.
+Für die Umwandlung der Kartendaten aus dem in Carla bereitgestellten OpenDrive-Format in ein CommonRoad-Szenario wurde das (veraltete) Opendrive2lanelet-Tool aus der CommonRoad-Toolbox verwendet. Dabei wurden große Bestandteile des Codes aus dem psaf-1-Projekt herangezogen. Der neuere CommonRoad-Scenario-Designer konnte keine zufriedenstellenden Ergebnisse liefern.
 Für die manuelle Modifikation der Kartendaten (Hinzufügen von Schildern, Ampeln usw.) wurde die GUI des CommonRoad-Scenario-Designer verwendet. Die Installation kann über das Skript commonroad_designer.sh aus dem scripts-Verzeichnis des paf21-2-Repository erfolgen.
 
 ## Hinweise zur Verwendung der CRDesigner GUI
