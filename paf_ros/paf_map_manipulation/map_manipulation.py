@@ -60,6 +60,18 @@ class MapManipulator:
         else:
             rospy.logerr("MapManipulator: Error while turning lanelet network bidirectional: Scenario is None.")
 
+    def set_all_neighbours_same_direction(self):
+        if self.scenario is not None:
+            for lane in self.scenario.lanelet_network.lanelets:
+                if lane.adj_left is not None:
+                    lane._adj_left_same_direction = True
+                if lane.adj_right is not None:
+                    lane._adj_right_same_direction = True
+
+            rospy.loginfo("MapManipulator: Set every neighbour direction to same.")
+        else:
+            rospy.logerr("MapManipulator: Error while setting neighbour directions: Scenario is None.")
+
 
 def main():
     manipulator = MapManipulator()
@@ -68,6 +80,7 @@ def main():
     # modify the map here:
     manipulator.delete_signs_and_lights()
     manipulator.turn_lanelet_network_bidirectional()
+    # manipulator.set_all_neighbours_same_direction()
 
     manipulator.generate_cr_file()
 
