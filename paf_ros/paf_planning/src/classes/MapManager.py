@@ -32,9 +32,9 @@ class MapManager:
                 exit(1)
         map_file_name = "DEU_" + map_name + "-1_1_T-1.xml"
         if rules:
-            map_file_path = "maps/Rules/" + map_file_name
+            map_file_path = "Maps/Rules/" + map_file_name
         else:
-            map_file_path = "maps/No Rules/" + map_file_name
+            map_file_path = "Maps/No Rules/" + map_file_name
         scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{map_file_path}")).open()
         return scenario
 

@@ -6,7 +6,7 @@ global_path_topic: /paf/paf_global_planner/routing_response
 teleport_topic: /paf/paf_starter/teleport
 routing_request: /paf/paf_starter/routing_request
 
-rules_enabled: false
+rules_enabled: true
 
 semantic_tags:
   "0": "Unlabeled"

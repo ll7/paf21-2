@@ -91,7 +91,7 @@ class TopDownView(BirdViewProducer):
         self.line_width_px = 10
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
-        self.speed_text = [0, 0, 0]
+        self.info_text = [0, 0, 0, (0, 0)]
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -399,15 +399,15 @@ class TopDownView(BirdViewProducer):
         thickness = 1
         y0, dy = 50, 20
         text = ["current", "target", "limit"]
-        limit = self.speed_text[2]
-        for i, (speed, lbl) in enumerate(zip(self.speed_text, text)):
-            if i == 0 and speed > limit:
+        current, target, limit, (x, y) = self.info_text
+        text = [f"{lbl}: {speed} kmh" for speed, lbl in zip(self.info_text, text)] + [f"x={x},y={y}"]
+        for i, text in enumerate(text):
+            if i == 0 and current > limit and target < 250:
                 color = color2
             else:
                 color = color1
             y = y0 + i * dy
-            speed = f"{lbl}: {speed} kmh"
-            rgb_canvas = cv2.putText(rgb_canvas, speed, (50, y), font, scale, color, thickness, cv2.LINE_AA)
+            rgb_canvas = cv2.putText(rgb_canvas, text, (50, y), font, scale, color, thickness, cv2.LINE_AA)
         return rgb_canvas
 
     @staticmethod
