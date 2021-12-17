@@ -56,11 +56,11 @@ class GlobalPlanner:
         )
 
     def _last_known_target_update(self, msg: PafSpeedMsg):
-        limit = msg.limit / 3.6
+        limit = msg.limit
         if limit <= 0 or limit == self._last_known_target_speed:
             return
         self._last_known_target_speed = limit
-        rospy.loginfo_throttle(1, f"last known limit: {msg.limit}")
+        rospy.loginfo_throttle(1, f"[global planner] last known limit: {msg.limit}")
 
     def _reroute_provider(self, _: Empty = None):
         rospy.loginfo("[global planner] rerouting...")
@@ -133,7 +133,11 @@ class GlobalPlanner:
             target = msg.target
         routes = self._routes_from_objective(position, yaw, target, return_shortest_only=True)
         if len(routes) > 0:
-            rospy.loginfo_throttle(1, f"[global planner] publishing route to target {target}")
+            rospy.loginfo_throttle(
+                1,
+                f"[global planner] publishing route to target {target}"
+                f" (last known speed={self._last_known_target_speed * 3.6})",
+            )
             route = routes[0].as_msg(resolution, position, target, self._last_known_target_speed)
         elif len(routes) == 0:
             rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")

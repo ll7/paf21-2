@@ -20,12 +20,11 @@ from .SpeedCalculator import SpeedCalculator
 
 class PafRoute:
     SPEED_KMH_TO_MS = 1 / 3.6
+    rules_enabled = rospy.get_param("rules_enabled", False)
 
     def __init__(self, route: CommonroadRoute, traffic_sign_country: Country = Country.GERMANY):
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
-        self.rules_enabled = rospy.get_param("rules_enabled", False)
-        rospy.logwarn(f"[global planner] Rules are {'en' if self.rules_enabled else 'dis'}abled!")
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
         # self.graph = self._calc_lane_change_graph()
 

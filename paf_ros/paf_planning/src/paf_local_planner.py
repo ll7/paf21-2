@@ -44,12 +44,13 @@ class LocalPlanner:
     END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
     MAX_ANGULAR_ERROR = np.deg2rad(45)
 
+    rules_enabled = rospy.get_param("rules_enabled", False)
+
     def __init__(self):
 
         rospy.init_node("local_path_node", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
-        self.rules_enabled = rospy.get_param("rules_enabled", False)
         rospy.logwarn(f"[local planner] Rules are {'en' if self.rules_enabled else 'dis'}abled!")
 
         self._current_pose = Pose()
@@ -294,7 +295,7 @@ class LocalPlanner:
         calc = SpeedCalculator(self._distances, start_idx, end_idx)
         self._signal_debug_print(self._traffic_signals)
         speed = self._curve_speed[start_idx:end_idx]
-        if self._rules_enabled:
+        if self.rules_enabled:
             ...
             # speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=1, buffer_m=0.5)
             # speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=1, buffer_m=0.5)
