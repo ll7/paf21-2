@@ -372,12 +372,12 @@ class LocalPlanner:
                 if sign.index > idx:
                     break
                 if sign.type == TrafficSignIDGermany.MAX_SPEED.value:
-                    limit = np.round(sign.value * 3.6)
-                    rospy.logerr_throttle(1, f"{TrafficSignIDGermany(sign.type).name} {limit}")
-            target = np.round(speed[idx] * 3.6)
+                    limit = sign.value
+                    # rospy.logerr_throttle(1, f"{TrafficSignIDGermany(sign.type).name} {limit*3.6}")
+            target = speed[idx]
             if limit != self._speed_msg.limit or target != self._speed_msg.target:
-                self._speed_msg.limit = int(limit)
-                self._speed_msg.target = int(target)
+                self._speed_msg.limit = limit
+                self._speed_msg.target = target
                 self._speed_msg_publisher.publish(self._speed_msg)
         except IndexError:
             pass

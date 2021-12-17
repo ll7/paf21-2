@@ -45,7 +45,7 @@ class TopDownRosNode(object):
         self.producer.update_obstacles(msg)
 
     def _update_speed_str(self, msg: PafSpeedMsg):
-        self.producer.speed_text = [int(self.velocity()), msg.target, msg.limit]
+        self.producer.speed_text = [int(self.velocity()), np.round(msg.target * 3.6), np.round(msg.limit * 3.6)]
 
     def _update_line_set(self, msg: PafTopDownViewPointSet):
         self.producer.line_sets[msg.label] = msg
