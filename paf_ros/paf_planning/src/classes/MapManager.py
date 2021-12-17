@@ -40,8 +40,8 @@ class MapManager:
 
     @staticmethod
     def visualize_route(route: Route, draw_route_lanelets=False, draw_reference_path=False, size_x=10):
-        """Visualizes the given route.
-
+        """
+        Visualizes the given route.
         :param route: route object to be visualized
         :param draw_route_lanelets: flag to indicate if the lanelets should be visualized
         :param draw_reference_path: flag to indicate if the reference path should be visualized
