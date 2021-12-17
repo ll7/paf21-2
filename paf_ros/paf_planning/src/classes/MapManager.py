@@ -1,3 +1,4 @@
+import rospy
 from os.path import expanduser
 
 from commonroad.common.file_reader import CommonRoadFileReader
@@ -7,34 +8,31 @@ from commonroad.visualization.mp_renderer import MPRenderer
 from commonroad_route_planner.route import Route
 from commonroad_route_planner.utility.visualization import obtain_plot_limits_from_reference_path, draw_state
 
-import rospy
-
 
 class MapManager:
     @staticmethod
-    def _get_town_path(rules=True, town=None):
-        if town is None:
-            town = "UNKNOWN"
+    def get_current_scenario(rules=True, map_name=None):
+        """
+        Loads the commonroad scenario with or without traffic rules of town with number map_number
+
+        Args:
+            rules (bool): Defines which driving mode the map should be loaded for
+
+        Returns:
+            Scenario: CommonRoad-Scenario of current town
+        """
+        if map_name is None:
             try:
-                town = rospy.get_param("/carla/town")
+                map_name = rospy.get_param("/carla/town")
             except KeyError:
-                # rospy.logerr("town parameter not set")
-                # exit(1)
-                town = "Town03"
-        rule = "Rules" if rules else "noRules"
-        town = f"maps/{rule}/{town}.xml"
-        return town
-
-    @staticmethod
-    def get_current_scenario():
-        pth = MapManager._get_town_path()
-        scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{pth}")).open()
-        return scenario
-
-    @staticmethod
-    def get_scenario(town):
-        pth = MapManager._get_town_path(town=town)
-        scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{pth}")).open()
+                rospy.logerr("MapManager: Town parameter not set.")
+                exit(1)
+        map_file_name = "DEU_" + map_name + "-1_1_T-1.xml"
+        if rules:
+            map_file_path = "Maps/Rules/" + map_file_name
+        else:
+            map_file_path = "Maps/No Rules/" + map_file_name
+        scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{map_file_path}")).open()
         return scenario
 
     @staticmethod
