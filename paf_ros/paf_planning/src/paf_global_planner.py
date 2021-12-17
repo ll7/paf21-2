@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import time
+
 from commonroad_route_planner.route import Route, RouteType
 
 import rospy
@@ -60,7 +62,7 @@ class GlobalPlanner:
         if limit <= 0 or limit == self._last_known_target_speed:
             return
         self._last_known_target_speed = limit
-        rospy.loginfo_throttle(1, f"[global planner] last known limit: {msg.limit}")
+        rospy.loginfo_throttle(1, f"[global planner] last known limit: {msg.limit * 3.6}")
 
     def _reroute_provider(self, _: Empty = None):
         rospy.loginfo("[global planner] rerouting...")
@@ -98,6 +100,7 @@ class GlobalPlanner:
     def _routing_provider_random(self, _: Empty):
         msg = PafRoutingRequest()
         rospy.loginfo_throttle(10, "[global planner] sending new route..")
+        t0 = time.perf_counter()
         try:
             position, yaw = self._find_closest_position_on_lanelet_network()
         except IndexError:
@@ -106,7 +109,8 @@ class GlobalPlanner:
         msg.target = self._any_target_anywhere(position)
         self._routing_provider(msg, position, yaw)
 
-        rospy.loginfo_throttle(10, "[global planner] success")
+        t0 = np.round(time.perf_counter() - t0, 2)
+        rospy.loginfo_throttle(10, f"[global planner] success ({t0}s)")
 
     def _routing_provider(self, msg: PafRoutingRequest = None, position=None, yaw=None):
         if msg is None:
@@ -135,8 +139,7 @@ class GlobalPlanner:
         if len(routes) > 0:
             rospy.loginfo_throttle(
                 1,
-                f"[global planner] publishing route to target {target}"
-                f" (last known speed={self._last_known_target_speed * 3.6})",
+                f"[global planner] publishing route to target {target}",
             )
             route = routes[0].as_msg(resolution, position, target, self._last_known_target_speed)
         elif len(routes) == 0:

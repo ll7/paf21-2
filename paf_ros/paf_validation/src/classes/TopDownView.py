@@ -278,7 +278,7 @@ class TopDownView(BirdViewProducer):
         elif msg.type == "Vehicles":
             self.obstacles_vehicles = self._update_obstacles(msg)
         else:
-            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+            rospy.logerr_throttle(10, f"[top down view] obstacle type '{msg.type}' is unknown to top_down_view node")
 
     @staticmethod
     def _update_obstacles(msg: PafObstacleList) -> list:
