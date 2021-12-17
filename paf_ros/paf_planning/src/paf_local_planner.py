@@ -240,15 +240,15 @@ class LocalPlanner:
     def _signal_debug_print(self, signals):
         end_idx = self._current_point_index + len(self._local_path)
 
-        # pts = PafTopDownViewPointSet()
-        # pts.label = "signals"
-        # pts.points = [
-        #     self._global_path[s.index]
-        #     for s in signals
-        #     if s.type in (SpeedCalculator.QUICK_BRAKE_EVENTS + SpeedCalculator.ROLLING_EVENTS)
-        # ]
-        # pts.color = [255, 0, 0]
-        # self._sign_publisher.publish(pts)
+        pts = PafTopDownViewPointSet()
+        pts.label = "signals"
+        pts.points = [
+            self._global_path[s.index]
+            for s in signals
+            if s.type in (SpeedCalculator.QUICK_BRAKE_EVENTS + SpeedCalculator.ROLLING_EVENTS)
+        ]
+        pts.color = [255, 0, 0]
+        self._sign_publisher.publish(pts)
 
         pts = PafTopDownViewPointSet()
         pts.label = "speed_signs"
@@ -296,18 +296,18 @@ class LocalPlanner:
         self._signal_debug_print(self._traffic_signals)
         speed = self._curve_speed[start_idx:end_idx]
         if self.rules_enabled:
-            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=1, shift_m=1)
-            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=1, shift_m=1)
+            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=1)
+            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=1)
         if self._current_speed < 0.1 and self._allowed_from_stop():
-            rospy.sleep(1)
+            rospy.sleep(2)
             rospy.logwarn_throttle(20, "[local planner] continuing from stop")
             speed = calc.remove_stop_event(speed, buffer_m=10)
 
-        pts = PafTopDownViewPointSet()
-        pts.label = "low_speed"
-        pts.points = [self._global_path[i + start_idx] for i, s in enumerate(speed) if s < 0.1]
-        pts.color = (255, 0, 255)
-        self._sign_publisher.publish(pts)
+        # pts = PafTopDownViewPointSet()
+        # pts.label = "low_speed"
+        # pts.points = [self._global_path[i + start_idx] for i, s in enumerate(speed) if s < 0.1]
+        # pts.color = (255, 0, 255)
+        # self._sign_publisher.publish(pts)
 
         speed = calc.add_linear_deceleration(speed)
         # self._speed_debug_print(speed)
