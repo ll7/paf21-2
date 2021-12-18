@@ -12,7 +12,6 @@ from commonroad.scenario.traffic_sign import (
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
-import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
 from .HelperFunctions import closest_index_of_point_list
 from .SpeedCalculator import SpeedCalculator
@@ -20,10 +19,6 @@ from .SpeedCalculator import SpeedCalculator
 
 class PafRoute:
     SPEED_KMH_TO_MS = 1 / 3.6
-    try:
-        rules_enabled = rospy.get_param("rules_enabled", False)
-    except Exception:
-        rules_enabled = True
 
     def __init__(self, route: CommonroadRoute, rules_enabled: bool, traffic_sign_country: Country = Country.GERMANY):
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
