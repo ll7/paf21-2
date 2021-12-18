@@ -19,7 +19,7 @@ if (which crdesigner); then
   if [ $# -eq 0 ]; then
     crdesigner "$@"
   else
-    crdesigner -i ~/.ros/maps/Rules/"$1".xml
+    crdesigner -i ~/.ros/Maps/Rules/"DEU_$1-1_1_T-1".xml
   fi
   exit
 fi

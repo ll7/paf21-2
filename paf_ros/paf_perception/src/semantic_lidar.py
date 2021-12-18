@@ -65,7 +65,7 @@ class SemanticLidarNode(object):
             current_pose.orientation.w,
         )
         _, _, yaw = euler_from_quaternion(quaternion)
-        self.z_orientation = yaw
+        self.z_orientation = -yaw
         # rotation of result in opposite direction to get world coords
         self.cos = np.cos(-self.z_orientation)
         self.sin = np.sin(-self.z_orientation)

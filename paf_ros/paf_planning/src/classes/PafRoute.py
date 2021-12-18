@@ -12,6 +12,7 @@ from commonroad.scenario.traffic_sign import (
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
+import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
 from .HelperFunctions import closest_index_of_point_list
 from .SpeedCalculator import SpeedCalculator
@@ -19,11 +20,14 @@ from .SpeedCalculator import SpeedCalculator
 
 class PafRoute:
     SPEED_KMH_TO_MS = 1 / 3.6
+    try:
+        rules_enabled = rospy.get_param("rules_enabled", False)
+    except Exception:
+        rules_enabled = True
 
     def __init__(self, route: CommonroadRoute, traffic_sign_country: Country = Country.GERMANY):
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
-
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
         # self.graph = self._calc_lane_change_graph()
 
@@ -133,6 +137,9 @@ class PafRoute:
                     f"(speed_limit={speed_limit}, min={speed_minimum})\n"
                 )
 
+            if len(lanelet.predecessor) > 1:
+                print(f"merging with {len(lanelet.predecessor) - 1} other lane(s)")
+
         out += f"Route completed at {route_ids[-1]}"
         return out
 
@@ -208,6 +215,13 @@ class PafRoute:
             lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
             relevant_traffic_lights += list(lanelet.traffic_lights)
             relevant_traffic_signs += list(lanelet.traffic_signs)
+            if len(lanelet.predecessor) > 1:
+                merging_pt = lanelet.center_vertices[0]
+                paf_sign = PafTrafficSignal()
+                paf_sign.type = "MERGE"
+                paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(merging_pt))
+                paf_sign.value = len(lanelet.predecessor) - 1
+                traffic_signals.append(paf_sign)
 
         sign: TrafficSign
         for sign in self.route.scenario.lanelet_network.traffic_signs:
@@ -217,7 +231,7 @@ class PafRoute:
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             try:
                 paf_sign.value = float(sign.traffic_sign_elements[0].additional_values[0])
-                if paf_sign.type == TrafficSignIDGermany.MAX_SPEED:
+                if paf_sign.type == TrafficSignIDGermany.MAX_SPEED.value:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
                 paf_sign.value = -1.0
@@ -246,7 +260,7 @@ class PafRoute:
 
         return sorted(traffic_signals, key=lambda elem: elem.index)
 
-    def as_msg(self, resolution=0, start_pt=None, target=None):
+    def as_msg(self, resolution=0, start_pt=None, target=None, last_known_target_speed=1000):
         msg = PafLaneletRoute()
         msg.lanelet_ids = self.route.list_ids_lanelets
         msg.points = []
@@ -278,7 +292,10 @@ class PafRoute:
                     break
                 msg.traffic_signals.append(m)
         msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
-        # msg.curvatures = list(self.route.path_curvature[::every_nth])
+        if self.rules_enabled:
+            msg.curve_speed = SpeedCalculator.add_speed_limits(
+                msg.curve_speed, msg.traffic_signals, last_known_target_speed
+            )
 
         return msg
         # msg.graph = []

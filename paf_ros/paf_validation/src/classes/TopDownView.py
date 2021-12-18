@@ -91,6 +91,7 @@ class TopDownView(BirdViewProducer):
         self.line_width_px = 10
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
+        self.info_text = [0, 0, 0, (0, 0)]
         if show_whole_map:
             self.north_is_up = True
             gen = MapMaskGenerator(client, pixels_per_meter)
@@ -166,8 +167,13 @@ class TopDownView(BirdViewProducer):
             masks,
         )
         ordered_indices = [mask.value for mask in MaskPriority.bottom_to_top()]
-        ordered_indices += new_indices
-        return cropped_masks[ordered_indices]
+        ordered_indices2 = ordered_indices + new_indices
+        try:
+            return cropped_masks[ordered_indices2]
+        except IndexError:
+            rospy.logerr("tdv index error")
+            rospy.logerr(ordered_indices)
+            return cropped_masks[ordered_indices]
 
     def _get_line_sets_masks(self):
         lines_masks = []
@@ -272,7 +278,7 @@ class TopDownView(BirdViewProducer):
         elif msg.type == "Vehicles":
             self.obstacles_vehicles = self._update_obstacles(msg)
         else:
-            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to top_down_view node")
+            rospy.logerr_throttle(10, f"[top down view] obstacle type '{msg.type}' is unknown to top_down_view node")
 
     @staticmethod
     def _update_obstacles(msg: PafObstacleList) -> list:
@@ -385,6 +391,23 @@ class TopDownView(BirdViewProducer):
             rgb_canvas[nonzero] = rgb_color
         if not self.dark_mode:
             rgb_canvas = np.where(rgb_canvas.any(-1, keepdims=True), rgb_canvas, 255)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        scale = 0.5
+        color1 = (0, 0, 102)
+        color2 = (255, 0, 0)
+        thickness = 1
+        y0, dy = 50, 20
+        text = ["current", "target", "limit"]
+        current, target, limit, (x, y) = self.info_text
+        text = [f"{lbl}: {speed} kmh" for speed, lbl in zip(self.info_text, text)] + [f"x={x},y={y}"]
+        for i, text in enumerate(text):
+            if i == 0 and current > limit and target < 250:
+                color = color2
+            else:
+                color = color1
+            y = y0 + i * dy
+            rgb_canvas = cv2.putText(rgb_canvas, text, (50, y), font, scale, color, thickness, cv2.LINE_AA)
         return rgb_canvas
 
     @staticmethod

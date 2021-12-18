@@ -1,3 +1,7 @@
+from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry
+from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
+
+import rospy
 from os.path import expanduser
 
 from commonroad.common.file_reader import CommonRoadFileReader
@@ -7,39 +11,37 @@ from commonroad.visualization.mp_renderer import MPRenderer
 from commonroad_route_planner.route import Route
 from commonroad_route_planner.utility.visualization import obtain_plot_limits_from_reference_path, draw_state
 
-import rospy
-
 
 class MapManager:
     @staticmethod
-    def _get_town_path(rules=True, town=None):
-        if town is None:
-            town = "UNKNOWN"
+    def get_current_scenario(rules=True, map_name=None):
+        """
+        Loads the commonroad scenario with or without traffic rules of town with number map_number
+
+        Args:
+            rules (bool): Defines which driving mode the map should be loaded for
+            map_name (str): Defines the name of the town. None loads the current carla town
+        Returns:
+            Scenario: CommonRoad-Scenario of current town
+        """
+        if map_name is None:
             try:
-                town = rospy.get_param("/carla/town")
+                map_name = rospy.get_param("/carla/town")
             except KeyError:
-                rospy.logerr("town parameter not set")
+                rospy.logerr("MapManager: Town parameter not set.")
                 exit(1)
-        rule = "Rules" if rules else "noRules"
-        town = f"maps/{rule}/{town}.xml"
-        return town
-
-    @staticmethod
-    def get_current_scenario():
-        pth = MapManager._get_town_path()
-        scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{pth}")).open()
-        return scenario
-
-    @staticmethod
-    def get_scenario(town):
-        pth = MapManager._get_town_path(town=town)
-        scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{pth}")).open()
+        map_file_name = "DEU_" + map_name + "-1_1_T-1.xml"
+        if rules:
+            map_file_path = "Maps/Rules/" + map_file_name
+        else:
+            map_file_path = "Maps/No Rules/" + map_file_name
+        scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{map_file_path}")).open()
         return scenario
 
     @staticmethod
     def visualize_route(route: Route, draw_route_lanelets=False, draw_reference_path=False, size_x=10):
-        """Visualizes the given route.
-
+        """
+        Visualizes the given route.
         :param route: route object to be visualized
         :param draw_route_lanelets: flag to indicate if the lanelets should be visualized
         :param draw_reference_path: flag to indicate if the reference path should be visualized
@@ -106,3 +108,25 @@ class MapManager:
 
         plt.margins(0, 0)
         plt.show()
+
+    @staticmethod
+    def speed_sign_checker():
+        for i in range(1, 9):
+            town = f"Town0{i}"
+            if i == 8:
+                town = "Town10HD"
+            scenario = MapManager.get_current_scenario(map_name=town)
+            sig = TrafficSigInterpreter(SupportedTrafficSignCountry.GERMANY, scenario.lanelet_network)
+            limits = [
+                (sig.speed_limit(frozenset([lanelet.lanelet_id]))) for lanelet in scenario.lanelet_network.lanelets
+            ]
+            limits_d = {}
+            for limit in limits:
+                if limit is None:
+                    limit = "no limit"
+                if limit not in limits_d:
+                    limits_d[limit] = 1
+                else:
+                    limits_d[limit] += 1
+            print(town)
+            print(limits_d)

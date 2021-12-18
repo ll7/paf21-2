@@ -56,14 +56,14 @@ class VehicleController:
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
-            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated
+            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated, queue_size=1
         )
         self.vehicle_control_publisher: rospy.Publisher = rospy.Publisher(
             f"/carla/{role_name}/vehicle_control_cmd", CarlaEgoVehicleControl, queue_size=1
         )
 
         self.local_path_subscriber: rospy.Subscriber = rospy.Subscriber(
-            "/paf/paf_local_planner/path", PafLocalPath, self.__local_path_received
+            "/paf/paf_local_planner/path", PafLocalPath, self.__local_path_received, queue_size=1
         )
 
         self.emergy_break_publisher: rospy.Publisher = rospy.Publisher(

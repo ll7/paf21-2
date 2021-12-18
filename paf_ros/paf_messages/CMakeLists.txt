@@ -24,6 +24,7 @@ add_message_files(
   PafLogScalar.msg
   PafLogText.msg
   PafTopDownViewPointSet.msg
+  PafSpeedMsg.msg
 )
 
 #add_service_files(

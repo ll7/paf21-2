@@ -4,9 +4,11 @@ import rospy
 
 from carla_birdeye_view.mask import PixelDimensions
 from time import sleep
-from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute, PafTopDownViewPointSet
+
+from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute, PafTopDownViewPointSet, PafSpeedMsg
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
+import numpy as np
 from cv_bridge import CvBridge
 
 
@@ -18,6 +20,7 @@ class TopDownRosNode(object):
         self.params = rospy.get_param("/top_down_view/")
         self.actor = _actor
         self.point_sets = {}
+        self._current_speed = 0
         self.producer = TopDownView(
             _client,
             target_size=PixelDimensions(
@@ -36,9 +39,18 @@ class TopDownRosNode(object):
         rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
         rospy.Subscriber("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, self._update_pt_set)
         rospy.Subscriber("/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, self._update_line_set)
+        rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._update_speed_str)
 
     def update_obstacles(self, msg: PafObstacleList):
         self.producer.update_obstacles(msg)
+
+    def _update_speed_str(self, msg: PafSpeedMsg):
+        self.producer.info_text = [
+            int(self.velocity()),
+            int(np.round(msg.target * 3.6)),
+            int(np.round(msg.limit * 3.6)),
+            self.location(),
+        ]
 
     def _update_line_set(self, msg: PafTopDownViewPointSet):
         self.producer.line_sets[msg.label] = msg
@@ -65,9 +77,19 @@ class TopDownRosNode(object):
             rgb = self.produce_map()
             self.pub.publish(self.br.cv2_to_imgmsg(rgb, "rgb8"))
             delta = rospy.Time.now().to_time() - t0
+            self.producer.info_text[0] = int(self.velocity())
+            self.producer.info_text[3] = self.location()
             if delta > 0:
                 rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / delta}")
             rate.sleep()
+
+    def velocity(self):
+        s = self.actor.get_velocity()
+        return np.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2) * 3.6
+
+    def location(self):
+        s = self.actor.get_location()
+        return np.round(s.x, 1), np.round(-s.y, 1)
 
 
 def main():
