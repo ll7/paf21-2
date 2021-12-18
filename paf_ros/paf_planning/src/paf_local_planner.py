@@ -44,7 +44,7 @@ class LocalPlanner:
     END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
     MAX_ANGULAR_ERROR = np.deg2rad(45)
 
-    rules_enabled = rospy.get_param("rules_enabled", False)
+    rules_enabled = False  # rospy.get_param("rules_enabled", False)
 
     def __init__(self):
 
