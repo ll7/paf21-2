@@ -19,7 +19,7 @@ from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from std_msgs.msg import Bool
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D, PafSpeedMsg
-from classes.HelperFunctions import dist
+from classes.HelperFunctions import dist, find_closest_lanelet
 from classes.PafRoute import PafRoute
 from classes.MapManager import MapManager
 from std_msgs.msg import Empty
@@ -84,7 +84,7 @@ class GlobalPlanner:
         return lanelet_p
 
     def _find_closest_position_on_lanelet_network(self) -> Tuple[np.ndarray, float]:
-        lanelet_id = self._find_closest_lanelet()[0]
+        lanelet_id = find_closest_lanelet(self._scenario.lanelet_network, self._position)[0]
         lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         idx = np.argmin([dist(a, self._position) for a in lanelet.center_vertices])
         if idx == len(lanelet.center_vertices) - 1:
@@ -159,20 +159,6 @@ class GlobalPlanner:
         draw_msg.points = [Point2D(target[0], target[1])]
         draw_msg.color = 153, 0, 153
         self._target_on_map_pub.publish(draw_msg)
-
-    def _find_closest_lanelet(self, p=None):
-        if p is None:
-            p = self._position
-        p = np.array(p, dtype=float)
-        lanelets = self._scenario.lanelet_network.find_lanelet_by_position([p])[0]
-        if len(lanelets) > 0:
-            return lanelets
-        for radius in range(3, 100, 3):
-            shape = Circle(radius=radius, center=p)
-            lanelets = self._scenario.lanelet_network.find_lanelet_by_shape(shape)
-            if len(lanelets) > 0:
-                break
-        return lanelets
 
     def _teleport(self, msg: Pose):
         msg_out = PoseWithCovarianceStamped()

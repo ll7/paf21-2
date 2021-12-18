@@ -75,7 +75,7 @@ class PafRoute:
 
         lane_change_graph = {}
         for (planned_id_0, l_ids_0, r_ids_0), (planned_id_1, l_ids_1, r_ids_1) in zip(
-            self._adjacent_lanelets, self._adjacent_lanelets[1:]
+                self._adjacent_lanelets, self._adjacent_lanelets[1:]
         ):
             possible_0 = [planned_id_0] + l_ids_0 + r_ids_0
             possible_1 = [planned_id_1] + l_ids_1 + r_ids_1
@@ -279,9 +279,12 @@ class PafRoute:
 
         for lanelet in l_list:
             _h, _blob, _anchor = get_lanelet_blob(lanelet)
-            if len(_blob) > 0 and _h not in out:
+            if _anchor is not None and len(_blob) > 0 and _h not in out:
                 out[_h] = (_blob, _anchor)
-        return list(out.values())
+        out = list(out.values())
+        for i, (lanelet_list, anchor) in enumerate(out):
+            ...  # todo merge lanelet lists with identical lane count and anchor
+        return out
 
     def get_paf_lanelet_matrix(self, groups, distance_m=5):
         n: LaneletNetwork = self.route.scenario.lanelet_network
@@ -300,71 +303,29 @@ class PafRoute:
                 if len(pts) < 3:
                     pts = lanelet.center_vertices
                 x, y, _, _, _ = calc_spline_course_from_point_list(pts, length / num_pts)
-                vertices.append(np.array(list((zip(x, y)))))
-            out.append((np.array(vertices), anchor))
+                vertices.append(np.array(list((zip(x, y)))[:-1]))
+            out.append((np.array(vertices), anchor, avg_len))
         return out
 
-    def as_msg(self, target=None):
+    def as_msg(self):
         msg = PafLaneletRoute()
         groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
         distance_m = 5
 
-        for i, ((lanelet_ids, _), (lanes, anchor)) in enumerate(
-            zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
+        for i, ((lanelet_id_list, _), (lanes, anchor, length)) in enumerate(
+                zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
             matrix = PafLaneletMatrix()
             matrix.target_index = anchor
             matrix.distance_per_index = distance_m
-            for lanelet_id, vertices in zip(lanelet_ids, lanes):
+
+            for lanelet_ids, vertices in zip(lanelet_id_list, lanes):
                 paf_lanelet = PafLanelet()
                 paf_lanelet.points = [Point2D(x, y) for x, y in vertices]
-                paf_lanelet.signals = self._extract_traffic_signals(lanelet_id)
+                paf_lanelet.signals = self._extract_traffic_signals(lanelet_ids)
+                paf_lanelet.lanelet_ids = lanelet_ids
                 matrix.lanes.append(paf_lanelet)
+                matrix.distance = length
             msg.sections.append(matrix)
+        msg.distance = self.route.path_length[-1]
         return msg
-        #
-        # msg.lanelet_ids = self.route.list_ids_lanelets
-        # msg.points = []
-        # if resolution == 0:
-        #     every_nth = 1
-        # else:
-        #     every_nth = int(np.round(len(self.route.path_length) / self.route.path_length[-1] / resolution))
-        #     every_nth = every_nth if every_nth != 0 else 1
-        #
-        # path_pts = self.route.reference_path[::every_nth]
-        # msg.distances = list(self.route.path_length[::every_nth])
-        # traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
-        #
-        # for (x, y) in path_pts:
-        #     point = Point2D()
-        #     point.x = x
-        #     point.y = y
-        #     msg.points.append(point)
-        # if target is not None:
-        #     idx, _ = closest_index_of_point_list(msg.points, target)
-        #     msg.points = msg.points[: idx + 50]
-        # if start_pt is not None:
-        #     idx, _ = closest_index_of_point_list(msg.points, start_pt)
-        #     idx = max(0, idx - 50)
-        #     msg.points = msg.points[idx:]
-        #     for m in traffic_signals:
-        #         m.index -= idx
-        #         if m.index >= len(msg.points):
-        #             break
-        #         msg.traffic_signals.append(m)
-        # msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
-        # if self._rules_enabled:
-        #     msg.curve_speed = SpeedCalculator.add_speed_limits(
-        #         msg.curve_speed, msg.traffic_signals, last_known_target_speed
-        #     )
-
-        # return msg
-        # msg.graph = []
-        # for key, (l, s, r) in self.graph.items():
-        #     node_msg = PafRoutingGraphNode()
-        #     node_msg.start = key
-        #     node_msg.left = -1 if l is None else l
-        #     node_msg.straight = -1 if s is None else s
-        #     node_msg.right = -1 if r is None else r
-        #     msg.graph.append(node_msg)
-        # return msg

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import time
 
+from commonroad.scenario.lanelet import LaneletNetwork
 from commonroad.scenario.traffic_sign import (
     TrafficLightState,
     TrafficSignIDGermany,
@@ -17,16 +18,17 @@ from paf_messages.msg import (
     PafTrafficSignal,
     PafTopDownViewPointSet,
     Point2D,
-    PafSpeedMsg,
+    PafSpeedMsg, PafLanelet, PafLaneletMatrix,
 )
 from classes.SpeedCalculator import SpeedCalculator
 from classes.HelperFunctions import (
     dist,
     closest_index_of_point_list,
     get_angle_between_vectors,
-    xy_from_distance_and_angle,
+    xy_from_distance_and_angle, k_closest_indices_of_point_in_list, find_closest_lanelet,
 )
 from classes.Spline import calc_spline_course
+from classes.MapManager import MapManager
 from std_msgs.msg import Bool, Empty
 from tf.transformations import euler_from_quaternion
 
@@ -55,15 +57,20 @@ class LocalPlanner:
         self._current_speed = 0
         self._current_pitch = 0
         self._current_yaw = 0
-        self._current_point_index = 0
+
+        self._current_matrix_idx = 0
+        self._current_lane_idx = 0
+        self._current_lane_pt_idx = 0
+
         self._local_path_end_index = 0
 
         self._speed_limit = 50 / 3.6
 
         self._global_path = []
-        self._distances = []
-        self._curve_speed = []
-        self._traffic_signals = []
+        self._global_path_length = 0
+        # self._distances = []
+        # self._curve_speed = []
+        self._traffic_signals = []  # todo remove
         self._traffic_light_color = TrafficLightState.GREEN  # or None # todo fill this
         self._following_distance = -1  # todo set following distance
         self._following_speed = -1  # todo set following speed
@@ -71,6 +78,8 @@ class LocalPlanner:
         self._is_at_end_of_route = True
         self._last_local_reroute = rospy.Time.now().to_time()
         self._speed_msg = PafSpeedMsg()
+
+        self._network: LaneletNetwork = MapManager.get_current_scenario().lanelet_network
 
         # local path params
         self._local_path = []
@@ -104,13 +113,10 @@ class LocalPlanner:
         )
 
     def _process_global_path(self, msg: PafLaneletRoute):
-        if len(self._distances) == 0 or len(msg.distances) == 0 or msg.distances[-1] != self._distances[-1]:
-            rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distances[-1])}m")
-        self._global_path = msg.points
-        self._distances = msg.distances
-        self._curve_speed = np.array(msg.curve_speed)
-        self._curve_speed[-1] = self.END_OF_ROUTE_SPEED
-        self._traffic_signals = msg.traffic_signals
+        if self._global_path_length != msg.distance:
+            rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
+        self._global_path = msg.sections
+        self._global_path_length = msg.distance
         self._create_paf_local_path_msg()
 
     def _get_track_angle(self, index):
@@ -179,35 +185,28 @@ class LocalPlanner:
 
         self._target_speed = [1 for _ in self._local_path]
 
-    def _get_current_path(self, start_idx, distance):
+    def _get_current_path(self):
         if len(self._global_path) == 0:
             self._local_path = []
             self._distances_delta = 0.01
             return self._local_path, self._target_speed
-        track_angle = self._get_track_angle(start_idx)
-        track_err = track_angle - self._current_yaw
-        while track_err > np.pi:
-            track_err -= 2 * np.pi
-        if self.REPLANNING_THRES_DISTANCE_M > distance > 3 or np.abs(track_err) > self.MAX_ANGULAR_ERROR:
-            # self._get_turning_path_to(start_idx, track_angle, track_err, distance)
-            rospy.logwarn_throttle(10, f"off track! deg={np.rad2deg(track_err)}, d={distance}")
-            # self._local_path = []
-            # self._target_speed = [3 for _ in self._local_path]
-            # return
 
-        self._distances_delta = self._distances[-1] / len(self._distances)
-        try:
-            travel_dist = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
-            end_idx = int(np.ceil(travel_dist / self._distances_delta)) + start_idx
-            _ = self._distances[end_idx]  # index error check
-        except IndexError:
-            end_idx = len(self._distances)
+        target_distance = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
+        distance_planned = 0
+
+        sparse_local_path = []
+
+        current_matrix_idx = self._current_matrix_idx
+        while target_distance > distance_planned and current_matrix_idx < len(self._global_path):
+            plan_matrix: PafLaneletMatrix = self._global_path[current_matrix_idx]
+
+            current_matrix_idx += 1
 
         end_idx = min(end_idx, len(self._global_path))
         self._local_path = self._global_path[start_idx:end_idx]
         self._local_path_end_index = end_idx - 1
         sp = self._update_target_speed(start_idx, end_idx)
-        return self._local_path, sp
+        return self._local_path, speeds
 
     def _create_paf_local_path_msg(self, send_empty=False):
         """create path message for ros
@@ -228,7 +227,7 @@ class LocalPlanner:
             self._local_plan_publisher.publish(path_msg)
 
     def _get_current_trajectory(self):
-        index, distance = self._set_current_point_index()
+        self.set_current_matrix_and_lane()
         last_local_reroute = rospy.Time.now().to_time()
         if len(self._local_path) > 0 and self._planner_at_end_of_route(self._local_path):
             self._end_of_route_handling()
@@ -237,10 +236,10 @@ class LocalPlanner:
             self._global_path = []
             is_new_message = True
         elif len(self._global_path) > 0 and (
-            last_local_reroute - self._last_local_reroute > self.REPLAN_THROTTLE_SEC / 2
-            or index + 300 > self._local_path_end_index
+                last_local_reroute - self._last_local_reroute > self.REPLAN_THROTTLE_SEC / 2
+                or self._current_matrix_idx == len(self._global_path) - 1
         ):
-            self._get_current_path(index, distance)
+            self._get_current_path()
             is_new_message = True
             rospy.loginfo_throttle(30, "[local planner] local planner is replanning")
             self._last_local_reroute = last_local_reroute
@@ -369,23 +368,22 @@ class LocalPlanner:
         )
         self._current_pose = odometry.pose.pose
 
-    def _set_current_point_index(self):
-        if len(self._global_path) == 0:
-            self._current_point_index = 0
-            distance = 0
+    def set_current_matrix_and_lane(self):
+        current_lanelet = find_closest_lanelet(self._network, self._current_pose.position)
+        ref = (self._current_pose.position.x, self._current_pose.position.y)
+        for i, matrix in enumerate(self._global_path):
+            lane: PafLanelet
+            for j, lane in enumerate(matrix.lanes):
+                if current_lanelet in lane.lanelet_ids:
+                    self._current_matrix_idx = i
+                    self._current_lane_idx = j
+                    idx, d = k_closest_indices_of_point_in_list(2, lane.points, ref)
+                    self._current_lane_pt_idx = min(idx)
+                    return
         else:
-            current_pos = self._current_pose.position
-            start_idx = max(0, self._current_point_index - 300)
-            end_idx = min(len(self._global_path), self._current_point_index + 300)
-            pts = self._global_path[start_idx:end_idx]
-            ref = (current_pos.x, current_pos.y)
-            found_idx, distance = closest_index_of_point_list(pts, ref, acc=30)
-            if found_idx > 0 and distance < self.REPLANNING_THRES_DISTANCE_M * 1:
-                self._current_point_index = found_idx + start_idx
-            else:
-                found_idx, distance = closest_index_of_point_list(self._global_path, ref, acc=100)
-                self._current_point_index = found_idx
-        return self._current_point_index, distance
+            self._current_matrix_idx = -1
+            self._current_lane_pt_idx = -1
+            self._current_lane_idx = -1
 
     def _publish_speed_msg(self, idx, speed):
         # idx = self._current_point_index + 100

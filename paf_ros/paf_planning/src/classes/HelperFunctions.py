@@ -1,6 +1,8 @@
 from typing import List, Tuple
 
 import numpy as np
+from commonroad.geometry.shape import Circle
+
 from paf_messages.msg import Point2D
 
 
@@ -18,6 +20,31 @@ def closest_index_of_point_list(pts_list: List[Point2D], target_pt: Tuple[float,
         return len(pts_list) - 1
     idx = int(np.argmin(distances))
     return idx * acc, distances[idx]
+
+
+def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_pt: Tuple[float, float], acc: int = 1):
+    if len(pts_list) == 0:
+        return -1, -1
+    distances = [dist([p.x, p.y], target_pt) for p in pts_list[::acc]]
+    if len(distances) == 0:
+        return len(pts_list) - 1
+    idx = np.argpartition(distances, k)[:k]
+    return idx * acc, distances[idx]
+
+
+def find_closest_lanelet(lanelet_network, p):
+    if hasattr(p, "x"):
+        p = [p.x, p.y]
+    p = np.array(p, dtype=float)
+    lanelets = lanelet_network.find_lanelet_by_position([p])[0]
+    if len(lanelets) > 0:
+        return lanelets
+    for radius in range(3, 100, 3):
+        shape = Circle(radius=radius, center=p)
+        lanelets = lanelet_network.find_lanelet_by_shape(shape)
+        if len(lanelets) > 0:
+            break
+    return lanelets
 
 
 def quadratic_deceleration_function(max_speed, factor=1, step_size=0.125):
