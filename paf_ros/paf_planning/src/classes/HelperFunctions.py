@@ -1,12 +1,10 @@
 from typing import List, Tuple
 
 import numpy as np
-
-# todo change to np.hypot()
 from paf_messages.msg import Point2D
 
 
-def dist(a, b):
+def dist(a, b):  # todo change to np.hypot()
     x1, y1 = a
     x2, y2 = b
     return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)

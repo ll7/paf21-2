@@ -1,20 +1,17 @@
 import numpy as np
 from typing import List, Tuple
 
-from commonroad.scenario.lanelet import Lanelet
+from commonroad.scenario.lanelet import Lanelet, LaneletNetwork
 from commonroad.scenario.traffic_sign import (
     SupportedTrafficSignCountry as Country,
-    TrafficSign,
-    TrafficLight,
     TrafficLightState,
     TrafficSignIDGermany,
 )
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
-from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal
-from .HelperFunctions import closest_index_of_point_list
-from .SpeedCalculator import SpeedCalculator
+from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafLaneletMatrix, PafLanelet
+from .Spline import calc_spline_course_from_point_list
 
 
 class PafRoute:
@@ -25,7 +22,7 @@ class PafRoute:
         self.route = route
         self._rules_enabled = rules_enabled
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
-        # self.graph = self._calc_lane_change_graph()
+        self.graph = self._calc_lane_change_graph()
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
@@ -140,7 +137,7 @@ class PafRoute:
         return out
 
     @staticmethod
-    def _locate_obj_on_lanelet(route_pts: List[List[float]], object_position: List[float]):
+    def _locate_obj_on_lanelet(route_pts: np.ndarray, object_position: List[float]):
         def dist(a, b):
             x1, y1 = a
             x2, y2 = b
@@ -203,27 +200,25 @@ class PafRoute:
 
         return calc_extremum(is_left_extremum=True), calc_extremum(is_left_extremum=False)
 
-    def _extract_traffic_signals(self, path_pts, route_lanelet_ids):
+    def _extract_traffic_signals(self, lanelet_id):
         traffic_signals = []
-        relevant_traffic_signs = []
-        relevant_traffic_lights = []
-        for lanelet_id in route_lanelet_ids:
-            lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
-            relevant_traffic_lights += list(lanelet.traffic_lights)
-            relevant_traffic_signs += list(lanelet.traffic_signs)
-            if len(lanelet.predecessor) > 1:
-                merging_pt = lanelet.center_vertices[0]
-                paf_sign = PafTrafficSignal()
-                paf_sign.type = "MERGE"
-                paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(merging_pt))
-                paf_sign.value = len(lanelet.predecessor) - 1
-                traffic_signals.append(paf_sign)
 
-        sign: TrafficSign
-        for sign in self.route.scenario.lanelet_network.traffic_signs:
-            if sign.traffic_sign_id not in relevant_traffic_signs:
-                continue
+        lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+        vertices = lanelet.center_vertices
+
+        # lane merge events
+        if len(lanelet.predecessor) > 1:
+            merging_pt = vertices[0]
             paf_sign = PafTrafficSignal()
+            paf_sign.type = "MERGE"
+            paf_sign.index = self._locate_obj_on_lanelet(vertices, list(merging_pt)) / len(vertices)
+            paf_sign.value = len(lanelet.predecessor) - 1
+            traffic_signals += [paf_sign]
+
+        # all traffic signs
+        for sign_id in lanelet.traffic_signs:
+            paf_sign = PafTrafficSignal()
+            sign = self.route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             try:
                 paf_sign.value = float(sign.traffic_sign_elements[0].additional_values[0])
@@ -231,13 +226,12 @@ class PafRoute:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
                 paf_sign.value = -1.0
-            paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(sign.position))
-            traffic_signals.append(paf_sign)
+            paf_sign.index = self._locate_obj_on_lanelet(vertices, list(sign.position)) / len(vertices)
+            traffic_signals += [paf_sign]
 
-        light: TrafficLight
-        for light in self.route.scenario.lanelet_network.traffic_lights:
-            if light.traffic_light_id not in relevant_traffic_lights:
-                continue
+        # all traffic lights
+        for light_id in lanelet.traffic_lights:
+            light = self.route.scenario.lanelet_network.find_traffic_light_by_id(light_id)
             paf_sign = PafTrafficSignal()
             paf_sign.type = "LIGHT"
             paf_sign.value = 0.0
@@ -251,49 +245,120 @@ class PafRoute:
                 paf_sign.value /= paf_sign.value + red_value
             except ZeroDivisionError:
                 paf_sign.value = -1.0
-            paf_sign.index = self._locate_obj_on_lanelet(path_pts, list(light.position))
-            traffic_signals.append(paf_sign)
+            paf_sign.index = self._locate_obj_on_lanelet(vertices, list(light.position)) / len(vertices)
+            traffic_signals += [paf_sign]
+        traffic_signals = sorted(traffic_signals, key=lambda elem: elem.index)
+        return traffic_signals
 
-        return sorted(traffic_signals, key=lambda elem: elem.index)
+    def _get_lanelet_groups(self, l_list):
+        out = {}
 
-    def as_msg(self, resolution=0, start_pt=None, target=None, last_known_target_speed=1000):
-        msg = PafLaneletRoute()
-        msg.lanelet_ids = self.route.list_ids_lanelets
-        msg.points = []
-        if resolution == 0:
-            every_nth = 1
-        else:
-            every_nth = int(np.round(len(self.route.path_length) / self.route.path_length[-1] / resolution))
-            every_nth = every_nth if every_nth != 0 else 1
-
-        path_pts = self.route.reference_path[::every_nth]
-        msg.distances = list(self.route.path_length[::every_nth])
-        traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
-
-        for (x, y) in path_pts:
-            point = Point2D()
-            point.x = x
-            point.y = y
-            msg.points.append(point)
-        if target is not None:
-            idx, _ = closest_index_of_point_list(msg.points, target)
-            msg.points = msg.points[: idx + 50]
-        if start_pt is not None:
-            idx, _ = closest_index_of_point_list(msg.points, start_pt)
-            idx = max(0, idx - 50)
-            msg.points = msg.points[idx:]
-            for m in traffic_signals:
-                m.index -= idx
-                if m.index >= len(msg.points):
+        def get_lanelet_blob(from_lanelet):
+            other = from_lanelet
+            blob = []
+            anchor = None
+            while other in self.graph:  # go to leftmost lanelet
+                (left, straight, _) = self.graph[other]
+                if left is None:
                     break
-                msg.traffic_signals.append(m)
-        msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
-        if self._rules_enabled:
-            msg.curve_speed = SpeedCalculator.add_speed_limits(
-                msg.curve_speed, msg.traffic_signals, last_known_target_speed
-            )
+                other = left
+                # (_, straight, _) = graph[left]
+                # anchor = straight
+            other2 = other
+            while other2 in self.graph:  # add from left to right
+                if other2 not in blob:
+                    blob.append(other2)
+                (_, straight, other2) = self.graph[other2]
+                if straight is not None and anchor is None:
+                    anchor = len(blob) - 1
+                if other2 is None:
+                    break
+            blob = tuple(blob)
+            h = hash(blob)
+            return h, blob, anchor
 
+        for lanelet in l_list:
+            _h, _blob, _anchor = get_lanelet_blob(lanelet)
+            if len(_blob) > 0 and _h not in out:
+                out[_h] = (_blob, _anchor)
+        return list(out.values())
+
+    def get_paf_lanelet_matrix(self, groups, distance_m=5):
+        n: LaneletNetwork = self.route.scenario.lanelet_network
+        out = []
+        for blob, anchor in groups:
+            lanelets = [n.find_lanelet_by_id(lanelet) for lanelet in blob]
+            lengths = [
+                np.sum([np.abs(x - y) for x, y in zip(lanelet.center_vertices, lanelet.center_vertices[1:])])
+                for lanelet in lanelets
+            ]
+            avg_len = np.average(lengths)
+            num_pts = max(2, avg_len / distance_m)
+            vertices = []
+            for i, (lanelet, length) in enumerate(zip(lanelets, lengths)):
+                pts = lanelet.center_vertices[::10]
+                if len(pts) < 3:
+                    pts = lanelet.center_vertices
+                x, y, _, _, _ = calc_spline_course_from_point_list(pts, length / num_pts)
+                vertices.append(np.array(list((zip(x, y)))))
+            out.append((np.array(vertices), anchor))
+        return out
+
+    def as_msg(self, target=None):
+        msg = PafLaneletRoute()
+        groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
+        distance_m = 5
+
+        for i, ((lanelet_ids, _), (lanes, anchor)) in enumerate(
+            zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
+        ):
+            matrix = PafLaneletMatrix()
+            matrix.target_index = anchor
+            matrix.distance_per_index = distance_m
+            for lanelet_id, vertices in zip(lanelet_ids, lanes):
+                paf_lanelet = PafLanelet()
+                paf_lanelet.points = [Point2D(x, y) for x, y in vertices]
+                paf_lanelet.signals = self._extract_traffic_signals(lanelet_id)
+                matrix.lanes.append(paf_lanelet)
+            msg.sections.append(matrix)
         return msg
+        #
+        # msg.lanelet_ids = self.route.list_ids_lanelets
+        # msg.points = []
+        # if resolution == 0:
+        #     every_nth = 1
+        # else:
+        #     every_nth = int(np.round(len(self.route.path_length) / self.route.path_length[-1] / resolution))
+        #     every_nth = every_nth if every_nth != 0 else 1
+        #
+        # path_pts = self.route.reference_path[::every_nth]
+        # msg.distances = list(self.route.path_length[::every_nth])
+        # traffic_signals = self._extract_traffic_signals(path_pts, msg.lanelet_ids)
+        #
+        # for (x, y) in path_pts:
+        #     point = Point2D()
+        #     point.x = x
+        #     point.y = y
+        #     msg.points.append(point)
+        # if target is not None:
+        #     idx, _ = closest_index_of_point_list(msg.points, target)
+        #     msg.points = msg.points[: idx + 50]
+        # if start_pt is not None:
+        #     idx, _ = closest_index_of_point_list(msg.points, start_pt)
+        #     idx = max(0, idx - 50)
+        #     msg.points = msg.points[idx:]
+        #     for m in traffic_signals:
+        #         m.index -= idx
+        #         if m.index >= len(msg.points):
+        #             break
+        #         msg.traffic_signals.append(m)
+        # msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
+        # if self._rules_enabled:
+        #     msg.curve_speed = SpeedCalculator.add_speed_limits(
+        #         msg.curve_speed, msg.traffic_signals, last_known_target_speed
+        #     )
+
+        # return msg
         # msg.graph = []
         # for key, (l, s, r) in self.graph.items():
         #     node_msg = PafRoutingGraphNode()

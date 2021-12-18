@@ -130,7 +130,7 @@ class GlobalPlanner:
                 rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
                 return
 
-        resolution = msg.resolution if msg is not None else 0
+        # resolution = msg.resolution if msg is not None else 0
         route = None
         if msg is None:
             rospy.logwarn_throttle(1, "[global planner] route planning failed, trying to find any route for now...")
@@ -146,7 +146,7 @@ class GlobalPlanner:
                 1,
                 f"[global planner] publishing route to target {target}",
             )
-            route = routes[0].as_msg(resolution, position, target, self._last_known_target_speed)
+            route = routes[0].as_msg(target)
         elif len(routes) == 0:
             rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")
             return

@@ -173,6 +173,13 @@ class Spline2D:
         return yaw
 
 
+def calc_spline_course_from_point_list(xy_list, ds=0.1):
+    if len(xy_list) > 0 and hasattr(xy_list[0], "x"):
+        xy_list = [(p.x, p.y) for p in xy_list]
+    x, y = list(zip(*xy_list))
+    return calc_spline_course(x, y, ds)
+
+
 def calc_spline_course(x, y, ds=0.1):
     sp = Spline2D(x, y)
     s = list(np.arange(0, sp.s[-1], ds))
