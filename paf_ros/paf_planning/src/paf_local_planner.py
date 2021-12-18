@@ -27,7 +27,7 @@ from classes.HelperFunctions import (
     xy_from_distance_and_angle,
 )
 from classes.Spline import calc_spline_course
-from std_msgs.msg import Empty
+from std_msgs.msg import Bool, Empty
 from tf.transformations import euler_from_quaternion
 
 
@@ -35,10 +35,8 @@ class LocalPlanner:
     """class used for the local planner. Task: return a local path"""
 
     REPLANNING_THRES_DISTANCE_M = 15
-    DETECT_BEHIND_SIGNALS_M = 5
     TRANSMIT_FRONT_MIN_M = 100
     TRANSMIT_FRONT_SEC = 5
-    DIST_TARGET_REACHED = 5
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
     END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
@@ -85,7 +83,7 @@ class LocalPlanner:
         self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         self._reroute_publisher = rospy.Publisher("/paf/paf_local_planner/reroute", Empty, queue_size=1)
         self._reroute_random_publisher = rospy.Publisher(
-            "/paf/paf_local_planner/routing_request_random", Empty, queue_size=1
+            "/paf/paf_local_planner/routing_request_random", Bool, queue_size=1
         )
         self._sign_publisher = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
@@ -294,8 +292,8 @@ class LocalPlanner:
         self._signal_debug_print(self._traffic_signals)
         speed = self._curve_speed[start_idx:end_idx]
         if self.rules_enabled:
-            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=1)
-            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=1)
+            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=0)
+            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=0)
 
         if self._current_speed < 1 and self._allowed_from_stop():
             rospy.sleep(2)
@@ -413,7 +411,7 @@ class LocalPlanner:
         if self.REPLAN_THROTTLE_SEC < delta_t:
             self._last_replan_request = t
             rospy.loginfo_throttle(20, "[local planner] requesting new random global route")
-            self._reroute_random_publisher.publish(Empty())
+            self._reroute_random_publisher.publish(Bool(self.rules_enabled))
 
     def _end_of_route_handling(self):
         if self._current_speed < 5:

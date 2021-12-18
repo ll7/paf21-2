@@ -16,6 +16,7 @@ from commonroad.scenario.trajectory import State
 from commonroad_route_planner.route_planner import RoutePlanner
 
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
+from std_msgs.msg import Bool
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D, PafSpeedMsg
 from classes.HelperFunctions import dist
@@ -43,7 +44,7 @@ class GlobalPlanner:
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider)
-        rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Empty, self._routing_provider_random)
+        rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Bool, self._routing_provider_random)
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
 
@@ -97,9 +98,12 @@ class GlobalPlanner:
         # norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
         return position, self._yaw  # , float(get_angle_between_vectors(norm))
 
-    def _routing_provider_random(self, _: Empty):
+    def _routing_provider_random(self, rules_enabled_msg: Bool):
         msg = PafRoutingRequest()
-        rospy.loginfo_throttle(10, "[global planner] sending new route..")
+        msg.rules_enabled = rules_enabled_msg.data
+        rospy.loginfo_throttle(
+            10, f"[global planner] sending new route (rules {'en' if msg.rules_enabled else 'dis'}abled)"
+        )
         t0 = time.perf_counter()
         try:
             position, yaw = self._find_closest_position_on_lanelet_network()
@@ -117,6 +121,7 @@ class GlobalPlanner:
             msg = self._routing_target
         else:
             self._routing_target = msg
+        rules_enabled = msg.rules_enabled
 
         if position is None or yaw is None:
             try:
@@ -135,7 +140,7 @@ class GlobalPlanner:
                 return
         else:
             target = msg.target
-        routes = self._routes_from_objective(position, yaw, target, return_shortest_only=True)
+        routes = self._routes_from_objective(position, yaw, target, rules_enabled, return_shortest_only=True)
         if len(routes) > 0:
             rospy.loginfo_throttle(
                 1,
@@ -192,6 +197,7 @@ class GlobalPlanner:
         start_coordinates: np.ndarray,
         start_orientation_rad: float,
         target_coordinates: List[float],
+        rules_enabled: bool,
         target_orientation_rad: float = None,
         start_velocity: float = 0.0,
         target_circle_diameter: float = 4.0,
@@ -204,6 +210,7 @@ class GlobalPlanner:
         :param start_coordinates: start coordinates [x,y]
         :param start_orientation_rad: start orientation in radians (yaw)
         :param target_coordinates: target coordinates [x,y]
+        :param rules_enabled: rules enabled (adds speed limits)
         :param target_orientation_rad: target orientation in radians (yaw). Standard: None for any direction
         :param start_velocity: start velocity in m/s. Standard: 0
         :param target_circle_diameter: size of the target region (circle diameter)
@@ -227,12 +234,12 @@ class GlobalPlanner:
                 return []
             idx = np.argmin([x.path_length[-1] for x in routes])
             route = routes[idx]
-            return [PafRoute(route)]
-        return [PafRoute(route) for route in routes]
+            return [PafRoute(route, rules_enabled)]
+        return [PafRoute(route, rules_enabled) for route in routes]
 
     @staticmethod
     def _get_planning_problem(
-        start_coordinates: List[float],
+        start_coordinates: np.ndarray,
         start_orientation_rad: float,
         target_coordinates: List[float],
         target_orientation_rad: float = None,
@@ -280,8 +287,8 @@ class GlobalPlanner:
 
         return PlanningProblem(1, initial_state, GoalRegion([target_state]))
 
-    def _route_from_ids(self, lanelet_ids: List[int]):
-        return PafRoute(Route(self._scenario, None, lanelet_ids, RouteType.REGULAR))
+    def _route_from_ids(self, lanelet_ids: List[int], rules_enabled: bool):
+        return PafRoute(Route(self._scenario, None, lanelet_ids, RouteType.REGULAR), rules_enabled)
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)

@@ -25,9 +25,10 @@ class PafRoute:
     except Exception:
         rules_enabled = True
 
-    def __init__(self, route: CommonroadRoute, traffic_sign_country: Country = Country.GERMANY):
+    def __init__(self, route: CommonroadRoute, rules_enabled: bool, traffic_sign_country: Country = Country.GERMANY):
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
+        self._rules_enabled = rules_enabled
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
         # self.graph = self._calc_lane_change_graph()
 
@@ -292,7 +293,7 @@ class PafRoute:
                     break
                 msg.traffic_signals.append(m)
         msg.curve_speed = SpeedCalculator.get_curve_speed(msg.points)
-        if self.rules_enabled:
+        if self._rules_enabled:
             msg.curve_speed = SpeedCalculator.add_speed_limits(
                 msg.curve_speed, msg.traffic_signals, last_known_target_speed
             )
