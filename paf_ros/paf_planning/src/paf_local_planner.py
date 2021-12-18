@@ -60,7 +60,7 @@ class LocalPlanner:
         self._current_point_index = 0
         self._local_path_end_index = 0
 
-        self._speed_limit = 50 / 3.6
+        self._speed_limit = 500 / 3.6
 
         self._global_path = []
         self._distances = []
