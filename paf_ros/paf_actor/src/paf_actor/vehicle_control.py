@@ -180,7 +180,7 @@ class VehicleController:
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
 
-        if control.brake > 0 and self._current_speed > 1e-1:
+        if control.brake > 0 and self._current_speed > 5:
             control.reverse = not self._is_reverse
             control.throttle = control.brake
 

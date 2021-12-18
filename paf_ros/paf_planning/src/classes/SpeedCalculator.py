@@ -133,7 +133,7 @@ class SpeedCalculator:
         steps = np.ceil(braking_distance * 4 / self._step_size)
         m = -delta_v / steps
         y2 = [m * x + y1[-1] for x in range(int(steps * (1 - frac)))]
-        y2 = [y for y in y2 if np.abs(y) > 5]
+        y2 = [y for y in y2 if np.abs(y) > 10]
 
         speed = y1 + y2
 

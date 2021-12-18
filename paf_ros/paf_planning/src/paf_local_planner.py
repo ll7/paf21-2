@@ -76,8 +76,11 @@ class LocalPlanner:
         self._local_path = []
         self._target_speed = []
 
-        rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_updated)
-        rospy.Subscriber("/paf/paf_global_planner/routing_response", PafLaneletRoute, self._process_global_path)
+        rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_updated, queue_size=1)
+        rospy.Subscriber(
+            "/paf/paf_global_planner/routing_response", PafLaneletRoute, self._process_global_path, queue_size=1
+        )
+        rospy.Subscriber("/paf/paf_local_planner/rules_enabled", Bool, self._change_rules, queue_size=1)
         self._last_replan_request = time.perf_counter()
         # create and start the publisher for the local path
         self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
@@ -89,6 +92,16 @@ class LocalPlanner:
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
         self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", PafSpeedMsg, queue_size=1)
+
+    def _change_rules(self, msg: Bool):
+        rospy.set_param("rules_enabled", msg.data)
+        if msg.data == self.rules_enabled:
+            return
+        self.rules_enabled = msg.data
+        rospy.logwarn(
+            f"[local planner] Rules are now {'en' if self.rules_enabled else 'dis'}abled! "
+            f"Speed limits will change after starting a new route."
+        )
 
     def _process_global_path(self, msg: PafLaneletRoute):
         if len(self._distances) == 0 or len(msg.distances) == 0 or msg.distances[-1] != self._distances[-1]:
@@ -241,14 +254,20 @@ class LocalPlanner:
         pts = PafTopDownViewPointSet()
         pts.label = "signals"
         pts.points = [
-            self._global_path[s.index] for s in signals if s.type in SpeedCalculator.SPEED_LIMIT_RESTORE_EVENTS
+            self._global_path[s.index]
+            for s in signals
+            if s.type in SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS
         ]
         pts.color = [255, 0, 0]
         self._sign_publisher.publish(pts)
 
         pts = PafTopDownViewPointSet()
         pts.label = "speed_signs"
-        pts.points = [self._global_path[s.index] for s in signals if s.type == TrafficSignIDGermany.MAX_SPEED.value]
+        pts.points = [
+            self._global_path[s.index]
+            for s in signals
+            if s.type == TrafficSignIDGermany.MAX_SPEED.value or s.type == "MERGE"
+        ]
         pts.color = (255, 204, 0)
         self._sign_publisher.publish(pts)
 
@@ -292,8 +311,8 @@ class LocalPlanner:
         self._signal_debug_print(self._traffic_signals)
         speed = self._curve_speed[start_idx:end_idx]
         if self.rules_enabled:
-            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=0)
-            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=5, shift_m=0)
+            speed = calc.add_stop_events(speed, self._traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
+            speed = calc.add_roll_events(speed, self._traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
 
         if self._current_speed < 1 and self._allowed_from_stop():
             rospy.sleep(2)
