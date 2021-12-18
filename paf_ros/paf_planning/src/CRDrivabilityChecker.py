@@ -15,6 +15,9 @@ from threading import Thread
 
 from nav_msgs.msg import Odometry
 
+#for orientation of the ego vehicle
+from tf.transformations import euler_from_quaternion
+
 # from paf_perception.msg import PafObstacleList, PafObstacle
 from paf_messages.msg import PafObstacleList, PafObstacle
 
@@ -56,16 +59,17 @@ class CRDriveabilityChecker(object):
         rospy.logwarn(odometry_topic)
         rospy.logwarn(obstacle_topic)
         rospy.Subscriber(odometry_topic, Odometry, self._odometry_updated)
-        # rospy.Subscriber(obstacle_topic, PafObstacleList, self._obstacle_list_updated)
+        rospy.Subscriber(obstacle_topic, PafObstacleList, self._obstacle_list_updated)
 
         # read in the scenario and planning problem set
         self.scenario, self.planning_problem_set = CommonRoadFileReader(file_path).open()
 
         self.ego_vehicle_id = self.scenario.generate_object_id()
 
-        self.renderer = MPRenderer()
-
         self.done = 0
+
+        # #orientation of the ego vehicle
+        # self.z_orientation = None
 
     def _odometry_updated(self, odo: Odometry):
         """
@@ -79,6 +83,17 @@ class CRDriveabilityChecker(object):
         )
 
         self._current_pose = odo.pose.pose
+
+        # #calculate current orientation in z axis
+        # quaternion = (
+        #     self._current_pose.orientation.x,
+        #     self._current_pose.orientation.y,
+        #     self._current_pose.orientation.z,
+        #     self._current_pose.orientation.w,
+        # )
+        # _, _, yaw = euler_from_quaternion(quaternion)
+        # self.z_orientation = -yaw
+
         # update pose of ego vehicle in cr-scenario
         self._update_ego_vehicle_to_CRScenario()
         # self._overwrite_file()
@@ -125,6 +140,7 @@ class CRDriveabilityChecker(object):
         type = ObstacleType.PARKED_VEHICLE
         shape = Rectangle(width=2.0, length=4.5)
         position = [self._current_pose.position.x, self._current_pose.position.y]
+        #orientation = np.cos(self._current_pose.orientation.w)
         orientation = 0
 
         initial_state = State(position=position, velocity=5, orientation=orientation, time_step=0)
@@ -148,6 +164,11 @@ class CRDriveabilityChecker(object):
         initial_state = State(position=np.array([0.0, 0.0]), velocity=0, orientation=0, time_step=0)
         return StaticObstacle(id, type, shape, initial_state)
 
+    def _convert_obstacles_to_collision_objects(self, cr_obstacles):
+        # convert each obstacle in the scenario to a collision object
+        for obs in cr_obstacles:
+            create_collision_object(obs)
+
     def _add_pedestrian(self, id, obstacle: PafObstacle):
         shape = Circle(0.35, np.array(obstacle.closest))
         position = np.array(obstacle.closest)
@@ -165,10 +186,10 @@ class CRDriveabilityChecker(object):
         cr_obstacle = self._create_obstacle(id, obstacle, shape, type, position)
 
         # create collision object
-        create_collision_object(cr_obstacle)  # .draw(rnd, draw_params={'facecolor': 'red'})
+        #create_collision_object(cr_obstacle)
 
         self.scenario.add_objects(cr_obstacle)
-        self.cr_obstacles_pedestrians.append(cr_obstacle)
+        self.cr_obstacles_vehicles.append(cr_obstacle)
 
     def _overwrite_file(self):
         author = ""
@@ -178,21 +199,13 @@ class CRDriveabilityChecker(object):
 
         # write new scenario
         fw = CommonRoadFileWriter(self.scenario, self.planning_problem_set, author, affiliation, source, tags)
-        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew4.xml", OverwriteExistingFile.ALWAYS)
+        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew5.xml", OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             rate.sleep()
-
-    def draw_plot_scenario(self):
-        print("in plot scenario")
-        plt.figure(figsize=(25, 10))
-        self.scenario.draw(self.renderer)
-        self.planning_problem_set.draw(self.renderer)
-        self.renderer.render()
-        plt.show()
 
     def main1(self):
         print("in main1")
