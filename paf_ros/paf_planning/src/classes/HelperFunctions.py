@@ -29,7 +29,7 @@ def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_p
     if len(distances) == 0:
         return len(pts_list) - 1
     idx = np.argpartition(distances, k)[:k]
-    return idx * acc, distances[idx]
+    return idx * acc, [distances[i] for i in idx]
 
 
 def find_closest_lanelet(lanelet_network, p):
@@ -39,8 +39,8 @@ def find_closest_lanelet(lanelet_network, p):
     lanelets = lanelet_network.find_lanelet_by_position([p])[0]
     if len(lanelets) > 0:
         return lanelets
-    for radius in range(3, 100, 3):
-        shape = Circle(radius=radius, center=p)
+    for radius in range(1, 1000, 5):
+        shape = Circle(radius=radius/10, center=p)
         lanelets = lanelet_network.find_lanelet_by_shape(shape)
         if len(lanelets) > 0:
             break
