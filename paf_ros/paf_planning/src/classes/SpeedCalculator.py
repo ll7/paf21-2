@@ -164,6 +164,20 @@ class SpeedCalculator:
         return speed
 
     @staticmethod
+    def expand_sparse_speeds(local_speeds, to_len):
+        ratio = to_len / (len(local_speeds)) - 1
+        speed_out = []
+        prev_i = 0
+        for i, sp in enumerate(local_speeds):
+            if i == 0:
+                continue
+            new_i = max(int(i * ratio), to_len - 1)
+            for _ in range(prev_i, new_i):
+                speed_out.append(new_i)
+            prev_i = new_i
+        return speed_out
+
+    @staticmethod
     def add_speed_limits(speed, traffic_signals: List[PafTrafficSignal], last_known_target_speed=1000):
 
         speed_limit = np.ones_like(speed) * last_known_target_speed * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
@@ -179,7 +193,7 @@ class SpeedCalculator:
         return np.clip(speed, 0, speed_limit)
 
     def add_stop_events(
-        self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None, buffer_m=0, shift_m=0
+            self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None, buffer_m=0, shift_m=0
     ):
         buffer_idx = int(buffer_m / self._step_size)
         shift_idx = int(shift_m / self._step_size)
@@ -241,7 +255,3 @@ class SpeedCalculator:
             )
             self._plots[1].plot(x_values[:-1], accel)
         self._plots[0].plot(x_values, [s * 3.6 for s in speed])
-
-    # string type
-    # int64 index
-    # float32 value

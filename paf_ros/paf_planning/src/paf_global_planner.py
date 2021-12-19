@@ -47,11 +47,11 @@ class GlobalPlanner:
         rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Bool, self._routing_provider_random)
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
-
         rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
-
         rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._last_known_target_update)
+
         self._last_known_target_speed = 1000
+
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
         self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)
         self._target_on_map_pub = rospy.Publisher(

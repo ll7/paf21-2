@@ -200,8 +200,9 @@ class PafRoute:
 
         return calc_extremum(is_left_extremum=True), calc_extremum(is_left_extremum=False)
 
-    def _extract_traffic_signals(self, lanelet_id):
+    def _extract_traffic_signals(self, lanelet_id, new_vertices):
         traffic_signals = []
+        speed_limits = []
 
         lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         vertices = lanelet.center_vertices
@@ -211,23 +212,29 @@ class PafRoute:
             merging_pt = vertices[0]
             paf_sign = PafTrafficSignal()
             paf_sign.type = "MERGE"
-            paf_sign.index = self._locate_obj_on_lanelet(vertices, list(merging_pt)) / len(vertices)
-            paf_sign.value = len(lanelet.predecessor) - 1
-            traffic_signals += [paf_sign]
+            idx = self._locate_obj_on_lanelet(vertices, list(merging_pt)) / len(vertices) * len(new_vertices)
+            paf_sign.index = int(idx)
+            paf_sign.value = 50 * self.SPEED_KMH_TO_MS
+            speed_limits += [paf_sign]
 
         # all traffic signs
         for sign_id in lanelet.traffic_signs:
             paf_sign = PafTrafficSignal()
             sign = self.route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
+            is_speed_limit = paf_sign.type == TrafficSignIDGermany.MAX_SPEED.value
             try:
                 paf_sign.value = float(sign.traffic_sign_elements[0].additional_values[0])
-                if paf_sign.type == TrafficSignIDGermany.MAX_SPEED.value:
+                if is_speed_limit:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
                 paf_sign.value = -1.0
-            paf_sign.index = self._locate_obj_on_lanelet(vertices, list(sign.position)) / len(vertices)
-            traffic_signals += [paf_sign]
+            idx = self._locate_obj_on_lanelet(vertices, list(sign.position)) / len(vertices) * len(new_vertices)
+            paf_sign.index = int(idx)
+            if is_speed_limit:
+                speed_limits += [paf_sign]
+            else:
+                traffic_signals += [paf_sign]
 
         # all traffic lights
         for light_id in lanelet.traffic_lights:
@@ -245,10 +252,11 @@ class PafRoute:
                 paf_sign.value /= paf_sign.value + red_value
             except ZeroDivisionError:
                 paf_sign.value = -1.0
-            paf_sign.index = self._locate_obj_on_lanelet(vertices, list(light.position)) / len(vertices)
+            idx = self._locate_obj_on_lanelet(vertices, list(light.position)) / len(vertices) * len(new_vertices)
+            paf_sign.index = int(idx)
             traffic_signals += [paf_sign]
         traffic_signals = sorted(traffic_signals, key=lambda elem: elem.index)
-        return traffic_signals
+        return traffic_signals, speed_limits
 
     def _get_lanelet_groups(self, l_list):
         out = {}
@@ -257,13 +265,12 @@ class PafRoute:
             other = from_lanelet
             blob = []
             anchor = None
+            shift = 0
             while other in self.graph:  # go to leftmost lanelet
                 (left, straight, _) = self.graph[other]
                 if left is None:
                     break
                 other = left
-                # (_, straight, _) = graph[left]
-                # anchor = straight
             other2 = other
             while other2 in self.graph:  # add from left to right
                 if other2 not in blob:
@@ -271,19 +278,22 @@ class PafRoute:
                 (_, straight, other2) = self.graph[other2]
                 if straight is not None and anchor is None:
                     anchor = len(blob) - 1
+                    left = straight
+                    while left is not None:
+                        left, _, _ = self.graph[left]
+                        shift -= 1
+
                 if other2 is None:
                     break
             blob = tuple(blob)
             h = hash(blob)
-            return h, blob, anchor
+            return h, blob, (shift, anchor)
 
         for lanelet in l_list:
             _h, _blob, _anchor = get_lanelet_blob(lanelet)
             if _anchor is not None and len(_blob) > 0 and _h not in out:
                 out[_h] = (_blob, _anchor)
         out = list(out.values())
-        for i, (lanelet_list, anchor) in enumerate(out):
-            ...  # todo merge lanelet lists with identical lane count and anchor
         return out
 
     def get_paf_lanelet_matrix(self, groups, distance_m=5):
@@ -307,25 +317,27 @@ class PafRoute:
             out.append((np.array(vertices), anchor, avg_len))
         return out
 
-    def as_msg(self):
+    def as_msg(self, target) -> PafLaneletRoute:
         msg = PafLaneletRoute()
         groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
         distance_m = 5
 
-        for i, ((lanelet_id_list, _), (lanes, anchor, length)) in enumerate(
+        for i, ((lanelet_id_list, _), (lanes, (shift, anchor), length)) in enumerate(
                 zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
             matrix = PafLaneletMatrix()
             matrix.target_index = anchor
+            matrix.shift = shift
             matrix.distance_per_index = distance_m
 
-            for lanelet_ids, vertices in zip(lanelet_id_list, lanes):
+            for lanelet_id, vertices in zip(lanelet_id_list, lanes):
                 paf_lanelet = PafLanelet()
                 paf_lanelet.points = [Point2D(x, y) for x, y in vertices]
-                paf_lanelet.signals = self._extract_traffic_signals(lanelet_ids)
-                paf_lanelet.lanelet_ids = lanelet_ids
+                paf_lanelet.signals, paf_lanelet.speed_limits = self._extract_traffic_signals(lanelet_id, vertices)
+                paf_lanelet.lanelet_id = lanelet_id
                 matrix.lanes.append(paf_lanelet)
                 matrix.distance = length
             msg.sections.append(matrix)
         msg.distance = self.route.path_length[-1]
+        msg.target = Point2D(target[0], target[1])
         return msg

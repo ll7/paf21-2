@@ -1,3 +1,3 @@
 string type
-float32 index
+int32 index
 float32 value

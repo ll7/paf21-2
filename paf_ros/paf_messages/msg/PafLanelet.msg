@@ -1,3 +1,4 @@
 Point2D[] points
 PafTrafficSignal[] signals
-int64[] lanelet_ids
+PafTrafficSignal[] speed_limits
+int64 lanelet_id
