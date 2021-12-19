@@ -10,6 +10,7 @@ from commonroad.scenario.traffic_sign import (
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
+import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafLaneletMatrix, PafLanelet
 from .Spline import calc_spline_course_from_point_list
 
@@ -279,7 +280,7 @@ class PafRoute:
                 if straight is not None and anchor is None:
                     anchor = len(blob) - 1
                     left = straight
-                    while left is not None:
+                    while left is not None and left in self.graph:
                         left, _, _ = self.graph[left]
                         shift -= 1
 
@@ -291,7 +292,11 @@ class PafRoute:
 
         for lanelet in l_list:
             _h, _blob, _anchor = get_lanelet_blob(lanelet)
-            if _anchor is not None and len(_blob) > 0 and _h not in out:
+            if len(_blob) == 0:
+                _blob = (lanelet,)
+                _anchor = 0, 0
+                _h = hash(_blob)
+            if _anchor is not None and _h not in out:
                 out[_h] = (_blob, _anchor)
         out = list(out.values())
         return out
@@ -321,10 +326,11 @@ class PafRoute:
         msg = PafLaneletRoute()
         groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
         distance_m = 5
-
+        import rospy
         for i, ((lanelet_id_list, _), (lanes, (shift, anchor), length)) in enumerate(
                 zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
+            rospy.logwarn(lanelet_id_list)
             matrix = PafLaneletMatrix()
             matrix.target_index = anchor
             matrix.shift = shift
@@ -340,4 +346,6 @@ class PafRoute:
             msg.sections.append(matrix)
         msg.distance = self.route.path_length[-1]
         msg.target = Point2D(target[0], target[1])
+        rospy.logwarn(self.route.list_ids_lanelets)
+
         return msg
