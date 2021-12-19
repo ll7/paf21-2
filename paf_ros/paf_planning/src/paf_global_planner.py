@@ -2,6 +2,7 @@
 import time
 
 from commonroad_route_planner.route import Route, RouteType
+from classes.SpeedCalculator import SpeedCalculator
 
 import rospy
 import numpy as np
@@ -135,6 +136,7 @@ class GlobalPlanner:
                 return
         else:
             target = msg.target
+
         routes = self._routes_from_objective(position, yaw, target, return_shortest_only=True)
         if len(routes) > 0:
             rospy.loginfo_throttle(
@@ -146,6 +148,7 @@ class GlobalPlanner:
             rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")
             return
 
+        route = self._next_raceway_loop(position, yaw, resolution)  # TODO remove: only for Town06 raceway testing
         self._last_route = route
         self._routing_pub.publish(route)
 
@@ -154,6 +157,37 @@ class GlobalPlanner:
         draw_msg.points = [Point2D(target[0], target[1])]
         draw_msg.color = 153, 0, 153
         self._target_on_map_pub.publish(draw_msg)
+
+    def _next_raceway_loop(self, position, yaw, resolution):
+        """Calculates a route that drives to the start point of the loop and leads to the end point.
+
+        Returns:
+            PafLaneletRoute: raceway loop
+        """
+        path_msg = None
+        waypoints = [(-223.04, 19.26), (-255.40, -246.51), (586.25, -246.51), (586.25, 19.26)]
+
+        for wp in waypoints:
+            routes = self._routes_from_objective(position, yaw, wp, return_shortest_only=True)
+            path_msg_segment = routes[0].as_msg(resolution, position, wp, self._last_known_target_speed)
+            position = wp
+
+            if path_msg is None:
+                path_msg = path_msg_segment
+            else:
+                path_msg.points = path_msg.points + path_msg_segment.points
+                path_msg.lanelet_ids = path_msg.lanelet_ids + path_msg_segment.lanelet_ids
+                path_msg.distances = path_msg.distances + path_msg_segment.distances
+                # path_msg.traffic_signals = path_msg.traffic_signals + \
+                #    path_msg_segment.traffic_signals
+                path_msg.traffic_signals = []
+                path_msg.curve_speed = SpeedCalculator.get_curve_speed(path_msg.points)
+                if PafRoute.rules_enabled:
+                    path_msg.curve_speed = SpeedCalculator.add_speed_limits(
+                        path_msg.curve_speed, path_msg.traffic_signals, self._last_known_target_speed
+                    )
+
+        return path_msg
 
     def _find_closest_lanelet(self, p=None):
         if p is None:
