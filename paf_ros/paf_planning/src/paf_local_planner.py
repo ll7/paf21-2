@@ -27,7 +27,7 @@ from classes.HelperFunctions import (
     dist,
     closest_index_of_point_list,
     get_angle_between_vectors,
-    xy_from_distance_and_angle, k_closest_indices_of_point_in_list, find_closest_lanelet,
+    xy_from_distance_and_angle, k_closest_indices_of_point_in_list, find_closest_lanelet, xy_to_pts, dist_pts,
 )
 from classes.Spline import calc_spline_course, calc_spline_course_from_point_list
 from classes.MapManager import MapManager
@@ -38,6 +38,7 @@ from tf.transformations import euler_from_quaternion
 class LocalPlanner:
     """class used for the local planner. Task: return a local path"""
 
+    STEP_SIZE = .125
     REPLANNING_THRES_DISTANCE_M = 15
     TRANSMIT_FRONT_MIN_M = 100
     TRANSMIT_FRONT_SEC = 5
@@ -170,7 +171,6 @@ class LocalPlanner:
     def _set_current_path(self):
         if len(self._global_path) == 0:
             self._local_path = []
-            self._distances_delta = 0.01
             return self._local_path, self._target_speed
 
         target_distance = max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
@@ -183,93 +183,144 @@ class LocalPlanner:
         _, current_lane, _ = self._current_indices
         _, target_index, _ = self._target_indices
 
-        lane_change_secs = 3  # 3s for a lane change (distance depends on speed)
+        lane_change_secs = 1  # x seconds for a lane change (distance depends on speed)
+        m_per_index = 5
 
         row_generator = self._yield_next_matrix_rows()
 
-        pts_limits, signs, _, _, _ = next(row_generator)
-        pt, current_speed = pts_limits[current_lane]
+        # for row in self._yield_next_matrix_rows():
+        #     _pts_limits, _signs, _trg_idx, _shift_idx, _distance_planned = row
+        #     print("temp: ", len(_pts_limits), len(_signs), _trg_idx, _shift_idx, _distance_planned)
+        # print()
+
+        lanes, signs, _, _, _ = next(row_generator)
+        new_pt, current_speed = lanes[current_lane]
         current_speed = current_speed if current_speed > 0 else self._current_speed_limit
-        sparse_local_path.append(pt)
+        sparse_local_path.append(new_pt)
+        print(-1, len(sparse_local_path), current_lane, np.round([new_pt.x, new_pt.y], 1), distance_planned)
         sparse_local_path_speeds.append(current_speed)
-        if len(signs) > 0:
-            sparse_traffic_signals.append((len(sparse_local_path) - 1, signs))
+        sparse_traffic_signals.append((len(sparse_local_path) - 1, signs))
 
+        next_item = None
         while distance_planned < target_distance:
-
-            matrix_temp = []
+            if next_item is None:
+                matrix_temp = []
+            else:
+                matrix_temp = [next_item]
             # target_lanes = [0]
-            shift_idx = 0
+            # shift_idx = 0
             for i, item in enumerate(row_generator):
-                pts_limits, signs, trg_idx, shift_idx, distance_planned = item
-                matrix_temp.append((pts_limits, signs))
-                if trg_idx != 0 or shift_idx != 0:
+                lanes, _, target_index, shift_idx, _ = item
+                matrix_temp.append(item)
+                if target_index != 0 or shift_idx != 0:
+                    try:
+                        next_item = next(row_generator)
+                    except StopIteration:
+                        next_item = None
                     # cur_len = len(matrix_temp[-1])
                     # target_lanes = list(range(-shift_idx, -shift_idx + cur_len))
                     # target_index = trg_idx
                     # print(trg_idx, shift_idx)
                     break
-                if distance_planned > target_distance:
-                    break
+            else:
+                break
+
+            if len(matrix_temp) == 0:
+                break
+            # for row in matrix_temp:
+            #     pts_limits, signs, trg_idx, shift_idx, distance_planned = row
+            #     print("temp: ", len(pts_limits), len(signs), trg_idx, shift_idx, distance_planned)
+            # print()
+
+            num_lanes = len(lanes)
+
+            if next_item is None:
+                target_lanes = [self._target_indices[1]]
+            else:
+                num_lanes_next = len(next_item[0])
+                target_lanes = list(range(target_index, min(target_index + num_lanes_next, num_lanes + 1)))
 
             next_lane_change_index = 0
-            for i, (pts_limits, signs) in enumerate(matrix_temp):  # i is the next (unmapped row of possible points)
-                if next_lane_change_index >= i:
+
+            for i, item in enumerate(matrix_temp):  # item is the next unmapped row of possible points
+                pts_limits, signs, _, _, _ = item
+                if distance_planned > target_distance:
+                    break
+                if next_lane_change_index > i:
                     continue
-                indices_count_for_lane_change = max(1, current_speed * lane_change_secs)
+                indices_count_for_lane_change = max(1, current_speed * lane_change_secs / m_per_index)
 
-                # todo multiple target lanes ??
-                number_of_lanes_off = int(np.abs(target_index - current_lane))  # n lanes to change to target lane
-                j = i - 1 + indices_count_for_lane_change * number_of_lanes_off
-                j_max = i - 1 + indices_count_for_lane_change * len(pts_limits)
+                # n lanes to change to target lane
+                if current_lane in target_lanes:
+                    number_of_lanes_off = 0
+                elif current_lane > target_lanes[-1]:
+                    number_of_lanes_off = current_lane - target_lanes[-1]  # target is left == number of lanes off > 0
+                else:
+                    number_of_lanes_off = current_lane - target_lanes[0]  # target is left == number of lanes off < 0
 
-                target_is_left = target_index < current_lane
+                lane_change_idx = indices_count_for_lane_change * np.abs(number_of_lanes_off)
+                lane_change_idx_max = indices_count_for_lane_change * (np.abs(number_of_lanes_off) + 1)
+
                 l_change, r_change = False, False
-                l_limit, r_limit = 0, len(pts_limits) - 1
+                l_limit, r_limit = 0, num_lanes - 1
                 l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
-                if j + 1 >= len(matrix_temp):
-                    # need to lane change here (the latest possibility)
-                    l_change = target_is_left
-                    r_change = not target_is_left
-                if j_max + 1 >= len(matrix_temp):
-                    # no lane changes in "wrong" direction allowed anymore
-                    l_change_allowed = target_is_left
-                    r_change_allowed = not target_is_left
+
+                if number_of_lanes_off != 0:
+                    if len(matrix_temp) - lane_change_idx <= i:
+                        # need to lane change here (the latest possibility)
+                        l_change = l_change_allowed = number_of_lanes_off > 0
+                        r_change = r_change_allowed = not l_change
+                    elif len(matrix_temp) - lane_change_idx_max <= i:
+                        # no lane changes in "wrong" direction allowed anymore
+                        l_change_allowed = number_of_lanes_off > 0
+                        r_change_allowed = not l_change_allowed
 
                 probabilities = self._test_lane_change(
-                    can_go_left=l_change or (l_change_allowed and not r_change),
-                    can_go_right=r_change or (r_change_allowed and not l_change),
+                    can_go_left=l_change or l_change_allowed,
+                    can_go_right=r_change or r_change_allowed,
                     can_go_straight=not (l_change or r_change)
                 )
-                choice = np.random.choice(["left", "straight", "right"], 1, p=probabilities)
+                choice = np.random.choice(["left", "straight", "right"], p=probabilities)
 
                 if choice == "left" or choice == "right":
-                    next_lane_change_index = int(min(j, len(matrix_temp) - 1))
-                    if choice == "left":
-                        current_lane -= 1
-                    else:
-                        current_lane += 1
-                    new_pt, current_speed = matrix_temp[next_lane_change_index]
-                else:  # straight
-                    new_pt, current_speed = pts_limits[current_lane]
-                sparse_local_path.append(new_pt)
-                sparse_local_path_speeds.append(current_speed)
-                rospy.logerr(current_speed)
-                if len(signs) > 0:
-                    sparse_traffic_signals.append((len(sparse_local_path) - 1, signs))
+                    delta = -1 if choice == "left" else 1
 
+                    p = (l_change or l_change_allowed), not (l_change or r_change), (r_change or r_change_allowed)
+                    sp = matrix_temp[next_lane_change_index][0][current_lane][1] * 3.6
+                    py = matrix_temp[next_lane_change_index][0][current_lane + delta][0].y
+                    print(f"lane change {choice} {current_lane}->{current_lane + delta}, "
+                          f"{int(np.round(sp, 0))}kmh, y={py}", p)
+                    j = int(np.round(i + indices_count_for_lane_change))
+                    next_lane_change_index = min(j, len(matrix_temp) - 1)
+                    print(f"current={i}, planned={next_lane_change_index}, actual={j}")
+                    current_lane += delta
+
+                new_pt, current_speed = pts_limits[current_lane]
+
+                sparse_local_path.append(new_pt)
+                if len(sparse_local_path) > 1:
+                    distance_planned += dist_pts(sparse_local_path[-2], sparse_local_path[-1])
+
+                print(i, len(sparse_local_path), current_lane, np.round([new_pt.x, new_pt.y], 1), distance_planned)
+                sparse_local_path_speeds.append(current_speed)
+                sparse_traffic_signals.append((len(sparse_local_path) - 1, signs))
+            print()
             # switch to new lanelet group / matrix (or is at target point)
             current_lane = current_lane - target_index + shift_idx
 
-        self._local_path = calc_spline_course_from_point_list(sparse_local_path, ds=.1)
+        if len(sparse_local_path) > 1:
+            self._local_path = xy_to_pts(calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE))
+        else:
+            self._local_path = sparse_local_path
 
-        factor = len(self._local_path) / (len(sparse_local_path) - 1)
+        factor = len(self._local_path) / max([len(sparse_local_path) - 1, 1])
         traffic_signals = []
-        for idx, signals in sparse_traffic_signals:
+        for idx, signal_list in sparse_traffic_signals:
             new_idx = idx * factor
-            for signal in signals:
-                signal.index = int(new_idx) - 1
-                traffic_signals.append(signal)
+            for signals in signal_list:
+                for signal in signals:
+                    signal.index = int(new_idx) - 1
+                    traffic_signals.append(signal)
 
         speeds = self._update_target_speed(self._local_path, sparse_local_path_speeds, traffic_signals)
         return self._local_path, speeds, traffic_signals
@@ -278,7 +329,7 @@ class LocalPlanner:
     def _test_lane_change(can_go_left, can_go_straight, can_go_right):
         left = can_go_left * 1
         right = can_go_right * 1
-        straight = can_go_straight * 2
+        straight = can_go_straight * 5
         _sum = left + right + straight
         return left / _sum, straight / _sum, right / _sum
 
@@ -356,6 +407,34 @@ class LocalPlanner:
                 # [((x,y), (speed_limit)), ...], signs_per_row,
                 #   left_anchor_to_next_row, shift_idx right for next row, distance_planned
             m_idx += 1
+
+    def _update_target_speed(self, local_path, local_speeds, traffic_signals):
+        if len(self._global_path) == 0:
+            return 0
+        calc = SpeedCalculator(self.STEP_SIZE)
+        # self._signal_debug_print(self._traffic_signals)
+        speed_limit = calc.expand_sparse_speeds(local_speeds, len(local_path))
+        speed = calc.get_curve_speed(local_path)
+        speed = np.clip(speed, 0, speed_limit)
+        if self.rules_enabled:
+            speed = calc.add_stop_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
+            speed = calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
+
+        if self._current_speed < 1 and self._allowed_from_stop():
+            rospy.loginfo("[local planner] continuing from stop")
+            speed = calc.remove_stop_event(speed, buffer_m=10)
+
+        speed = calc.add_linear_deceleration(speed)
+        # pts = PafTopDownViewPointSet()
+        # pts.label = "low_speed"
+        # pts.points = [self._global_path[i + start_idx] for i, s in enumerate(speed) if s < 0.1]
+        # pts.color = (255, 0, 255)
+        # self._sign_publisher.publish(pts)
+
+        # self._speed_debug_print(speed)
+        self._target_speed = speed
+        # self._publish_speed_msg()
+        return speed
 
     def _create_paf_local_path_msg(self, send_empty=False):
         """create path message for ros
@@ -451,35 +530,6 @@ class LocalPlanner:
         if len(out) > 0:
             rospy.loginfo_throttle(1, f"[local planner] Upcoming Speeds: {', '.join(out)}")
 
-    def _update_target_speed(self, local_path, local_speeds, traffic_signals):
-        if len(self._global_path) == 0:
-            return 0
-        calc = SpeedCalculator(local_path)
-        # self._signal_debug_print(self._traffic_signals)
-        speed_limit = calc.expand_sparse_speeds(local_speeds, len(local_path))
-        speed = calc.get_curve_speed(local_path)
-        speed = np.clip(speed, 0, speed_limit)
-        if self.rules_enabled:
-            speed = calc.add_stop_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
-            speed = calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
-
-        if self._current_speed < 1 and self._allowed_from_stop():
-            rospy.sleep(2)
-            rospy.logwarn_throttle(5, "[local planner] continuing from stop")
-            speed = calc.remove_stop_event(speed, buffer_m=10)
-
-        speed = calc.add_linear_deceleration(speed)
-        # pts = PafTopDownViewPointSet()
-        # pts.label = "low_speed"
-        # pts.points = [self._global_path[i + start_idx] for i, s in enumerate(speed) if s < 0.1]
-        # pts.color = (255, 0, 255)
-        # self._sign_publisher.publish(pts)
-
-        # self._speed_debug_print(speed)
-        self._target_speed = speed
-        # self._publish_speed_msg()
-        return speed
-
     def _allowed_from_stop(self):
         return True  # todo
 
@@ -531,10 +581,13 @@ class LocalPlanner:
             lane: PafLanelet
             for j, lane in enumerate(matrix.lanes):
                 if lane.lanelet_id in current_lanelets:
-                    idx, d = k_closest_indices_of_point_in_list(2, lane.points, ref)
                     current_matrix_idx = i
                     current_lane_idx = j
-                    current_lane_pt_idx = min(idx)
+                    try:
+                        idx, d = k_closest_indices_of_point_in_list(2, lane.points, ref)
+                        current_lane_pt_idx = min(idx)
+                    except ValueError:
+                        current_lane_pt_idx = 0
                     return current_matrix_idx, current_lane_idx, current_lane_pt_idx
         return -1, -1, -1
 

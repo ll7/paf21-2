@@ -20,14 +20,10 @@ class SpeedCalculator:
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
     SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + QUICK_BRAKE_EVENTS + ROLLING_EVENTS
 
-    def __init__(self, distances: List[float], index_start: int = 0, index_end=None):
+    def __init__(self, step_size: float, index_start: int = 0):
         # step size is assumed constant but has a variance of +/- 1mm
-        self._step_size = distances[-1] / len(distances) if len(distances) > 0 else 1
+        self._step_size = step_size
         self._index_start = index_start
-        self._index_end = len(distances) - 1 if index_end is None else index_end
-        self._distances = distances[index_start:index_end]
-
-        self._continue_on_indices = []
         self._plots = None
 
         # self._deceleration_delta = np.sqrt(2 * self.MAX_DECELERATION * self._step_size) * self._step_size
@@ -117,7 +113,7 @@ class SpeedCalculator:
         for r in curve_radius_list[::10]:
             speed1 += [SpeedCalculator._radius_to_speed(r)] * 10
         speed1 += [speed1[-1] for _ in range(len(path) - len(speed1))]
-        return speed1
+        return speed1[:len(path)]
 
     def _linear_deceleration_function(self, target_speed):
         b = self.MAX_SPEED
@@ -175,6 +171,8 @@ class SpeedCalculator:
             for _ in range(prev_i, new_i):
                 speed_out.append(new_i)
             prev_i = new_i
+        filler = speed_out[-1] if len(speed_out) > 0 else 255
+        speed_out += [filler for _ in range(to_len - len(speed_out))]
         return speed_out
 
     @staticmethod

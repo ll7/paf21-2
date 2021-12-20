@@ -18,10 +18,9 @@ from .Spline import calc_spline_course_from_point_list
 class PafRoute:
     SPEED_KMH_TO_MS = 1 / 3.6
 
-    def __init__(self, route: CommonroadRoute, rules_enabled: bool, traffic_sign_country: Country = Country.GERMANY):
+    def __init__(self, route: CommonroadRoute, traffic_sign_country: Country = Country.GERMANY):
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
-        self._rules_enabled = rules_enabled
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
         self.graph = self._calc_lane_change_graph()
 
@@ -266,7 +265,7 @@ class PafRoute:
             other = from_lanelet
             blob = []
             anchor = None
-            shift = 0
+            shift = 1
             while other in self.graph:  # go to leftmost lanelet
                 (left, straight, _) = self.graph[other]
                 if left is None:
@@ -283,11 +282,13 @@ class PafRoute:
                     while left is not None and left in self.graph:
                         left, _, _ = self.graph[left]
                         shift -= 1
+                    shift = min([0, shift])
 
                 if other2 is None:
                     break
             blob = tuple(blob)
             h = hash(blob)
+
             return h, blob, (shift, anchor)
 
         for lanelet in l_list:
@@ -317,20 +318,18 @@ class PafRoute:
                 pts = lanelet.center_vertices[::10]
                 if len(pts) < 3:
                     pts = lanelet.center_vertices
-                x, y, _, _, _ = calc_spline_course_from_point_list(pts, length / num_pts)
-                vertices.append(np.array(list((zip(x, y)))[:-1]))
+                new_pts = calc_spline_course_from_point_list(pts, length / num_pts)
+                vertices.append(np.array(new_pts[:-1]))
             out.append((np.array(vertices), anchor, avg_len))
         return out
 
-    def as_msg(self, target) -> PafLaneletRoute:
+    def as_msg(self) -> PafLaneletRoute:
         msg = PafLaneletRoute()
         groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
         distance_m = 5
-        import rospy
-        for i, ((lanelet_id_list, _), (lanes, (shift, anchor), length)) in enumerate(
+        for i, ((lanelet_id_list, (shift, anchor)), (lanes, _, length)) in enumerate(
                 zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
-            rospy.logwarn(lanelet_id_list)
             matrix = PafLaneletMatrix()
             matrix.target_index = anchor
             matrix.shift = shift
@@ -345,7 +344,5 @@ class PafRoute:
                 matrix.distance = length
             msg.sections.append(matrix)
         msg.distance = self.route.path_length[-1]
-        msg.target = Point2D(target[0], target[1])
-        rospy.logwarn(self.route.list_ids_lanelets)
 
         return msg

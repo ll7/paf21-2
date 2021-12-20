@@ -6,10 +6,23 @@ from commonroad.geometry.shape import Circle
 from paf_messages.msg import Point2D
 
 
+def dist_pts(a, b):
+    a = a.x, a.y
+    b = b.x, b.y
+    return dist(a, b)
+
+
 def dist(a, b):  # todo change to np.hypot()
     x1, y1 = a
     x2, y2 = b
     return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+
+def xy_to_pts(xy_list):
+    out = []
+    for x, y in xy_list:
+        out.append(Point2D(x, y))
+    return out
 
 
 def closest_index_of_point_list(pts_list: List[Point2D], target_pt: Tuple[float, float], acc: int = 1):
@@ -40,7 +53,7 @@ def find_closest_lanelet(lanelet_network, p):
     if len(lanelets) > 0:
         return lanelets
     for radius in range(1, 1000, 5):
-        shape = Circle(radius=radius/10, center=p)
+        shape = Circle(radius=radius / 10, center=p)
         lanelets = lanelet_network.find_lanelet_by_shape(shape)
         if len(lanelets) > 0:
             break
