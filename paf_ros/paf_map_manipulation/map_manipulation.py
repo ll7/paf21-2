@@ -16,12 +16,15 @@ class MapManipulator:
         self.inverse_scenario: Scenario = None
         self.bidirectional_scenario: Scenario = None
         self.save_path_prefix: str = "paf_ros/paf_map_manipulation/Temporary Maps/"
+        self.corresponding_lanelets_old_new = {}
+        self.corresponding_lanelets_new_old = {}
 
     def generate_no_rules_map(self):
         self._load_scenario()
         self._delete_signs_and_lights()
         self._create_inverse_scenario()
         self._create_bidirectional_scenario()
+        self._connect_normal_and_inverse_lanelets()
         self._generate_bidirectional_cr_file()
 
     def _load_scenario(self):
@@ -141,17 +144,44 @@ class MapManipulator:
                 "MapManipulator: Error while creating bidirectional scenario: Scenario or inverse scenario is None."
             )
 
-    def _set_all_neighbours_same_direction(self):
-        if self.scenario is not None:
+    def _connect_normal_and_inverse_lanelets(self):
+        if self.bidirectional_scenario is not None:
+            rospy.loginfo("MapManipulator: Connecting normal and inverse lanelets...")
             for lane in self.scenario.lanelet_network.lanelets:
-                if lane.adj_left is not None:
-                    lane._adj_left_same_direction = True
-                if lane.adj_right is not None:
-                    lane._adj_right_same_direction = True
-
-            rospy.loginfo("MapManipulator: Set every neighbour direction to same.")
+                if lane.adj_left is not None and not lane.adj_left_same_direction:
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_left = self.corresponding_lanelets_old_new[lane.adj_left]
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_left_same_direction = True
+                if lane.adj_right is not None and not lane.adj_right_same_direction:
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_right = self.corresponding_lanelets_old_new[lane.adj_right]
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_right_same_direction = True
+            for lane in self.inverse_scenario.lanelet_network.lanelets:
+                if lane.adj_left is not None and not lane.adj_left_same_direction:
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_left = self.corresponding_lanelets_new_old[lane.adj_left]
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_left_same_direction = True
+                if lane.adj_right is not None and not lane.adj_right_same_direction:
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_right = self.corresponding_lanelets_new_old[lane.adj_right]
+                    self.bidirectional_scenario.lanelet_network.find_lanelet_by_id(
+                        lane.lanelet_id
+                    )._adj_right_same_direction = True
+            rospy.loginfo("MapManipulator: Connecting normal and inverse lanelets successfull.")
         else:
-            rospy.logerr("MapManipulator: Error while setting neighbour directions: Scenario is None.")
+            rospy.logerr(
+                "MapManipulator: Error while Connecting normal and inverse lanelets: Bidirectional scenario is None."
+            )
 
     def _get_max_id_of_lanelet_network(self, network: LaneletNetwork) -> int:
         highest_id = 0
@@ -168,6 +198,8 @@ class MapManipulator:
             new_id = old_id + highest_id + 1
             lane._lanelet_id = new_id
             self._update_lanelet_refs(old_lanelet_id=old_id, new_lanelet_id=lane.lanelet_id)
+            self.corresponding_lanelets_old_new[old_id] = new_id
+            self.corresponding_lanelets_new_old[new_id] = old_id
 
     def _update_lanelet_refs(self, old_lanelet_id, new_lanelet_id):
         for lane in self.inverse_scenario.lanelet_network.lanelets:
