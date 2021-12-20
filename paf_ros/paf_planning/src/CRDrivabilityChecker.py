@@ -7,6 +7,8 @@ from commonroad.scenario.scenario import Scenario
 from commonroad.visualization.mp_renderer import MPRenderer
 from matplotlib import pyplot as plt
 import numpy as np
+#for orientation of the ego vehicle
+from tf.transformations import euler_from_quaternion
 import rospy
 import time
 
@@ -15,8 +17,7 @@ from threading import Thread
 
 from nav_msgs.msg import Odometry
 
-#for orientation of the ego vehicle
-from tf.transformations import euler_from_quaternion
+
 
 # from paf_perception.msg import PafObstacleList, PafObstacle
 from paf_messages.msg import PafObstacleList, PafObstacle
@@ -68,9 +69,6 @@ class CRDriveabilityChecker(object):
 
         self.done = 0
 
-        # #orientation of the ego vehicle
-        # self.z_orientation = None
-
     def _odometry_updated(self, odo: Odometry):
         """
         Odometry update Callback
@@ -82,17 +80,17 @@ class CRDriveabilityChecker(object):
             odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
         )
 
-        self._current_pose = odo.pose.pose
+        self.current_pose = odo.pose.pose
 
-        # #calculate current orientation in z axis
-        # quaternion = (
-        #     self._current_pose.orientation.x,
-        #     self._current_pose.orientation.y,
-        #     self._current_pose.orientation.z,
-        #     self._current_pose.orientation.w,
-        # )
-        # _, _, yaw = euler_from_quaternion(quaternion)
-        # self.z_orientation = -yaw
+        #calculate current orientation in z axis (rad)
+        quaternion = (
+            self.current_pose.orientation.x,
+            self.current_pose.orientation.y,
+            self.current_pose.orientation.z,
+            self.current_pose.orientation.w,
+        )
+        _, _, yaw = euler_from_quaternion(quaternion)
+        self.current_orientation = yaw
 
         # update pose of ego vehicle in cr-scenario
         self._update_ego_vehicle_to_CRScenario()
@@ -139,9 +137,8 @@ class CRDriveabilityChecker(object):
         id = self.ego_vehicle_id
         type = ObstacleType.PARKED_VEHICLE
         shape = Rectangle(width=2.0, length=4.5)
-        position = [self._current_pose.position.x, self._current_pose.position.y]
-        #orientation = np.cos(self._current_pose.orientation.w)
-        orientation = 0
+        position = [self.current_pose.position.x, self.current_pose.position.y]
+        orientation = self.current_orientation
 
         initial_state = State(position=position, velocity=5, orientation=orientation, time_step=0)
 
