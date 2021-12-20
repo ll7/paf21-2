@@ -117,8 +117,7 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
         self._global_path = msg.sections
         self._global_path_length = msg.distance
-        m_i, l_i, p_i = self._get_matrix_and_lane_indices(msg.target)
-        self._target_indices = m_i, l_i, p_i + 1
+        self._target_indices = self._get_matrix_and_lane_indices(msg.target)
         self._global_path_lanelets = []
         for matrix in msg.sections:
             for lane in matrix.lanes:
@@ -184,23 +183,19 @@ class LocalPlanner:
         _, target_index, _ = self._target_indices
 
         lane_change_secs = 1  # x seconds for a lane change (distance depends on speed)
+        min_lane_change_meters = 100
         m_per_index = 5
 
-        row_generator = self._yield_next_matrix_rows()
-
-        # for row in self._yield_next_matrix_rows():
-        #     _pts_limits, _signs, _trg_idx, _shift_idx, _distance_planned = row
-        #     print("temp: ", len(_pts_limits), len(_signs), _trg_idx, _shift_idx, _distance_planned)
-        # print()
+        row_generator = self._yield_next_matrix_rows(self._current_indices)
 
         lanes, signs, _, _, _ = next(row_generator)
         new_pt, current_speed = lanes[current_lane]
         current_speed = current_speed if current_speed > 0 else self._current_speed_limit
         sparse_local_path.append(new_pt)
-        print(-1, len(sparse_local_path), current_lane, np.round([new_pt.x, new_pt.y], 1), distance_planned)
+        # print(-1, len(sparse_local_path), current_lane, np.round([new_pt.x, new_pt.y], 1), distance_planned)
         sparse_local_path_speeds.append(current_speed)
         sparse_traffic_signals.append((len(sparse_local_path) - 1, signs))
-
+        # print(len(lanes)) # todo not enough lanes (continue here!)
         next_item = None
         while distance_planned < target_distance:
             if next_item is None:
@@ -209,7 +204,7 @@ class LocalPlanner:
                 matrix_temp = [next_item]
             # target_lanes = [0]
             # shift_idx = 0
-            for i, item in enumerate(row_generator):
+            for item in row_generator:
                 lanes, _, target_index, shift_idx, _ = item
                 matrix_temp.append(item)
                 if target_index != 0 or shift_idx != 0:
@@ -222,8 +217,6 @@ class LocalPlanner:
                     # target_index = trg_idx
                     # print(trg_idx, shift_idx)
                     break
-            else:
-                break
 
             if len(matrix_temp) == 0:
                 break
@@ -233,7 +226,6 @@ class LocalPlanner:
             # print()
 
             num_lanes = len(lanes)
-
             if next_item is None:
                 target_lanes = [self._target_indices[1]]
             else:
@@ -241,14 +233,19 @@ class LocalPlanner:
                 target_lanes = list(range(target_index, min(target_index + num_lanes_next, num_lanes + 1)))
 
             next_lane_change_index = 0
+            last_lane_change = 0
+            shift_idx = 0
 
             for i, item in enumerate(matrix_temp):  # item is the next unmapped row of possible points
                 pts_limits, signs, _, _, _ = item
                 if distance_planned > target_distance:
                     break
-                if next_lane_change_index > i:
+                if next_lane_change_index >= i:
                     continue
-                indices_count_for_lane_change = max(1, current_speed * lane_change_secs / m_per_index)
+
+                indices_count_for_lane_change = max(
+                    [1, current_speed * lane_change_secs / m_per_index, min_lane_change_meters / m_per_index]
+                )
 
                 # n lanes to change to target lane
                 if current_lane in target_lanes:
@@ -263,6 +260,7 @@ class LocalPlanner:
 
                 l_change, r_change = False, False
                 l_limit, r_limit = 0, num_lanes - 1
+
                 l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
 
                 if number_of_lanes_off != 0:
@@ -274,7 +272,13 @@ class LocalPlanner:
                         # no lane changes in "wrong" direction allowed anymore
                         l_change_allowed = number_of_lanes_off > 0
                         r_change_allowed = not l_change_allowed
+                if last_lane_change != 0:
+                    # l_change_allowed = l_change = False
+                    # r_change_allowed = r_change = False
+                    last_lane_change = 0
 
+                # print(l_limit, r_limit)
+                # print((l_change, l_change_allowed), (r_change, r_change_allowed))
                 probabilities = self._test_lane_change(
                     can_go_left=l_change or l_change_allowed,
                     can_go_right=r_change or r_change_allowed,
@@ -284,29 +288,41 @@ class LocalPlanner:
 
                 if choice == "left" or choice == "right":
                     delta = -1 if choice == "left" else 1
-
-                    p = (l_change or l_change_allowed), not (l_change or r_change), (r_change or r_change_allowed)
-                    sp = matrix_temp[next_lane_change_index][0][current_lane][1] * 3.6
-                    py = matrix_temp[next_lane_change_index][0][current_lane + delta][0].y
-                    print(f"lane change {choice} {current_lane}->{current_lane + delta}, "
-                          f"{int(np.round(sp, 0))}kmh, y={py}", p)
-                    j = int(np.round(i + indices_count_for_lane_change))
+                    rospy.logerr(choice)
+                    # sp = matrix_temp[next_lane_change_index][0][current_lane][1] * 3.6
+                    # py = matrix_temp[next_lane_change_index][0][current_lane + delta][0].y
+                    # print(f"lane change {choice} {current_lane}->{current_lane + delta}, "
+                    #       f"{int(np.round(sp, 0))}kmh, y={py}", p)
+                    j = int(np.round(indices_count_for_lane_change)) + i + 1
+                    # j2 = int(np.round(i + indices_count_for_lane_change * 2))
                     next_lane_change_index = min(j, len(matrix_temp) - 1)
-                    print(f"current={i}, planned={next_lane_change_index}, actual={j}")
+                    last_lane_change = delta
+                    # print(f"current={i}, planned={next_lane_change_index}, actual={j}")
                     current_lane += delta
-
-                new_pt, current_speed = pts_limits[current_lane]
+                    new_pt, current_speed = matrix_temp[next_lane_change_index][0][current_lane]
+                else:
+                    new_pt, current_speed = pts_limits[current_lane]
+                # if last_lane_change != 0:
+                #     last_lane_change = 0
+                #     prev = sparse_local_path[-1]
+                #     x, y = .5 * (prev.x + new_pt.x), .5 * (prev.y + new_pt.y)
+                #     sparse_local_path.append(Point2D(x, y))
+                #     sparse_local_path_speeds.append(current_speed)
+                #     sparse_traffic_signals.append((len(sparse_local_path) - 1, signs))
+                #     distance_planned += dist_pts(sparse_local_path[-2], sparse_local_path[-1])
 
                 sparse_local_path.append(new_pt)
-                if len(sparse_local_path) > 1:
-                    distance_planned += dist_pts(sparse_local_path[-2], sparse_local_path[-1])
-
-                print(i, len(sparse_local_path), current_lane, np.round([new_pt.x, new_pt.y], 1), distance_planned)
                 sparse_local_path_speeds.append(current_speed)
                 sparse_traffic_signals.append((len(sparse_local_path) - 1, signs))
-            print()
+                distance_planned += dist_pts(sparse_local_path[-2], sparse_local_path[-1])
+            # print()
             # switch to new lanelet group / matrix (or is at target point)
             current_lane = current_lane - target_index + shift_idx
+            pts = PafTopDownViewPointSet()
+            pts.label = "123"
+            pts.points = sparse_local_path
+            pts.color = (255, 0, 255)
+            self._sign_publisher.publish(pts)
 
         if len(sparse_local_path) > 1:
             self._local_path = xy_to_pts(calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE))
@@ -333,10 +349,10 @@ class LocalPlanner:
         _sum = left + right + straight
         return left / _sum, straight / _sum, right / _sum
 
-    def _yield_next_matrix_rows(self):
-        m_idx, _, p_idx = self._current_indices
+    def _yield_next_matrix_rows(self, from_indices):
+        m_idx_start, l_idx_start, p_idx_start = from_indices
         m_idx_t, _, p_idx_t = self._target_indices
-        m_idx_start, p_idx_start = m_idx, p_idx
+        m_idx = m_idx_start
 
         def get_speed_limit_by_index(lanes, prev_speed_limits, prev_target_index, prev_shift):
             prev_speed_limits = [_lane[-1] for _lane in prev_speed_limits]
@@ -373,7 +389,7 @@ class LocalPlanner:
         target_index, shift = 0, 0
 
         plan_matrix: PafLaneletMatrix
-        for plan_matrix in self._global_path[m_idx:]:
+        for plan_matrix in self._global_path[m_idx_start:]:
             distance_per_index = plan_matrix.distance_per_index
             if m_idx == m_idx_t:
                 for lane in plan_matrix.lanes:
@@ -389,6 +405,8 @@ class LocalPlanner:
             zipped = list(zip(zip(*points), zip(*speed_limits)))
             signs_per_lane = [lane.signals for lane in plan_matrix.lanes]
             for p_idx, (points_row, limits_row) in enumerate(zipped):
+                if m_idx == m_idx_start and p_idx < p_idx_start:
+                    continue
                 signs = []
                 for sign_lane in signs_per_lane:
                     current = [s for s in sign_lane if s.index == p_idx]
@@ -421,7 +439,7 @@ class LocalPlanner:
             speed = calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
 
         if self._current_speed < 1 and self._allowed_from_stop():
-            rospy.loginfo("[local planner] continuing from stop")
+            # rospy.loginfo("[local planner] continuing from stop")
             speed = calc.remove_stop_event(speed, buffer_m=10)
 
         speed = calc.add_linear_deceleration(speed)
@@ -577,6 +595,8 @@ class LocalPlanner:
             ref = (position.x, position.y)
         else:
             ref = position
+        found = []
+        found_pt = []
         for i, matrix in enumerate(self._global_path):
             lane: PafLanelet
             for j, lane in enumerate(matrix.lanes):
@@ -585,11 +605,19 @@ class LocalPlanner:
                     current_lane_idx = j
                     try:
                         idx, d = k_closest_indices_of_point_in_list(2, lane.points, ref)
-                        current_lane_pt_idx = min(idx)
+                        current_lane_pt_idx = max(idx)
                     except ValueError:
                         current_lane_pt_idx = 0
-                    return current_matrix_idx, current_lane_idx, current_lane_pt_idx
-        return -1, -1, -1
+                    found_pt += [lane.points[current_lane_pt_idx]]
+                    found.append((current_matrix_idx, current_lane_idx, current_lane_pt_idx))
+        if len(found_pt) == 0:
+            found = -1, -1, -1
+        elif len(found_pt) == 1:
+            found = found[0]
+        else:
+            idx = k_closest_indices_of_point_in_list(2, found_pt, ref)
+            found = found[max(idx)]
+        return found
 
     def _set_current_indices(self):
         self._current_indices = self._get_matrix_and_lane_indices(self._current_pose.position)

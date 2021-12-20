@@ -217,8 +217,8 @@ class GlobalPlanner:
                 return []
             idx = np.argmin([x.path_length[-1] for x in routes])
             route = routes[idx]
-            return [PafRoute(route)]
-        return [PafRoute(route) for route in routes]
+            return [PafRoute(route, target_coordinates)]
+        return [PafRoute(route, target_coordinates) for route in routes]
 
     @staticmethod
     def _get_planning_problem(
@@ -270,8 +270,8 @@ class GlobalPlanner:
 
         return PlanningProblem(1, initial_state, GoalRegion([target_state]))
 
-    def _route_from_ids(self, lanelet_ids: List[int], rules_enabled: bool):
-        return PafRoute(Route(self._scenario, None, lanelet_ids, RouteType.REGULAR), rules_enabled)
+    def _route_from_ids(self, lanelet_ids: List[int]):
+        return PafRoute(Route(self._scenario, None, lanelet_ids, RouteType.REGULAR), self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1].center_vertices[-1]))
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)

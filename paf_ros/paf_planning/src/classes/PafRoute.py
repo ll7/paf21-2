@@ -18,7 +18,10 @@ from .Spline import calc_spline_course_from_point_list
 class PafRoute:
     SPEED_KMH_TO_MS = 1 / 3.6
 
-    def __init__(self, route: CommonroadRoute, traffic_sign_country: Country = Country.GERMANY):
+    def __init__(self, route: CommonroadRoute, target, traffic_sign_country: Country = Country.GERMANY):
+        if hasattr(target, "x"):
+            target = target.x, target.y
+        self.target = Point2D(target[0], target[1])
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
         self.route = route
         self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
@@ -276,6 +279,9 @@ class PafRoute:
                 if other2 not in blob:
                     blob.append(other2)
                 (_, straight, other2) = self.graph[other2]
+                other3 = other2
+                while straight is None:
+                    (_, straight, other3) = self.graph[other3]
                 if straight is not None and anchor is None:
                     anchor = len(blob) - 1
                     left = straight
@@ -318,8 +324,8 @@ class PafRoute:
                 pts = lanelet.center_vertices[::10]
                 if len(pts) < 3:
                     pts = lanelet.center_vertices
-                new_pts = calc_spline_course_from_point_list(pts, length / num_pts)
-                vertices.append(np.array(new_pts[:-1]))
+                new_pts = calc_spline_course_from_point_list(pts, length / num_pts / 5)[:-1]
+                vertices.append(np.array(new_pts[::5]))
             out.append((np.array(vertices), anchor, avg_len))
         return out
 
@@ -331,7 +337,7 @@ class PafRoute:
                 zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
             matrix = PafLaneletMatrix()
-            matrix.target_index = anchor
+            matrix.target_index = int(anchor)
             matrix.shift = shift
             matrix.distance_per_index = distance_m
 
@@ -344,5 +350,6 @@ class PafRoute:
                 matrix.distance = length
             msg.sections.append(matrix)
         msg.distance = self.route.path_length[-1]
+        msg.target = self.target
 
         return msg
