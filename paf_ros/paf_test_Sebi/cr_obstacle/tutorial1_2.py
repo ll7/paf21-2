@@ -19,7 +19,7 @@ scenario, planning_problem_set = CommonRoadFileReader(file_path).open()
 static_obstacle_id = scenario.generate_object_id()
 static_obstacle_type = ObstacleType.PARKED_VEHICLE
 static_obstacle_shape = Rectangle(width=2.0, length=4.5)
-static_obstacle_initial_state = State(position=np.array([30.0, 3.5]), orientation=0.02, time_step=0)
+static_obstacle_initial_state = State(position=np.array([30.0, 3.5]), orientation=1.57, time_step=0)
 
 # feed in the required components to construct a static obstacle
 static_obstacle = StaticObstacle(

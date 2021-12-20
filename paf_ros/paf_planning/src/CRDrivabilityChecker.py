@@ -2,6 +2,7 @@
 import math
 import numpy as np
 import rospy
+from tf.transformations import euler_from_quaternion
 
 
 from nav_msgs.msg import Odometry
@@ -57,7 +58,18 @@ class CRDriveabilityChecker(object):
             odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
         )
 
-        self._current_pose = odo.pose.pose
+        self.current_pose = odo.pose.pose
+
+        quaternion = (
+            self.current_pose.orientation.x,
+            self.current_pose.orientation.y,
+            self.current_pose.orientation.z,
+            self.current_pose.orientation.w,
+        )
+        _, _, yaw = euler_from_quaternion(quaternion)
+        #current_orientation in rad
+        self.current_orientation = yaw
+
         # update pose of ego vehicle in cr-scenario
         self._update_ego_vehicle_to_CRScenario()
         # self._overwrite_file()
@@ -103,8 +115,8 @@ class CRDriveabilityChecker(object):
         id = self.ego_vehicle_id
         type = ObstacleType.PARKED_VEHICLE
         shape = Rectangle(width=2.0, length=4.5)
-        position = [self._current_pose.position.x, self._current_pose.position.y]
-        orientation = 0
+        position = [self.current_pose.position.x, self.current_pose.position.y]
+        orientation = self.current_orientation
 
         initial_state = State(position=position, velocity=0, orientation=orientation, time_step=0)
 
@@ -152,7 +164,7 @@ class CRDriveabilityChecker(object):
 
         # write new scenario
         fw = CommonRoadFileWriter(self.scenario, self.planning_problem_set, author, affiliation, source, tags)
-        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew4.xml", OverwriteExistingFile.ALWAYS)
+        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew5.xml", OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)
