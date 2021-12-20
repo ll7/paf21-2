@@ -11,7 +11,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
 import rospy
-from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafLaneletMatrix, PafLanelet
+from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
 from .Spline import calc_spline_course_from_point_list
 
 
@@ -217,7 +217,7 @@ class PafRoute:
             paf_sign.type = "MERGE"
             idx = self._locate_obj_on_lanelet(vertices, list(merging_pt)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
-            paf_sign.value = 50 * self.SPEED_KMH_TO_MS
+            paf_sign.value = 0
             speed_limits += [paf_sign]
 
         # all traffic signs
@@ -267,8 +267,9 @@ class PafRoute:
         def get_lanelet_blob(from_lanelet):
             other = from_lanelet
             blob = []
-            anchor = None
-            shift = 1
+            anchor_l = 0  # leftmost lane to continue on
+            anchor_r = -1  # rightmost lane to continue on
+            shift_l = 0  # merging lanes from next segment on the left
             while other in self.graph:  # go to leftmost lanelet
                 (left, straight, _) = self.graph[other]
                 if left is None:
@@ -279,30 +280,30 @@ class PafRoute:
                 if other2 not in blob:
                     blob.append(other2)
                 (_, straight, other2) = self.graph[other2]
-                other3 = other2
-                while straight is None:
-                    (_, straight, other3) = self.graph[other3]
-                if straight is not None and anchor is None:
-                    anchor = len(blob) - 1
-                    left = straight
-                    while left is not None and left in self.graph:
-                        left, _, _ = self.graph[left]
-                        shift -= 1
-                    shift = min([0, shift])
-
                 if other2 is None:
                     break
+            if len(blob) == 0:
+                blob = (other,)
+                return hash(_blob), blob, (0, 0, 0)
+            other3 = blob[0]
+            while other3 in self.graph and self.graph[other3][1] is None:
+                other3 = self.graph[other3][2]
+                anchor_l += 1
+                anchor_r += 1
+            next_straight = self.graph[other3][1] if other3 in self.graph else None
+            while other3 in self.graph and self.graph[other3][1] is not None:
+                other3 = self.graph[other3][2]
+                anchor_r += 1
+            while next_straight in self.graph and self.graph[next_straight][0] is not None:
+                shift_l += 1
+
             blob = tuple(blob)
             h = hash(blob)
 
-            return h, blob, (shift, anchor)
+            return h, blob, (shift_l, anchor_l, anchor_r)
 
         for lanelet in l_list:
             _h, _blob, _anchor = get_lanelet_blob(lanelet)
-            if len(_blob) == 0:
-                _blob = (lanelet,)
-                _anchor = 0, 0
-                _h = hash(_blob)
             if _anchor is not None and _h not in out:
                 out[_h] = (_blob, _anchor)
         out = list(out.values())
@@ -333,23 +334,72 @@ class PafRoute:
         msg = PafLaneletRoute()
         groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
         distance_m = 5
-        for i, ((lanelet_id_list, (shift, anchor)), (lanes, _, length)) in enumerate(
+        last_limits = None
+
+        for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
                 zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
-            matrix = PafLaneletMatrix()
-            matrix.target_index = int(anchor)
-            matrix.shift = shift
-            matrix.distance_per_index = distance_m
+            if last_limits is None:
+                last_limits = [-1 for _ in lanes]
+            print(lanelet_id_list)
 
+            signals_per_lane, speed_limits_per_lane = [], []
             for lanelet_id, vertices in zip(lanelet_id_list, lanes):
-                paf_lanelet = PafLanelet()
-                paf_lanelet.points = [Point2D(x, y) for x, y in vertices]
-                paf_lanelet.signals, paf_lanelet.speed_limits = self._extract_traffic_signals(lanelet_id, vertices)
-                paf_lanelet.lanelet_id = lanelet_id
-                matrix.lanes.append(paf_lanelet)
-                matrix.distance = length
-            msg.sections.append(matrix)
+                signals, speed_limits = self._extract_traffic_signals(lanelet_id, vertices)
+                signals_per_lane.append(signals)
+                speed_limits_per_lane.append(speed_limits)
+
+            for j, section_points in enumerate(zip(*lanes)):
+                paf_section = PafRouteSection()
+                paf_section.points = [Point2D(p[0], p[1]) for p in section_points]
+                paf_section.speed_limits = [x for x in last_limits]
+                paf_section.target_lanes_index_distance = -1
+                for lane_number, (signal_lane, speed_lane) in enumerate(zip(signals_per_lane, speed_limits_per_lane)):
+                    for signal in signal_lane:
+                        if signal.index == j:
+                            signal.index = lane_number
+                            paf_section.signals.append(signal)
+                            break
+                        if signal.index > j:
+                            break
+                    for signal in speed_lane:
+                        if signal.index == j:
+                            paf_section.speed_limits[lane_number] = signal.value  # -1 = unknown, 0 = merge, else x m/s
+                            break
+                        if signal.index > j:
+                            break
+                last_limits = [x for x in paf_section.speed_limits]
+                # print(len(section_points))
+                msg.sections.append(paf_section)
+
+            if lanes_l != 0 or anchor_l != 0 or anchor_r != len(lanelet_id_list) - 1:
+                # shift speed limit lanes
+                print(lanes_l, anchor_l, anchor_r)
+                last_limits_new = [-1 for _ in range(anchor_l, anchor_r + 1)]
+                for index, entry in enumerate(last_limits_new):
+                    if index + 1 <= lanes_l:
+                        continue
+                    index_old_limits = index - lanes_l + anchor_l
+                    if index_old_limits < 0:
+                        continue
+                    try:
+                        last_limits_new[index] = last_limits[index_old_limits]
+                    except IndexError:
+                        break
+                print(last_limits_new)
+                last_limits = last_limits_new
+
+                # todo calculate target_lanes[], target_lanes_index_distance (since last lane change), target_lanes_left_shift (for this instance)
+
         msg.distance = self.route.path_length[-1]
         msg.target = self.target
 
         return msg
+
+# Point2D[] points
+# float32[] speed_limits
+# PafTrafficSignal[] signals
+
+# int32[] target_lanes
+# int32 target_lanes_index_distance
+# int32 target_lanes_left_shift

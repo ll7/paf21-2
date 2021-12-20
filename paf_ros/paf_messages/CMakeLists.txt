@@ -24,9 +24,8 @@ add_message_files(
   PafLogText.msg
   PafTopDownViewPointSet.msg
   PafSpeedMsg.msg
-  PafLanelet.msg
   PafLaneletRoute.msg
-  PafLaneletMatrix.msg
+  PafRouteSection.msg
 )
 
 #add_service_files(
