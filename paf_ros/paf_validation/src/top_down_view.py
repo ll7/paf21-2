@@ -69,9 +69,15 @@ class TopDownRosNode(object):
     def update_global_path(self, msg: PafLaneletRoute):
         path = []
         section: PafRouteSection
+        nan = 0
         for section in msg.sections:
-            point = section.points[int(len(section.points) / 2 - 0.5)]
+            point = section.points[section.target_lanes[0]]
+            if np.isnan(point.x):
+                nan += 1
+                continue
             path.append([point.x, -point.y])
+        if nan > 0:
+            rospy.logerr_throttle(5, f"[top down view] global path contains nan {nan}x")
         self.producer.set_path(coordinate_list_global_path=path)
 
     def update_local_path(self, msg: PafLocalPath):
