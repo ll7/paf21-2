@@ -7,7 +7,7 @@ from commonroad.scenario.scenario import Scenario
 from commonroad.visualization.mp_renderer import MPRenderer
 from matplotlib import pyplot as plt
 import numpy as np
-#for orientation of the ego vehicle
+# for orientation of the ego vehicle
 from tf.transformations import euler_from_quaternion
 import rospy
 import time
@@ -16,7 +16,6 @@ from threading import Thread
 
 
 from nav_msgs.msg import Odometry
-
 
 
 # from paf_perception.msg import PafObstacleList, PafObstacle
@@ -60,10 +59,12 @@ class CRDriveabilityChecker(object):
         rospy.logwarn(odometry_topic)
         rospy.logwarn(obstacle_topic)
         rospy.Subscriber(odometry_topic, Odometry, self._odometry_updated)
-        rospy.Subscriber(obstacle_topic, PafObstacleList, self._obstacle_list_updated)
+        rospy.Subscriber(obstacle_topic, PafObstacleList,
+                         self._obstacle_list_updated)
 
         # read in the scenario and planning problem set
-        self.scenario, self.planning_problem_set = CommonRoadFileReader(file_path).open()
+        self.scenario, self.planning_problem_set = CommonRoadFileReader(
+            file_path).open()
 
         self.ego_vehicle_id = self.scenario.generate_object_id()
 
@@ -77,12 +78,13 @@ class CRDriveabilityChecker(object):
         """
         # calculate current speed (km/h) from twist
         self._current_speed = math.sqrt(
-            odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
+            odo.twist.twist.linear.x ** 2 +
+            odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
         )
 
         self.current_pose = odo.pose.pose
 
-        #calculate current orientation in z axis (rad)
+        # calculate current orientation in z axis (rad)
         quaternion = (
             self.current_pose.orientation.x,
             self.current_pose.orientation.y,
@@ -115,13 +117,14 @@ class CRDriveabilityChecker(object):
         elif msg.type == "Vehicles":
             # clear vehicles
             for cr_obstacle in self.cr_obstacles_vehicles:
-                self.scenario.remove_obstacle(cr_obstacle)
-            self.vehicles = []
+                    self.scenario.remove_obstacle(cr_obstacle)
+            self.cr_obstacles_vehicles = []
 
-            self.paf_obstacles_vehicles = msg.obstacles
-            self._add_all_vehicles_to_cr(self.paf_obstacles_vehicles)
+            #add new obstacles
+            self._add_all_vehicles_to_cr(msg.obstacles)
         else:
-            rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to node")
+            rospy.logwarn_once(
+                f"obstacle type '{msg.type}' is unknown to node")
 
         self._overwrite_file()
 
@@ -140,9 +143,10 @@ class CRDriveabilityChecker(object):
         position = [self.current_pose.position.x, self.current_pose.position.y]
         orientation = self.current_orientation
 
-        initial_state = State(position=position, velocity=5, orientation=orientation, time_step=0)
+        initial_state = State(position=position, velocity=5,
+                              orientation=orientation, time_step=0)
 
-        self.ego_vehicle = DynamicObstacle(id, type, shape, initial_state)
+        self.ego_vehicle = StaticObstacle(id, type, shape, initial_state)
         self.scenario.add_objects(self.ego_vehicle)
 
     def _add_all_pedestrians_to_cr(self, pedestrians: PafObstacleList):
@@ -158,7 +162,8 @@ class CRDriveabilityChecker(object):
     def _create_obstacle(
         self, id, obstacle: PafObstacle, shape: Shape, type: ObstacleType, position: np.ndarray
     ) -> Obstacle:
-        initial_state = State(position=np.array([0.0, 0.0]), velocity=0, orientation=0, time_step=0)
+        initial_state = State(position=np.array(
+            [0.0, 0.0]), velocity=0, orientation=0, time_step=0)
         return StaticObstacle(id, type, shape, initial_state)
 
     def _convert_obstacles_to_collision_objects(self, cr_obstacles):
@@ -170,20 +175,23 @@ class CRDriveabilityChecker(object):
         shape = Circle(0.35, np.array(obstacle.closest))
         position = np.array(obstacle.closest)
         type = ObstacleType.PEDESTRIAN
-        cr_obstacle = self._create_obstacle(id, obstacle, shape, type, position)
+        cr_obstacle = self._create_obstacle(
+            id, obstacle, shape, type, position)
         self.scenario.add_objects(cr_obstacle)
         self.cr_obstacles_pedestrians.append(cr_obstacle)
 
     def _add_vehicle(self, id, obstacle: PafObstacle):
-        vertices = np.array([obstacle.closest, obstacle.bound_1, obstacle.bound_2])
+        vertices = np.array(
+            [obstacle.closest, obstacle.bound_1, obstacle.bound_2])
         shape = Polygon(vertices=vertices)
         # actual position should be fixed, dummy implementation
         position = np.array(obstacle.closest)
         type = ObstacleType.PARKED_VEHICLE
-        cr_obstacle = self._create_obstacle(id, obstacle, shape, type, position)
+        cr_obstacle = self._create_obstacle(
+            id, obstacle, shape, type, position)
 
         # create collision object
-        #create_collision_object(cr_obstacle)
+        # create_collision_object(cr_obstacle)
 
         self.scenario.add_objects(cr_obstacle)
         self.cr_obstacles_vehicles.append(cr_obstacle)
@@ -195,8 +203,10 @@ class CRDriveabilityChecker(object):
         tags = {}
 
         # write new scenario
-        fw = CommonRoadFileWriter(self.scenario, self.planning_problem_set, author, affiliation, source, tags)
-        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew5.xml", OverwriteExistingFile.ALWAYS)
+        fw = CommonRoadFileWriter(
+            self.scenario, self.planning_problem_set, author, affiliation, source, tags)
+        fw.write_to_file(
+            "/home/imech154/paf21-2/maps/Rules/Town03_modnew7.xml", OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)
