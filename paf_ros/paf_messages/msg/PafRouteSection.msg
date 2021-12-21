@@ -2,5 +2,7 @@ Point2D[] points
 float32[] speed_limits
 PafTrafficSignal[] signals
 int32[] target_lanes
-int32 target_lanes_index_distance
+int64 target_lanes_index_distance
 int32 target_lanes_left_shift
+float32 distance_from_last_section
+float32 target_lanes_distance

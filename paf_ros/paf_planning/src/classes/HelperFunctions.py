@@ -45,6 +45,31 @@ def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_p
     return idx * acc, [distances[i] for i in idx]
 
 
+def expand_sparse_list(sparse_list, to_len, fill_value=None):
+    assert len(sparse_list) > 0
+    assert to_len > len(sparse_list)
+    ratio = to_len / (len(sparse_list))
+    expanded_list = []
+    filler = fill_value
+    for i, sp in enumerate(sparse_list):
+        if i == 0:
+            continue
+        if fill_value is None:
+            filler = sp
+        else:
+            expanded_list.append(sp)
+            if len(expanded_list) > to_len:
+                expanded_list[to_len - 1] = sp
+        new_i = int(i * ratio)
+        for _ in range(len(expanded_list), new_i):
+            expanded_list.append(filler)
+
+    if fill_value is None:
+        filler = sparse_list[-1]
+    expanded_list += [filler for _ in range(to_len - len(expanded_list))]
+    return expanded_list[:to_len]
+
+
 def find_closest_lanelet(lanelet_network, p):
     if hasattr(p, "x"):
         p = [p.x, p.y]

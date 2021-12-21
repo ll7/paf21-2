@@ -18,6 +18,9 @@ from .Spline import calc_spline_course_from_point_list
 
 class PafRoute:
     SPEED_KMH_TO_MS = 1 / 3.6
+    MERGE_SPEED_RESET = 50 / 3.6
+    UNKNOWN_SPEED_LIMIT_SPEED = 250 / 3.6
+    APPLY_MERGING_RESET = True
 
     def __init__(self, route: CommonroadRoute, target, traffic_sign_country: Country = Country.GERMANY):
         if hasattr(target, "x"):
@@ -211,13 +214,13 @@ class PafRoute:
         vertices = lanelet.center_vertices
 
         # lane merge events
-        if len(lanelet.predecessor) > 1:
+        if self.APPLY_MERGING_RESET and len(lanelet.predecessor) > 1:
             merging_pt = vertices[0]
             paf_sign = PafTrafficSignal()
             paf_sign.type = "MERGE"
             idx = self._locate_obj_on_lanelet(vertices, list(merging_pt)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
-            paf_sign.value = 0
+            paf_sign.value = self.MERGE_SPEED_RESET
             speed_limits += [paf_sign]
 
         # all traffic signs
@@ -231,7 +234,7 @@ class PafRoute:
                 if is_speed_limit:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
-                paf_sign.value = -1.0
+                paf_sign.value = self.UNKNOWN_SPEED_LIMIT_SPEED
             idx = self._locate_obj_on_lanelet(vertices, list(sign.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             if is_speed_limit:
@@ -254,11 +257,21 @@ class PafRoute:
             try:
                 paf_sign.value /= paf_sign.value + red_value
             except ZeroDivisionError:
-                paf_sign.value = -1.0
+                paf_sign.value = -1
             idx = self._locate_obj_on_lanelet(vertices, list(light.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             traffic_signals += [paf_sign]
         traffic_signals = sorted(traffic_signals, key=lambda elem: elem.index)
+
+        for i in range(25):
+            pre = lanelet.predecessor
+            lanelet_id = lanelet.predecessor[int(len(pre) / 2)]
+            lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            for sign_id in lanelet.traffic_signs:
+                sign = self.route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
+                if sign.traffic_sign_elements[0].traffic_sign_element_id.name == TrafficSignIDGermany.MAX_SPEED.value:
+                    _, speed_limits = self._extract_traffic_signals(lanelet.lanelet_id, [[0, 0]])
+                    break
         return traffic_signals, speed_limits
 
     def _get_lanelet_groups(self, l_list):
@@ -284,7 +297,7 @@ class PafRoute:
                     break
             if len(blob) == 0:
                 blob = (other,)
-                return hash(_blob), blob, (0, 0, 0)
+                return hash(blob), blob, (0, 0, 0)
             other3 = blob[0]
             while other3 in self.graph and self.graph[other3][1] is None:
                 other3 = self.graph[other3][2]
@@ -337,12 +350,15 @@ class PafRoute:
         groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
         distance_m = 5
         last_limits = None
+        # dummy_signal = PafTrafficSignal()
+        # dummy_signal.index = -1
+        # dummy_signal.type = "DUMMY"
 
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
                 zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
             if last_limits is None:
-                last_limits = [-1 for _ in lanes]
+                last_limits = [self.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]
 
             signals_per_lane, speed_limits_per_lane = [], []
             for lanelet_id, vertices in zip(lanelet_id_list, lanes):
@@ -354,12 +370,13 @@ class PafRoute:
                 paf_section = PafRouteSection()
                 paf_section.points = [Point2D(p[0], p[1]) for p in section_points]
                 paf_section.speed_limits = [x for x in last_limits]
+                paf_section.signals = []
                 paf_section.target_lanes_index_distance = -1
                 p1 = paf_section.points[int(len(paf_section.points) / 2)]
                 if len(msg.sections) == 0:
                     p2 = p1
                 else:
-                    p2 = msg.sections[-1].points[int(len(msg.sections[-1].points) / 2)]
+                    p2 = msg.sections[-1].points[int(len(msg.sections[-1].points) / 2 - .5)]
                 paf_section.distance_from_last_section = dist_pts(p1, p2)
                 msg.distance += paf_section.distance_from_last_section
                 for lane_number, (signal_lane, speed_lane) in enumerate(zip(signals_per_lane, speed_limits_per_lane)):
@@ -376,6 +393,9 @@ class PafRoute:
                             break
                         if signal.index > j:
                             break
+                    # if len(paf_section.signals) == 0:
+                    #     paf_section.signals.append(dummy_signal)
+
                 last_limits = [x for x in paf_section.speed_limits]
                 # print(len(section_points))
                 msg.sections.append(paf_section)
@@ -399,7 +419,7 @@ class PafRoute:
 
                 # set target lanes etc. for all previous lanes
                 target_lanes = list(range(anchor_l, anchor_r + 1))
-                target_lanes_left_shift = anchor_l
+                target_lanes_left_shift = lanes_l
                 distance_to_target = 0
                 for target_lanes_index_distance, paf_section in enumerate(reversed(msg.sections)):
                     if paf_section.target_lanes_index_distance != -1:

@@ -160,22 +160,6 @@ class SpeedCalculator:
         return speed
 
     @staticmethod
-    def expand_sparse_speeds(local_speeds, to_len):
-        ratio = to_len / (len(local_speeds)) - 1
-        speed_out = []
-        prev_i = 0
-        for i, sp in enumerate(local_speeds):
-            if i == 0:
-                continue
-            new_i = max(int(i * ratio), to_len - 1)
-            for _ in range(prev_i, new_i):
-                speed_out.append(new_i)
-            prev_i = new_i
-        filler = speed_out[-1] if len(speed_out) > 0 else 255
-        speed_out += [filler for _ in range(to_len - len(speed_out))]
-        return speed_out
-
-    @staticmethod
     def add_speed_limits(speed, traffic_signals: List[PafTrafficSignal], last_known_target_speed=1000):
 
         speed_limit = np.ones_like(speed) * last_known_target_speed * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
@@ -191,21 +175,24 @@ class SpeedCalculator:
         return np.clip(speed, 0, speed_limit)
 
     def add_stop_events(
-            self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, events=None, buffer_m=0, shift_m=0
+            self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, events=None, buffer_m=0,
+            shift_m=0
     ):
+
+        assert (len(speed) == len(traffic_signals))
         buffer_idx = int(buffer_m / self._step_size)
         shift_idx = int(shift_m / self._step_size)
         speed_limit = np.ones_like(speed) * 1000
+
         if events is None:
             events = self.QUICK_BRAKE_EVENTS
-        for signal in traffic_signals:
-            i = signal.index - self._index_start
-            if i < 0 or i >= len(speed):
-                continue
-            if signal.type in events:
-                i0, i1 = i + shift_idx, i + buffer_idx + shift_idx
-                i1 += 1  # i1 is excluded otherwise
-                speed_limit[i0:i1] = target_speed
+
+        for i, signals in enumerate(traffic_signals):
+            for signal in signals:
+                if signal.type in events:
+                    i0, i1 = i + shift_idx, i + buffer_idx + shift_idx
+                    i1 += 1  # i1 is excluded otherwise
+                    speed_limit[i0:i1] = target_speed
         return np.clip(speed, 0, speed_limit)
 
     def remove_stop_event(self, speed, start_idx=0, buffer_m=5, speed_limit=None):
@@ -216,7 +203,8 @@ class SpeedCalculator:
         speed[start_idx:end_idx] = speed_limit
         return speed
 
-    def add_roll_events(self, speed, traffic_signals: List[PafTrafficSignal], target_speed=0, buffer_m=0, shift_m=0):
+    def add_roll_events(self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, buffer_m=0,
+                        shift_m=0):
         return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS, buffer_m, shift_m)
 
     def plt_init(self, add_accel=False):
