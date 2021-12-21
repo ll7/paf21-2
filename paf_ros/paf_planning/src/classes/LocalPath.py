@@ -1,7 +1,7 @@
-from typing import Tuple
+from typing import Tuple, List
 
 import rospy
-from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection
+from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet
 from std_msgs.msg import Header
 from .GlobalPath import GlobalPath
 from .HelperFunctions import xy_to_pts, expand_sparse_list
@@ -79,6 +79,7 @@ class LocalPath:
         point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
 
         sparse_local_path = [point]
+        # lane_change_pts = []
         sparse_local_path_speeds = [current_speed]
         sparse_traffic_signals = [signals]
 
@@ -87,7 +88,8 @@ class LocalPath:
         idx1 = section_from + 1
 
         s: PafRouteSection
-        for s in self.global_path.route.sections[idx1:]:
+        for i, s in enumerate(self.global_path.route.sections[idx1:]):
+            i += idx1
             # Point2D[] points
             # float32[] speed_limits
             # PafTrafficSignal[] signals
@@ -100,8 +102,6 @@ class LocalPath:
             if last_lane_change_target_dist is not None and last_lane_change_target_dist < s.target_lanes_distance:
                 distance_planned += s.distance_from_last_section
                 continue
-            else:
-                last_lane_change_target_dist = None
 
             distance_planned += s.distance_from_last_section
 
@@ -119,6 +119,7 @@ class LocalPath:
             # )
 
             if s.target_lanes_distance == 0:
+                # lane_change_pts.append(s.points[current_lane])
                 current_lane += -s.target_lanes[0] + s.target_lanes_left_shift
                 continue
 
@@ -150,10 +151,11 @@ class LocalPath:
                     # no lane changes in "wrong" direction allowed anymore
                     l_change_allowed = number_of_lanes_off > 0
                     r_change_allowed = not l_change_allowed
-            # if last_lane_change != 0:
-            #     l_change_allowed = l_change = False
-            #     r_change_allowed = r_change = False
-            #     last_lane_change = 0
+            if last_lane_change_target_dist is not None:
+                # lane_change_pts.append(s.points[current_lane])
+                last_lane_change_target_dist = None
+                l_change_allowed = l_change = False
+                r_change_allowed = r_change = False
 
             probabilities = self._choose_lane(
                 can_go_left=l_change or l_change_allowed,
@@ -166,6 +168,7 @@ class LocalPath:
                 # print(f"lane change {choice}, {l_change} {l_change_allowed} / {r_change} {r_change_allowed}")
                 current_lane += -1 if choice == "left" else 1
                 last_lane_change_target_dist = max(0, s.target_lanes_distance - distance_for_one_lane_change)
+                # lane_change_pts.append(s.points[current_lane])
 
         if len(sparse_local_path) > 1:
             points = xy_to_pts(calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE))
@@ -186,8 +189,11 @@ class LocalPath:
         except Exception:
             pass
 
+        self._draw_path_pts(sparse_local_path)
+        # self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
+
         return local_path
 
     def _update_target_speed(self, local_path, speed_limit, traffic_signals):
@@ -200,6 +206,14 @@ class LocalPath:
 
         speed = self.speed_calc.add_linear_deceleration(speed)
         return speed
+
+    @staticmethod
+    def _draw_path_pts(points: List[Point2D], lbl: str = "lp_pts", color=(0, 45, 123)):
+        pts1 = PafTopDownViewPointSet()
+        pts1.label = lbl
+        pts1.points = points
+        pts1.color = color
+        rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
 
     @staticmethod
     def _choose_lane(can_go_left: bool, can_go_straight: bool, can_go_right: bool) -> Tuple[float, float, float]:
