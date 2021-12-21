@@ -10,8 +10,9 @@ from commonroad.scenario.traffic_sign import (
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
-import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
+
+from .HelperFunctions import dist_pts
 from .Spline import calc_spline_course_from_point_list
 
 
@@ -198,7 +199,6 @@ class PafRoute:
                 route_.append(step)
                 l_id = step
                 assert counter < 10000, "Unable to find exit of route graph"
-            print(route_)
             return route_
 
         return calc_extremum(is_left_extremum=True), calc_extremum(is_left_extremum=False)
@@ -322,7 +322,9 @@ class PafRoute:
             num_pts = max(2, avg_len / distance_m)
             vertices = []
             for i, (lanelet, length) in enumerate(zip(lanelets, lengths)):
-                pts = lanelet.center_vertices[::10]
+                pts = list(lanelet.center_vertices[::10])
+                rem_idx = len(lanelet.center_vertices) - len(pts) * 10
+                pts.append(list(lanelet.center_vertices[int(len(lanelet.center_vertices) - 1 + rem_idx / 2)]))
                 if len(pts) < 3:
                     pts = lanelet.center_vertices
                 new_pts = calc_spline_course_from_point_list(pts, length / num_pts / 5)[:-1]
@@ -341,7 +343,6 @@ class PafRoute:
         ):
             if last_limits is None:
                 last_limits = [-1 for _ in lanes]
-            print(lanelet_id_list)
 
             signals_per_lane, speed_limits_per_lane = [], []
             for lanelet_id, vertices in zip(lanelet_id_list, lanes):
@@ -354,6 +355,13 @@ class PafRoute:
                 paf_section.points = [Point2D(p[0], p[1]) for p in section_points]
                 paf_section.speed_limits = [x for x in last_limits]
                 paf_section.target_lanes_index_distance = -1
+                p1 = paf_section.points[int(len(paf_section.points) / 2)]
+                if len(msg.sections) == 0:
+                    p2 = p1
+                else:
+                    p2 = msg.sections[-1].points[int(len(msg.sections[-1].points) / 2)]
+                paf_section.distance_from_last_section = dist_pts(p1, p2)
+                msg.distance += paf_section.distance_from_last_section
                 for lane_number, (signal_lane, speed_lane) in enumerate(zip(signals_per_lane, speed_limits_per_lane)):
                     for signal in signal_lane:
                         if signal.index == j:
@@ -372,9 +380,9 @@ class PafRoute:
                 # print(len(section_points))
                 msg.sections.append(paf_section)
 
-            if lanes_l != 0 or anchor_l != 0 or anchor_r != len(lanelet_id_list) - 1:
+            if (lanes_l != 0 or anchor_l != 0 or anchor_r != len(lanelet_id_list) - 1) or i == len(groups) - 1:
                 # shift speed limit lanes
-                print(lanes_l, anchor_l, anchor_r)
+                # print(lanes_l, anchor_l, anchor_r)
                 last_limits_new = [-1 for _ in range(anchor_l, anchor_r + 1)]
                 for index, entry in enumerate(last_limits_new):
                     if index + 1 <= lanes_l:
@@ -386,12 +394,23 @@ class PafRoute:
                         last_limits_new[index] = last_limits[index_old_limits]
                     except IndexError:
                         break
-                print(last_limits_new)
+                # print(last_limits_new)
                 last_limits = last_limits_new
 
-                # todo calculate target_lanes[], target_lanes_index_distance (since last lane change), target_lanes_left_shift (for this instance)
+                # set target lanes etc. for all previous lanes
+                target_lanes = list(range(anchor_l, anchor_r + 1))
+                target_lanes_left_shift = anchor_l
+                distance_to_target = 0
+                for target_lanes_index_distance, paf_section in enumerate(reversed(msg.sections)):
+                    if paf_section.target_lanes_index_distance != -1:
+                        break
+                    paf_section.target_lanes = target_lanes
+                    paf_section.target_lanes_index_distance = target_lanes_index_distance
+                    paf_section.target_lanes_distance = distance_to_target
+                    paf_section.target_lanes_left_shift = target_lanes_left_shift
 
-        msg.distance = self.route.path_length[-1]
+                    distance_to_target += paf_section.distance_from_last_section
+
         msg.target = self.target
 
         return msg
@@ -399,7 +418,8 @@ class PafRoute:
 # Point2D[] points
 # float32[] speed_limits
 # PafTrafficSignal[] signals
-
-# int32[] target_lanes
-# int32 target_lanes_index_distance
+# target_lanes[]
+# int64 target_lanes_index_distance
 # int32 target_lanes_left_shift
+# float32 distance_from_last_section
+# float32 target_lanes_distance
