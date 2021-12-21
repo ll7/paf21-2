@@ -237,7 +237,7 @@ class VehicleController:
             rospy.loginfo_throttle(
                 1,
                 f"Duration acc: {self._end_acc - self._start_acc}, "
-                "Duration break: {self._end_break - self._start_break}",
+                f"Duration break: {self._end_break - self._start_break}",
             )
 
         if distance >= 0.5 and self._current_speed > 10:
