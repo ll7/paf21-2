@@ -148,7 +148,8 @@ class GlobalPlanner:
             rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")
             return
 
-        route = self._next_raceway_loop(position, yaw, resolution)  # TODO remove: only for Town06 raceway testing
+        # TODO remove: only for Town06 raceway testing
+        route = self._next_raceway_loop(position, yaw, resolution)
         self._last_route = route
         self._routing_pub.publish(route)
 
@@ -165,7 +166,8 @@ class GlobalPlanner:
             PafLaneletRoute: raceway loop
         """
         path_msg = None
-        waypoints = [(-223.04, 19.26), (-255.40, -246.51), (586.25, -246.51), (586.25, 19.26)]
+        waypoints = [(-180.04, 19.26)]  # [(-195.04, 19.26)]
+        waypoints = [(-229.04, 19.26), (-255.40, -246.51), (586.25, -246.51), (586.25, 19.26)]
 
         for wp in waypoints:
             routes = self._routes_from_objective(position, yaw, wp, return_shortest_only=True)

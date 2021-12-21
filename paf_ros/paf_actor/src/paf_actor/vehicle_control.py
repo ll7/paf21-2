@@ -39,6 +39,10 @@ class VehicleController:
         self._emergency_mode: bool = False
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
+        self._start_acc = None
+        self._end_acc = None
+        self._start_break = None
+        self._end_break = None
 
         self._start_time = None
         self._end_time = None
@@ -117,6 +121,7 @@ class VehicleController:
             steering = 0.0
             self._is_reverse = False
             self._target_speed = 0.0
+            self.__calculate_throttle(dt, -10000)
             rospy.loginfo_throttle(10, "[Actor] waiting for new local path")
 
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
@@ -203,7 +208,37 @@ class VehicleController:
             float: the throttle to use
         """
         # perform pid control step with distance and speed controllers
+        self._target_speed = min(self._target_speed, 100 / 3.6)
         target_speed = self._target_speed * self._target_speed_offset
+
+        import time
+
+        if self._start_acc is None and self._target_speed > 0.0 and self._current_speed > 0.0 and distance != -10000:
+            self._start_acc = time.time()
+            rospy.loginfo("STARTING ACC")
+        if (
+            self._end_acc is None
+            and self._current_speed >= min(self._target_speed, 170 / 3.6)
+            and self._start_acc is not None
+        ):
+            self._end_acc = time.time()
+            rospy.loginfo("ENDING ACC")
+        if self._target_speed == 0.0 and self._start_break is None and self._end_acc is not None:
+            self._start_break = time.time()
+            rospy.loginfo("STARING BREAK")
+        if self._current_speed <= 0.0 and self._end_break is None and self._start_break is not None:
+            self._end_break = time.time()
+            rospy.loginfo("ENDING BREAK")
+
+        rospy.loginfo_throttle(1, "HERE IN ACTING")
+        rospy.loginfo_throttle(1, f"TARGET SPEED: {self._target_speed}")
+
+        if self._end_break is not None:
+            rospy.loginfo_throttle(
+                1,
+                f"Duration acc: {self._end_acc - self._start_acc}, "
+                "Duration break: {self._end_break - self._start_break}",
+            )
 
         if distance >= 0.5 and self._current_speed > 10:
             target_speed = max(10, self._current_speed * (1 - 1e-8))
