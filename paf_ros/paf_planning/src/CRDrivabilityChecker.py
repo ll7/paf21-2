@@ -40,7 +40,7 @@ from rospy.timer import Rate
 
 # generate path of the file to be opened
 file_path = "/home/imech154/paf21-2/maps/Rules/Town03.xml"
-
+EGO_VEHICLE_SHAPE = Rectangle(width=2.0, length=4.5)
 
 class CRDriveabilityChecker(object):
     def __init__(self):
@@ -143,10 +143,12 @@ class CRDriveabilityChecker(object):
         position = [self.current_pose.position.x, self.current_pose.position.y]
         orientation = self.current_orientation
 
-        initial_state = State(position=position, velocity=5,
+        #dummy velocity 
+        initial_state = State(position=position, velocity=20,
                               orientation=orientation, time_step=0)
+        predicted_trajectory = self._generate_trajectory_prediction_ego_vehicle(initial_state, EGO_VEHICLE_SHAPE)
 
-        self.ego_vehicle = StaticObstacle(id, type, shape, initial_state)
+        self.ego_vehicle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         self.scenario.add_objects(self.ego_vehicle)
 
     def _add_all_pedestrians_to_cr(self, pedestrians: PafObstacleList):
@@ -164,7 +166,38 @@ class CRDriveabilityChecker(object):
     ) -> Obstacle:
         initial_state = State(position=np.array(
             [0.0, 0.0]), velocity=0, orientation=0, time_step=0)
-        return StaticObstacle(id, type, shape, initial_state)
+        
+        predicted_trajectory = self._generate_trajectory_prediction_obstacle (initial_state, shape)
+
+        dynamic_obstacle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)  
+        return dynamic_obstacle
+
+    def _generate_trajectory_prediction_ego_vehicle(self, intialState: State, shape: Shape)-> TrajectoryPrediction:
+        state_list = []
+        for i in range(1, 21):
+            # compute new position
+            new_position = np.array([intialState.position[0] + self.scenario.dt * i * 20, self.current_pose.position.y])
+            # create new state
+            new_state = State(position = new_position, velocity = 20,orientation = self.current_orientation, time_step = i)
+            # add new state to state_list
+            state_list.append(new_state)
+        dynamic_obstacle_trajectory = Trajectory(1, state_list)
+        dynamic_obstacle_prediction = TrajectoryPrediction(dynamic_obstacle_trajectory, shape)
+        return dynamic_obstacle_prediction
+
+    def _generate_trajectory_prediction_obstacle(self, initial_state:State, shape: Shape)-> TrajectoryPrediction:
+        state_list = []
+        for i in range(1, 21):
+            # compute new position
+            new_position = np.array([initial_state.position[0] + self.scenario.dt * i * 0, 0])
+            # create new state
+            new_state = State(position = new_position, velocity = 0,orientation = 0.02, time_step = i)
+            # add new state to state_list
+            state_list.append(new_state)
+        dynamic_obstacle_trajectory = Trajectory(1, state_list)
+        dynamic_obstacle_prediction = TrajectoryPrediction(dynamic_obstacle_trajectory, shape)
+        return dynamic_obstacle_prediction
+
 
     def _convert_obstacles_to_collision_objects(self, cr_obstacles):
         # convert each obstacle in the scenario to a collision object
@@ -187,6 +220,7 @@ class CRDriveabilityChecker(object):
         # actual position should be fixed, dummy implementation
         position = np.array(obstacle.closest)
         type = ObstacleType.PARKED_VEHICLE
+
         cr_obstacle = self._create_obstacle(
             id, obstacle, shape, type, position)
 
