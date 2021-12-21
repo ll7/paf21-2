@@ -68,7 +68,8 @@ class CRDriveabilityChecker(object):
 
         self.ego_vehicle_id = self.scenario.generate_object_id()
 
-        self.done = 0
+        #collision checker
+        collision_checker = create_collision_checker(self.scenario)
 
     def _odometry_updated(self, odo: Odometry):
         """
@@ -150,6 +151,8 @@ class CRDriveabilityChecker(object):
 
         self.ego_vehicle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         self.scenario.add_objects(self.ego_vehicle)
+        # create collision object
+        create_collision_object(self.ego_vehicle)
 
     def _add_all_pedestrians_to_cr(self, pedestrians: PafObstacleList):
         for obstacle in pedestrians:
@@ -191,18 +194,13 @@ class CRDriveabilityChecker(object):
             # compute new position
             new_position = np.array([initial_state.position[0] + self.scenario.dt * i * 0, 0])
             # create new state
-            new_state = State(position = new_position, velocity = 0,orientation = 0.02, time_step = i)
+            new_state = State(position = new_position, velocity = 0, orientation = 0.02, time_step = i)
             # add new state to state_list
             state_list.append(new_state)
         dynamic_obstacle_trajectory = Trajectory(1, state_list)
         dynamic_obstacle_prediction = TrajectoryPrediction(dynamic_obstacle_trajectory, shape)
         return dynamic_obstacle_prediction
 
-
-    def _convert_obstacles_to_collision_objects(self, cr_obstacles):
-        # convert each obstacle in the scenario to a collision object
-        for obs in cr_obstacles:
-            create_collision_object(obs)
 
     def _add_pedestrian(self, id, obstacle: PafObstacle):
         shape = Circle(0.35, np.array(obstacle.closest))
@@ -225,7 +223,7 @@ class CRDriveabilityChecker(object):
             id, obstacle, shape, type, position)
 
         # create collision object
-        # create_collision_object(cr_obstacle)
+        create_collision_object(cr_obstacle)
 
         self.scenario.add_objects(cr_obstacle)
         self.cr_obstacles_vehicles.append(cr_obstacle)
