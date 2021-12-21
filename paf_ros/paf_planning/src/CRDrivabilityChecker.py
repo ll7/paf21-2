@@ -7,6 +7,7 @@ from commonroad.scenario.scenario import Scenario
 from commonroad.visualization.mp_renderer import MPRenderer
 from matplotlib import pyplot as plt
 import numpy as np
+from numpy.core.arrayprint import BoolFormat
 # for orientation of the ego vehicle
 from tf.transformations import euler_from_quaternion
 import rospy
@@ -69,7 +70,8 @@ class CRDriveabilityChecker(object):
         self.ego_vehicle_id = self.scenario.generate_object_id()
 
         #collision checker
-        collision_checker = create_collision_checker(self.scenario)
+        self.collision_checker = create_collision_checker(self.scenario)
+
 
     def _odometry_updated(self, odo: Odometry):
         """
@@ -140,7 +142,7 @@ class CRDriveabilityChecker(object):
 
         id = self.ego_vehicle_id
         type = ObstacleType.PARKED_VEHICLE
-        shape = Rectangle(width=2.0, length=4.5)
+        shape = EGO_VEHICLE_SHAPE
         position = [self.current_pose.position.x, self.current_pose.position.y]
         orientation = self.current_orientation
 
@@ -152,7 +154,11 @@ class CRDriveabilityChecker(object):
         self.ego_vehicle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         self.scenario.add_objects(self.ego_vehicle)
         # create collision object
-        create_collision_object(self.ego_vehicle)
+        co = create_collision_object(self.ego_vehicle)
+
+        #rospy.loginfo('Collision between the trajectory of the ego vehicle and objects in the environment: ' self.collision_checker.collide(co))
+        #cc = self.collision_checker.collide(co)
+        #self._is_collision_detected(co)
 
     def _add_all_pedestrians_to_cr(self, pedestrians: PafObstacleList):
         for obstacle in pedestrians:
@@ -214,7 +220,9 @@ class CRDriveabilityChecker(object):
     def _add_vehicle(self, id, obstacle: PafObstacle):
         vertices = np.array(
             [obstacle.closest, obstacle.bound_1, obstacle.bound_2])
-        shape = Polygon(vertices=vertices)
+        # add dummy implementation, obstacles should have three different vertices 
+        new_vertices = vertices + np.array([[0.0, 0.0], [0.00001, 0.0], [0.0000, 0.00001]])
+        shape = Polygon(vertices=new_vertices)
         # actual position should be fixed, dummy implementation
         position = np.array(obstacle.closest)
         type = ObstacleType.PARKED_VEHICLE
@@ -228,6 +236,9 @@ class CRDriveabilityChecker(object):
         self.scenario.add_objects(cr_obstacle)
         self.cr_obstacles_vehicles.append(cr_obstacle)
 
+    def _is_collision_detected(self, collision_object):
+        rospy.logwarn('Collision between the trajectory of the ego vehicle and objects in the environment: ', self.collision_checker.collide(collision_object))
+        
     def _overwrite_file(self):
         author = ""
         affiliation = ""
