@@ -93,7 +93,7 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
         self._global_path = GlobalPath(msg=msg)
         self._local_path = LocalPath(self._global_path, self.rules_enabled)
-        self._create_paf_local_path_msg()
+        self._create_paf_local_path_msg(self._local_path.calculate_new_local_path(self._current_pose.position))
 
     # def _get_track_angle(self, s_index, l_index):
     #     if len(self._global_path.sections) == 0:
@@ -138,16 +138,14 @@ class LocalPlanner:
     #
     #     self._target_speed = [1 for _ in self._local_path]
 
-    def _create_paf_local_path_msg(self, send_empty=False):
-        path_msg = self._local_path.message
+    def _create_paf_local_path_msg(self, path_msg=None, send_empty=False):
+        if path_msg is None:
+            path_msg = self._local_path.message
+
         if send_empty:
             path_msg.header.stamp = rospy.Time.now()
             path_msg.target_speed = []
             path_msg.points = []
-        #
-        # while 0 < len(path_msg.target_speed) < len(path_msg.points):  # threading issue
-        #     path_msg.target_speed.append(path_msg.target_speed[-1])
-
         self._local_plan_publisher.publish(path_msg)
 
     def _loop_handler(self):
@@ -167,8 +165,8 @@ class LocalPlanner:
             rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
         else:
             rospy.loginfo_throttle(30, "[local planner] local planner is replanning")
-            self._local_path.calculate_new_local_path(self._current_pose.position)
-            self._create_paf_local_path_msg()
+            msg = self._local_path.calculate_new_local_path(self._current_pose.position)
+            self._create_paf_local_path_msg(msg)
 
         if self._is_stopped():
             self._handle_stop_event()
@@ -177,8 +175,8 @@ class LocalPlanner:
         p = self._current_pose.position
         rospy.sleep(3)  # todo remove
         if self._allowed_from_stop():
-            self._local_path.calculate_new_local_path(p, ignore_signs_distance=10)
-            self._create_paf_local_path_msg()
+            msg = self._local_path.calculate_new_local_path(p, ignore_signs_distance=10)
+            self._create_paf_local_path_msg(msg)
 
     # def _get_current_trajectory(self):
     #     m_idx, l_idx, p_idx = self._set_current_indices()
@@ -269,8 +267,6 @@ class LocalPlanner:
     def _is_stopped(self):
         margin = 0.5
         stop = -margin < self._current_speed < margin
-
-        rospy.loginfo_throttle(5, stop)
         return stop
 
     def _planner_at_end_of_route(self, pth=None):

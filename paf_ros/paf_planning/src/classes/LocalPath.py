@@ -73,7 +73,7 @@ class LocalPath:
         min_lane_change_meters = 30
         buffer = 5
 
-        target_distance = 9999  # max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
+        target_distance = 250  # max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
         distance_planned = 0
 
         point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
@@ -112,11 +112,11 @@ class LocalPath:
             else:
                 sparse_traffic_signals.append(self.global_path.get_signals(s, current_lane))
 
-            print(
-                f"{len(sparse_local_path) - 1}: width={len(s.points)}, lane={current_lane}, "
-                f"speed={int(sparse_local_path_speeds[-1] * 3.6)}kmh, "
-                f"planned={np.round(distance_planned, 1)}m, target_lane_dist={int(s.target_lanes_distance)}"
-            )
+            # print(
+            #     f"{len(sparse_local_path) - 1}: width={len(s.points)}, lane={current_lane}, "
+            #     f"speed={int(sparse_local_path_speeds[-1] * 3.6)}kmh, "
+            #     f"planned={np.round(distance_planned, 1)}m, target_lane_dist={int(s.target_lanes_distance)}"
+            # )
 
             if s.target_lanes_distance == 0:
                 current_lane += -s.target_lanes[0] + s.target_lanes_left_shift
@@ -163,7 +163,7 @@ class LocalPath:
             choice = np.random.choice(["left", "straight", "right"], p=probabilities)
 
             if choice == "left" or choice == "right":
-                print(f"lane change {choice}, {l_change} {l_change_allowed} / {r_change} {r_change_allowed}")
+                # print(f"lane change {choice}, {l_change} {l_change_allowed} / {r_change} {r_change_allowed}")
                 current_lane += -1 if choice == "left" else 1
                 last_lane_change_target_dist = max(0, s.target_lanes_distance - distance_for_one_lane_change)
 

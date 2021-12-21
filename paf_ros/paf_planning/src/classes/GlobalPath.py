@@ -25,14 +25,13 @@ class GlobalPath:
 
     def __init__(
         self,
-        route: CommonroadRoute = None,
+        commonroad_route: CommonroadRoute = None,
         target=None,
         traffic_sign_country: Country = Country.GERMANY,
         msg: PafLaneletRoute = PafLaneletRoute(),
     ):
 
-        self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
-        if route is None:
+        if commonroad_route is None:
             self.route = msg
             self._graph = None
             self._adjacent_lanelets = None
@@ -42,9 +41,12 @@ class GlobalPath:
             if hasattr(target, "x"):
                 target = target.x, target.y
             self.target = Point2D(target[0], target[1])
-            self._commonroad_route = route
+            self._commonroad_route = commonroad_route
             self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
             self._graph = self._calc_lane_change_graph()
+            self._traffic_sign_interpreter = TrafficSigInterpreter(
+                traffic_sign_country, commonroad_route.scenario.lanelet_network
+            )
             self.route = None
 
     def __len__(self):
@@ -52,13 +54,14 @@ class GlobalPath:
             return 0
         return len(self.route.sections)
 
-    def get_signals(self, section_idx, lane_idx):
-        section: PafRouteSection = self.route.sections[section_idx]
+    def get_signals(self, section, lane_idx):
+        if type(section) is not PafRouteSection:
+            section = self.route.sections[section]
         return [sig for sig in section.signals if sig.index == lane_idx]
 
     def get_local_path_values(self, section_idx, lane_idx):
         section: PafRouteSection = self.route.sections[section_idx]
-        return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
+        return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section_idx, lane_idx)
 
     def get_section_and_lane_indices(self, position, not_found_threshold_meters=100):
         if hasattr(position, "x"):
