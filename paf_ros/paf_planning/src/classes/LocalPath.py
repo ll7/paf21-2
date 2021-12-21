@@ -1,9 +1,10 @@
 from typing import Tuple
 
 import rospy
-from paf_messages.msg import PafLaneletRoute, PafLocalPath, Point2D, PafRouteSection, PafTrafficSignalList
+from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection
 from std_msgs.msg import Header
-from .HelperFunctions import closest_index_of_point_list, xy_to_pts, expand_sparse_list
+from .GlobalPath import GlobalPath
+from .HelperFunctions import xy_to_pts, expand_sparse_list
 
 import numpy as np
 
@@ -13,56 +14,60 @@ from .Spline import calc_spline_course_from_point_list
 
 class LocalPath:
     REPLANNING_THRESHOLD_DISTANCE_M = 15
-    STEP_SIZE = .125
+    STEP_SIZE = 0.125
 
-    def __init__(self, route: PafLaneletRoute, current_position: Point2D, rules_enabled: bool):
-        self.route = route
-        self.from_point = current_position
+    def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
+        self._local_path_start_section = None
+        self.traffic_signals = []
+        self.global_path = global_path
         self.message = PafLocalPath()
         self.rules_enabled = rules_enabled
         self.speed_calc = SpeedCalculator(self.STEP_SIZE)
 
-    def _get_section_and_lane_indices(self, position):
-        if hasattr(position, "x"):
-            ref = (position.x, position.y)
-        else:
-            ref = position
+    def __len__(self):
+        return len(self.message.points)
 
-        if len(self.route.sections) == 0:
-            return -1, -1
+    def current_indices(self, position: Point2D):
+        return self.global_path.get_section_and_lane_indices(position)
 
-        filter1 = [section.points[int(len(section.points) / 2 - .5)] for section in self.route.sections]
-        section, d = closest_index_of_point_list(filter1, ref)
+    def next_traffic_signal(self, position: Point2D, within_distance=100, buffer_idx=1):
+        distance = 0
+        distance_buffer = 0
+        sec_idx, l_idx = self.current_indices(position)
+        sec_idx -= buffer_idx
+        idx_1 = self._local_path_start_section
+        delta_sec = sec_idx - idx_1
+        found = None
 
-        if d > self.REPLANNING_THRESHOLD_DISTANCE_M:
-            return -2, -2
+        section: PafRouteSection
+        for i, (section, sig) in enumerate(
+            zip(self.global_path.route.sections[idx_1:], self.traffic_signals[delta_sec:])
+        ):
+            if len(sig) != 0 or distance >= within_distance:
+                found = sig
+                break
+            if buffer_idx > 0:
+                buffer_idx -= 1
+                distance_buffer -= section.distance_from_last_section
+            distance += section.distance_from_last_section
 
-        filter2 = self.route.sections[section].points
-        lane, d = closest_index_of_point_list(filter2, ref)
+        return found, distance if distance > 0 else distance_buffer
 
-        return section, lane
-
-    @staticmethod
-    def _get_signals(section: PafRouteSection, lane_idx):
-        return [sig for sig in section.signals if sig.index == lane_idx]
-
-    def _get_point(self, section_idx, lane_idx):
-        section: PafRouteSection = self.route.sections[section_idx]
-        return section.points[lane_idx], section.speed_limits[lane_idx], self._get_signals(section, lane_idx)
-
-    def calculate_new_local_path(self):
+    def calculate_new_local_path(self, from_position: Point2D, ignore_signs_distance: float = 0):
         local_path = PafLocalPath()
         # float32[]             target_speed
         # Point2D[]             points
         # PafTrafficSignalList[]    signals
 
-        section_from, current_lane = self._get_section_and_lane_indices(self.from_point)
-        section_target, lane_target = self._get_section_and_lane_indices(self.route.target)
+        section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
+        section_target, lane_target = self.global_path.get_section_and_lane_indices(self.global_path.route.target)
 
         if section_from < 0 or section_target < 0:
             rospy.logerr("unable to calculate local path")
             self.message = local_path
             return local_path
+
+        self._local_path_start_section = section_from
 
         lane_change_secs = 1
         min_lane_change_meters = 30
@@ -71,7 +76,7 @@ class LocalPath:
         target_distance = 9999  # max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
         distance_planned = 0
 
-        point, current_speed, signals = self._get_point(section_from, current_lane)
+        point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
 
         sparse_local_path = [point]
         sparse_local_path_speeds = [current_speed]
@@ -79,8 +84,10 @@ class LocalPath:
 
         last_lane_change_target_dist = None
 
+        idx1 = section_from + 1
+
         s: PafRouteSection
-        for s in self.route.sections[section_from + 1:]:
+        for s in self.global_path.route.sections[idx1:]:
             # Point2D[] points
             # float32[] speed_limits
             # PafTrafficSignal[] signals
@@ -96,10 +103,14 @@ class LocalPath:
             else:
                 last_lane_change_target_dist = None
 
+            distance_planned += s.distance_from_last_section
+
             sparse_local_path.append(s.points[current_lane])
             sparse_local_path_speeds.append(s.speed_limits[current_lane])
-            sparse_traffic_signals.append(self._get_signals(s, current_lane))
-            distance_planned += s.distance_from_last_section
+            if distance_planned < ignore_signs_distance:
+                sparse_traffic_signals.append([])
+            else:
+                sparse_traffic_signals.append(self.global_path.get_signals(s, current_lane))
 
             print(
                 f"{len(sparse_local_path) - 1}: width={len(s.points)}, lane={current_lane}, "
@@ -108,7 +119,7 @@ class LocalPath:
             )
 
             if s.target_lanes_distance == 0:
-                current_lane += - s.target_lanes[0] + s.target_lanes_left_shift
+                current_lane += -s.target_lanes[0] + s.target_lanes_left_shift
                 continue
 
             if distance_planned > target_distance:
@@ -147,7 +158,7 @@ class LocalPath:
             probabilities = self._choose_lane(
                 can_go_left=l_change or l_change_allowed,
                 can_go_right=r_change or r_change_allowed,
-                can_go_straight=not (l_change or r_change)
+                can_go_straight=not (l_change or r_change),
             )
             choice = np.random.choice(["left", "straight", "right"], p=probabilities)
 
@@ -176,6 +187,7 @@ class LocalPath:
             pass
 
         self.message = local_path
+        self.traffic_signals = sparse_traffic_signals
         return local_path
 
     def _update_target_speed(self, local_path, speed_limit, traffic_signals):

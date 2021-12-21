@@ -113,7 +113,7 @@ class SpeedCalculator:
         for r in curve_radius_list[::10]:
             speed1 += [SpeedCalculator._radius_to_speed(r)] * 10
         speed1 += [speed1[-1] for _ in range(len(path) - len(speed1))]
-        return speed1[:len(path)]
+        return speed1[: len(path)]
 
     def _linear_deceleration_function(self, target_speed):
         b = self.MAX_SPEED
@@ -175,11 +175,10 @@ class SpeedCalculator:
         return np.clip(speed, 0, speed_limit)
 
     def add_stop_events(
-            self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, events=None, buffer_m=0,
-            shift_m=0
+        self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, events=None, buffer_m=0, shift_m=0
     ):
 
-        assert (len(speed) == len(traffic_signals))
+        assert len(speed) == len(traffic_signals)
         buffer_idx = int(buffer_m / self._step_size)
         shift_idx = int(shift_m / self._step_size)
         speed_limit = np.ones_like(speed) * 1000
@@ -203,8 +202,9 @@ class SpeedCalculator:
         speed[start_idx:end_idx] = speed_limit
         return speed
 
-    def add_roll_events(self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, buffer_m=0,
-                        shift_m=0):
+    def add_roll_events(
+        self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, buffer_m=0, shift_m=0
+    ):
         return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS, buffer_m, shift_m)
 
     def plt_init(self, add_accel=False):

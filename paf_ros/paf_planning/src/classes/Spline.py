@@ -7,7 +7,7 @@ https://github.com/AtsushiSakai/PythonRobotics/blob/master/PathPlanning/CubicSpl
 """
 import math
 import bisect
-from typing import List, Tuple, Union, Any
+from typing import List, Tuple
 
 import numpy as np
 

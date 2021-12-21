@@ -5,8 +5,14 @@ import rospy
 from carla_birdeye_view.mask import PixelDimensions
 from time import sleep
 
-from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute, PafTopDownViewPointSet, PafSpeedMsg, \
-    PafLaneletMatrix, PafLanelet
+from paf_messages.msg import (
+    PafObstacleList,
+    PafLocalPath,
+    PafLaneletRoute,
+    PafTopDownViewPointSet,
+    PafSpeedMsg,
+    PafRouteSection,
+)
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
 import numpy as np
@@ -62,10 +68,10 @@ class TopDownRosNode(object):
 
     def update_global_path(self, msg: PafLaneletRoute):
         path = []
-        section: PafLaneletMatrix
+        section: PafRouteSection
         for section in msg.sections:
-            lane: PafLanelet = section.lanes[int(len(section.lanes) / 2 - .5)]
-            path += [[point.x, -point.y] for point in lane.points]
+            point = section.points[int(len(section.points) / 2 - 0.5)]
+            path.append([point.x, -point.y])
         self.producer.set_path(coordinate_list_global_path=path)
 
     def update_local_path(self, msg: PafLocalPath):
@@ -104,7 +110,7 @@ class TopDownRosNode(object):
         vehicle_tf.rotation = carla.Rotation(pitch=-90, roll=0, yaw=-90)
         spec_tf = self._spectator.get_transform()
         if (vehicle_tf.location.x - spec_tf.location.x) ** 2 + (
-                vehicle_tf.location.y - spec_tf.location.y
+            vehicle_tf.location.y - spec_tf.location.y
         ) ** 2 > 30 ** 2:
             self._spectator.set_transform(vehicle_tf)
 

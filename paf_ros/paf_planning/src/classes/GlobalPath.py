@@ -12,24 +12,72 @@ from commonroad_route_planner.route import Route as CommonroadRoute
 
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
 
-from .HelperFunctions import dist_pts
+from .HelperFunctions import dist_pts, closest_index_of_point_list
 from .Spline import calc_spline_course_from_point_list
 
 
-class PafRoute:
+class GlobalPath:
     SPEED_KMH_TO_MS = 1 / 3.6
     MERGE_SPEED_RESET = 50 / 3.6
     UNKNOWN_SPEED_LIMIT_SPEED = 250 / 3.6
     APPLY_MERGING_RESET = True
 
-    def __init__(self, route: CommonroadRoute, target, traffic_sign_country: Country = Country.GERMANY):
-        if hasattr(target, "x"):
-            target = target.x, target.y
-        self.target = Point2D(target[0], target[1])
+    def __init__(
+        self,
+        route: CommonroadRoute = None,
+        target=None,
+        traffic_sign_country: Country = Country.GERMANY,
+        msg: PafLaneletRoute = PafLaneletRoute(),
+    ):
+
         self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, route.scenario.lanelet_network)
-        self.route = route
-        self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
-        self.graph = self._calc_lane_change_graph()
+        if route is None:
+            self.route = msg
+            self._graph = None
+            self._adjacent_lanelets = None
+            self._commonroad_route = None
+            self.target = msg.target
+        else:
+            if hasattr(target, "x"):
+                target = target.x, target.y
+            self.target = Point2D(target[0], target[1])
+            self._commonroad_route = route
+            self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
+            self._graph = self._calc_lane_change_graph()
+            self.route = self.as_msg()
+
+    def __len__(self):
+        if self.route is None:
+            return 0
+        return len(self.route.sections)
+
+    def get_signals(self, section_idx, lane_idx):
+        section: PafRouteSection = self.route.sections[section_idx]
+        return [sig for sig in section.signals if sig.index == lane_idx]
+
+    def get_local_path_values(self, section_idx, lane_idx):
+        section: PafRouteSection = self.route.sections[section_idx]
+        return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
+
+    def get_section_and_lane_indices(self, position, not_found_threshold_meters=100):
+        if hasattr(position, "x"):
+            ref = (position.x, position.y)
+        else:
+            ref = position
+
+        if len(self.route.sections) == 0:
+            return -1, -1
+
+        filter1 = [section.points[int(len(section.points) / 2 - 0.5)] for section in self.route.sections]
+        section, d = closest_index_of_point_list(filter1, ref)
+
+        if d > not_found_threshold_meters:
+            return -2, -2
+
+        filter2 = self.route.sections[section].points
+        lane, d = closest_index_of_point_list(filter2, ref)
+
+        return section, lane
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
@@ -38,7 +86,7 @@ class PafRoute:
         """
 
         def get_right_lanelets_same_directions(_lanelet_id, lanelets=None):
-            lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(_lanelet_id)
+            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(_lanelet_id)
             if lanelets is None:
                 lanelets = []
             if lanelet.adj_right_same_direction:
@@ -47,7 +95,7 @@ class PafRoute:
             return lanelets
 
         def get_left_lanelets_same_directions(_lanelet_id, lanelets=None):
-            lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(_lanelet_id)
+            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(_lanelet_id)
             if lanelets is None:
                 lanelets = []
             if lanelet.adj_left_same_direction:
@@ -56,7 +104,7 @@ class PafRoute:
             return lanelets
 
         adj_route = []
-        for lanelet_id in self.route.list_ids_lanelets:
+        for lanelet_id in self._commonroad_route.list_ids_lanelets:
             adj_left = get_left_lanelets_same_directions(lanelet_id)
             adj_right = get_right_lanelets_same_directions(lanelet_id)
             adj_route.append((lanelet_id, adj_left, adj_right))
@@ -82,12 +130,12 @@ class PafRoute:
 
         lane_change_graph = {}
         for (planned_id_0, l_ids_0, r_ids_0), (planned_id_1, l_ids_1, r_ids_1) in zip(
-                self._adjacent_lanelets, self._adjacent_lanelets[1:]
+            self._adjacent_lanelets, self._adjacent_lanelets[1:]
         ):
             possible_0 = [planned_id_0] + l_ids_0 + r_ids_0
             possible_1 = [planned_id_1] + l_ids_1 + r_ids_1
             for l_id in possible_0:
-                lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(l_id)
+                lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(l_id)
                 can_turn_left = lanelet.adj_left in (possible_1 + possible_0)
                 can_turn_right = lanelet.adj_right in (possible_1 + possible_0)
 
@@ -103,17 +151,17 @@ class PafRoute:
         Calculates the route in a human-readable format
         :return:
         """
-        route_ids = self.route.list_ids_lanelets
+        route_ids = self._commonroad_route.list_ids_lanelets
         out = f"start route from {route_ids[0]}\n"
         for lanelet_id, next_lanelet_id in zip(route_ids, route_ids[1:]):
-            lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
             l_set = frozenset([lanelet_id])
             speed_limit = self._traffic_sign_interpreter.speed_limit(l_set)
             speed_minimum = self._traffic_sign_interpreter.required_speed(l_set)
             speed_minimum = 0 if speed_minimum is None else speed_minimum
 
             for sign in lanelet.traffic_signs:
-                sign = self.route.scenario.lanelet_network.find_traffic_sign_by_id(sign)
+                sign = self._commonroad_route.scenario.lanelet_network.find_traffic_sign_by_id(sign)
                 sign_name = sign.traffic_sign_elements[0].traffic_sign_element_id.name
                 if sign_name == "MAX_SPEED":
                     continue
@@ -161,8 +209,8 @@ class PafRoute:
         """
 
         def calc_extremum(is_left_extremum):
-            l_id = self.route.list_ids_lanelets[0]
-            target_id = self.route.list_ids_lanelets[-1]
+            l_id = self._commonroad_route.list_ids_lanelets[0]
+            target_id = self._commonroad_route.list_ids_lanelets[-1]
             route_ = []
 
             def test_direction(l_dir):
@@ -172,9 +220,9 @@ class PafRoute:
             counter = 0
             while l_id != target_id:
                 if is_left_extremum:
-                    a, b, c = self.graph[l_id]
+                    a, b, c = self._graph[l_id]
                 else:
-                    c, b, a = self.graph[l_id]
+                    c, b, a = self._graph[l_id]
                 step = None
                 assert l_id not in (a, b, c), "Circular dependencies are not permitted"
                 if test_direction(a):
@@ -185,14 +233,14 @@ class PafRoute:
                     step = c
                 else:
                     # backtrack and choose other direction
-                    while len([x for x in self.graph[l_id] if x is not None]) < 2:
+                    while len([x for x in self._graph[l_id] if x is not None]) < 2:
                         assert len(route_) > 0
                         del route_[-1]
                         l_id = route_[-1]
                     if is_left_extremum:
-                        a, b, c = self.graph[l_id]
+                        a, b, c = self._graph[l_id]
                     else:
-                        c, b, a = self.graph[l_id]
+                        c, b, a = self._graph[l_id]
 
                     if test_direction(b):
                         step = b
@@ -210,7 +258,7 @@ class PafRoute:
         traffic_signals = []
         speed_limits = []
 
-        lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+        lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         vertices = lanelet.center_vertices
 
         # lane merge events
@@ -226,7 +274,7 @@ class PafRoute:
         # all traffic signs
         for sign_id in lanelet.traffic_signs:
             paf_sign = PafTrafficSignal()
-            sign = self.route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
+            sign = self._commonroad_route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             is_speed_limit = paf_sign.type == TrafficSignIDGermany.MAX_SPEED.value
             try:
@@ -244,7 +292,7 @@ class PafRoute:
 
         # all traffic lights
         for light_id in lanelet.traffic_lights:
-            light = self.route.scenario.lanelet_network.find_traffic_light_by_id(light_id)
+            light = self._commonroad_route.scenario.lanelet_network.find_traffic_light_by_id(light_id)
             paf_sign = PafTrafficSignal()
             paf_sign.type = "LIGHT"
             paf_sign.value = 0.0
@@ -266,9 +314,9 @@ class PafRoute:
         for i in range(25):
             pre = lanelet.predecessor
             lanelet_id = lanelet.predecessor[int(len(pre) / 2)]
-            lanelet = self.route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
             for sign_id in lanelet.traffic_signs:
-                sign = self.route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
+                sign = self._commonroad_route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
                 if sign.traffic_sign_elements[0].traffic_sign_element_id.name == TrafficSignIDGermany.MAX_SPEED.value:
                     _, speed_limits = self._extract_traffic_signals(lanelet.lanelet_id, [[0, 0]])
                     break
@@ -283,31 +331,31 @@ class PafRoute:
             anchor_l = 0  # leftmost lane to continue on
             anchor_r = -1  # rightmost lane to continue on
             shift_l = 0  # merging lanes from next segment on the left
-            while other in self.graph:  # go to leftmost lanelet
-                (left, straight, _) = self.graph[other]
+            while other in self._graph:  # go to leftmost lanelet
+                (left, straight, _) = self._graph[other]
                 if left is None:
                     break
                 other = left
             other2 = other
-            while other2 in self.graph:  # add from left to right
+            while other2 in self._graph:  # add from left to right
                 if other2 not in blob:
                     blob.append(other2)
-                (_, straight, other2) = self.graph[other2]
+                (_, straight, other2) = self._graph[other2]
                 if other2 is None:
                     break
             if len(blob) == 0:
                 blob = (other,)
                 return hash(blob), blob, (0, 0, 0)
             other3 = blob[0]
-            while other3 in self.graph and self.graph[other3][1] is None:
-                other3 = self.graph[other3][2]
+            while other3 in self._graph and self._graph[other3][1] is None:
+                other3 = self._graph[other3][2]
                 anchor_l += 1
                 anchor_r += 1
-            next_straight = self.graph[other3][1] if other3 in self.graph else None
-            while other3 in self.graph and self.graph[other3][1] is not None:
-                other3 = self.graph[other3][2]
+            next_straight = self._graph[other3][1] if other3 in self._graph else None
+            while other3 in self._graph and self._graph[other3][1] is not None:
+                other3 = self._graph[other3][2]
                 anchor_r += 1
-            while next_straight in self.graph and self.graph[next_straight][0] is not None:
+            while next_straight in self._graph and self._graph[next_straight][0] is not None:
                 shift_l += 1
 
             blob = tuple(blob)
@@ -323,7 +371,7 @@ class PafRoute:
         return out
 
     def get_paf_lanelet_matrix(self, groups, distance_m=5):
-        n: LaneletNetwork = self.route.scenario.lanelet_network
+        n: LaneletNetwork = self._commonroad_route.scenario.lanelet_network
         out = []
         for blob, anchor in groups:
             lanelets = [n.find_lanelet_by_id(lanelet) for lanelet in blob]
@@ -346,8 +394,12 @@ class PafRoute:
         return out
 
     def as_msg(self) -> PafLaneletRoute:
+
+        if self.route is not None:
+            return self.route
+
         msg = PafLaneletRoute()
-        groups = self._get_lanelet_groups(self.route.list_ids_lanelets)
+        groups = self._get_lanelet_groups(self._commonroad_route.list_ids_lanelets)
         distance_m = 5
         last_limits = None
         # dummy_signal = PafTrafficSignal()
@@ -355,7 +407,7 @@ class PafRoute:
         # dummy_signal.type = "DUMMY"
 
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
-                zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
+            zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
             if last_limits is None:
                 last_limits = [self.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]
@@ -376,7 +428,7 @@ class PafRoute:
                 if len(msg.sections) == 0:
                     p2 = p1
                 else:
-                    p2 = msg.sections[-1].points[int(len(msg.sections[-1].points) / 2 - .5)]
+                    p2 = msg.sections[-1].points[int(len(msg.sections[-1].points) / 2 - 0.5)]
                 paf_section.distance_from_last_section = dist_pts(p1, p2)
                 msg.distance += paf_section.distance_from_last_section
                 for lane_number, (signal_lane, speed_lane) in enumerate(zip(signals_per_lane, speed_limits_per_lane)):
@@ -434,6 +486,7 @@ class PafRoute:
         msg.target = self.target
 
         return msg
+
 
 # Point2D[] points
 # float32[] speed_limits
