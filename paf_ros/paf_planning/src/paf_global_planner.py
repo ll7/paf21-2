@@ -20,7 +20,7 @@ from std_msgs.msg import Bool
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D, PafSpeedMsg
 from classes.HelperFunctions import dist, find_closest_lanelet
-from classes.PafRoute import GlobalPath
+from classes.GlobalPath import GlobalPath
 from classes.MapManager import MapManager
 from std_msgs.msg import Empty
 from tf.transformations import euler_from_quaternion

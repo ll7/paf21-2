@@ -10,6 +10,7 @@ from commonroad.scenario.traffic_sign import (
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad_route_planner.route import Route as CommonroadRoute
 
+import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
 
 from .HelperFunctions import dist_pts, closest_index_of_point_list
@@ -44,7 +45,7 @@ class GlobalPath:
             self._commonroad_route = route
             self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
             self._graph = self._calc_lane_change_graph()
-            self.route = self.as_msg()
+            self.route = None
 
     def __len__(self):
         if self.route is None:
@@ -356,11 +357,11 @@ class GlobalPath:
                 other3 = self._graph[other3][2]
                 anchor_r += 1
             while next_straight in self._graph and self._graph[next_straight][0] is not None:
+                next_straight = self._graph[next_straight][0]
                 shift_l += 1
 
             blob = tuple(blob)
             h = hash(blob)
-
             return h, blob, (shift_l, anchor_l, anchor_r)
 
         for lanelet in l_list:
@@ -380,16 +381,16 @@ class GlobalPath:
                 for lanelet in lanelets
             ]
             avg_len = np.average(lengths)
-            num_pts = max(2, avg_len / distance_m)
+            num_pts = max(5, avg_len / distance_m)
             vertices = []
             for i, (lanelet, length) in enumerate(zip(lanelets, lengths)):
                 pts = list(lanelet.center_vertices[::10])
                 rem_idx = len(lanelet.center_vertices) - len(pts) * 10
                 pts.append(list(lanelet.center_vertices[int(len(lanelet.center_vertices) - 1 + rem_idx / 2)]))
-                if len(pts) < 3:
-                    pts = lanelet.center_vertices
-                new_pts = calc_spline_course_from_point_list(pts, length / num_pts / 5)[:-1]
-                vertices.append(np.array(new_pts[::5]))
+                new_pts = lanelet.center_vertices[:-1:5]
+                if len(new_pts) > 3:
+                    new_pts = calc_spline_course_from_point_list(new_pts, length / num_pts / 5)[::5]
+                vertices.append(np.array(new_pts))
             out.append((np.array(vertices), anchor, avg_len))
         return out
 
@@ -399,18 +400,19 @@ class GlobalPath:
             return self.route
 
         msg = PafLaneletRoute()
+        rospy.logwarn(f"plan created with lanelet ids {self._commonroad_route.list_ids_lanelets}")
         groups = self._get_lanelet_groups(self._commonroad_route.list_ids_lanelets)
         distance_m = 5
         last_limits = None
-        # dummy_signal = PafTrafficSignal()
-        # dummy_signal.index = -1
-        # dummy_signal.type = "DUMMY"
-
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
             zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
             if last_limits is None:
                 last_limits = [self.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]
+            else:
+                missing = len(lanes) - len(last_limits)
+                if missing > 0:
+                    last_limits = last_limits + [self.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(missing)]
 
             signals_per_lane, speed_limits_per_lane = [], []
             for lanelet_id, vertices in zip(lanelet_id_list, lanes):
@@ -441,7 +443,7 @@ class GlobalPath:
                             break
                     for signal in speed_lane:
                         if signal.index == j:
-                            paf_section.speed_limits[lane_number] = signal.value  # -1 = unknown, 0 = merge, else x m/s
+                            paf_section.speed_limits[lane_number] = signal.value
                             break
                         if signal.index > j:
                             break
@@ -467,7 +469,10 @@ class GlobalPath:
                     except IndexError:
                         break
                 # print(last_limits_new)
-                last_limits = last_limits_new
+                unknown_limits = [
+                    self.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(msg.sections[-1].target_lanes_left_shift)
+                ]
+                last_limits = unknown_limits + last_limits_new
 
                 # set target lanes etc. for all previous lanes
                 target_lanes = list(range(anchor_l, anchor_r + 1))
@@ -484,6 +489,8 @@ class GlobalPath:
                     distance_to_target += paf_section.distance_from_last_section
 
         msg.target = self.target
+
+        self.route = msg
 
         return msg
 
