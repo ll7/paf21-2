@@ -1,7 +1,7 @@
 from typing import Tuple, List
 
 import rospy
-from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet
+from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
 from std_msgs.msg import Header
 from .GlobalPath import GlobalPath
 from .HelperFunctions import xy_to_pts, expand_sparse_list
@@ -53,6 +53,34 @@ class LocalPath:
 
         return found, distance if distance > 0 else distance_buffer
 
+    def _calculate_intermediate_pts(self, s: PafRouteSection, from_lane: int, to_lane: int, fraction: float):
+
+        p0 = np.array([s.points[from_lane].x, s.points[from_lane].y])
+        p1 = np.array([s.points[to_lane].x, s.points[to_lane].y])
+
+        # calculate intermediate point
+
+        intermediate_p = np.sum([p1 * fraction, p0 * (1 - fraction)], axis=0)
+        intermediate_p = Point2D(intermediate_p[0], intermediate_p[1])
+
+        # choose higher speed of the two lanes
+        speed = max([s.speed_limits[to_lane], s.speed_limits[from_lane]])
+
+        # merge traffic signals of the two lanes, remove duplicates
+        sig1 = self.global_path.get_signals(s, to_lane)
+        sig2 = self.global_path.get_signals(s, from_lane)
+        signals = []
+        sig: PafTrafficSignal
+        added_sig: PafTrafficSignal
+        for sig in sig1 + sig2:
+            for added_sig in signals:
+                if added_sig.value == sig.value and added_sig.type == sig.type:
+                    break
+            else:
+                signals.append(sig)
+
+        return intermediate_p, speed, signals
+
     def calculate_new_local_path(self, from_position: Point2D, ignore_signs_distance: float = 0):
         local_path = PafLocalPath()
         # float32[]             target_speed
@@ -79,11 +107,13 @@ class LocalPath:
         point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
 
         sparse_local_path = [point]
-        # lane_change_pts = []
+        lane_change_pts = []
         sparse_local_path_speeds = [current_speed]
         sparse_traffic_signals = [signals]
 
-        last_lane_change_target_dist = None
+        lane_change_until_distance = None
+        lane_change_start_distance = None
+        last_lane = current_lane
 
         idx1 = section_from + 1
 
@@ -98,10 +128,29 @@ class LocalPath:
             # int32 target_lanes_left_shift
             # float32 distance_from_last_section
             # float32 target_lanes_distance
+            # print(f"section {i}, available lanes: {list(range(len(s.points)))}, "
+            #       f"target={list(s.target_lanes)}, dist={s.target_lanes_distance}")
 
-            if last_lane_change_target_dist is not None and last_lane_change_target_dist < s.target_lanes_distance:
-                distance_planned += s.distance_from_last_section
-                continue
+            # test if current lane exists on this section
+            assert (
+                0 <= current_lane < len(s.points)
+            ), f"{current_lane} does not exist in available lanes: {list(range(len(s.points)))}"
+
+            if lane_change_until_distance is not None and s.target_lanes_distance > 0:
+                fraction_completed = (distance_planned - lane_change_start_distance) / (
+                    lane_change_until_distance - lane_change_start_distance
+                )
+
+                if fraction_completed < 1 and i < len(self.global_path) - 1:
+                    distance_planned += s.distance_from_last_section
+
+                    point, speed, signs = self._calculate_intermediate_pts(
+                        s, last_lane, current_lane, fraction_completed
+                    )
+                    sparse_local_path.append(point)
+                    sparse_local_path_speeds.append(speed)
+                    sparse_traffic_signals.append(signs)
+                    continue
 
             distance_planned += s.distance_from_last_section
 
@@ -112,48 +161,44 @@ class LocalPath:
             else:
                 sparse_traffic_signals.append(self.global_path.get_signals(s, current_lane))
 
-            # print(
-            #     f"{len(sparse_local_path) - 1}: width={len(s.points)}, lane={current_lane}, "
-            #     f"speed={int(sparse_local_path_speeds[-1] * 3.6)}kmh, "
-            #     f"planned={np.round(distance_planned, 1)}m, target_lane_dist={int(s.target_lanes_distance)}"
-            # )
-
             if s.target_lanes_distance == 0:
-                # lane_change_pts.append(s.points[current_lane])
+                assert current_lane in s.target_lanes
                 current_lane += -s.target_lanes[0] + s.target_lanes_left_shift
                 continue
 
             if distance_planned > target_distance:
                 break
 
-            if current_lane in s.target_lanes:
-                number_of_lanes_off = 0
-            elif current_lane > s.target_lanes[-1]:
-                number_of_lanes_off = current_lane - s.target_lanes[-1]  # target is left == number of lanes off > 0
+            # target is right == number of lanes off > 0
+            # target is left == number of lanes off < 0
+            # on target lanes: number of lanes off == 0
+            if current_lane > s.target_lanes[-1]:
+                number_of_lanes_off = s.target_lanes[-1] - current_lane
+            elif current_lane < s.target_lanes[0]:
+                number_of_lanes_off = current_lane - s.target_lanes[0]
             else:
-                number_of_lanes_off = current_lane - s.target_lanes[0]  # target is left == number of lanes off < 0
+                number_of_lanes_off = 0
 
-            distance_for_one_lane_change = max([current_speed * lane_change_secs, min_lane_change_meters]) + buffer
+            distance_for_one_lane_change = max([current_speed * lane_change_secs, min_lane_change_meters]) - buffer
             distance_to_next_lane_change = s.target_lanes_distance
             distance_to_off_lanes_change = np.abs(number_of_lanes_off) * distance_for_one_lane_change
-            distance_to_off_plus_1_lanes_change = (np.abs(number_of_lanes_off) + 1) * distance_for_one_lane_change
+            distance_to_off_plus_1_lanes_change = (np.abs(number_of_lanes_off) + 2) * distance_for_one_lane_change
 
-            l_limit, r_limit = 0, len(s.target_lanes) - 1
+            l_limit, r_limit = 0, len(s.points) - 1
             l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
             l_change, r_change = False, False
 
-            if number_of_lanes_off != 0:
-                if distance_to_next_lane_change <= distance_to_off_lanes_change:
-                    # need to lane change here (the latest possibility)
-                    l_change = l_change_allowed = number_of_lanes_off > 0
-                    r_change = r_change_allowed = not l_change
-                elif distance_to_next_lane_change <= distance_to_off_plus_1_lanes_change:
-                    # no lane changes in "wrong" direction allowed anymore
-                    l_change_allowed = number_of_lanes_off > 0
-                    r_change_allowed = not l_change_allowed
-            if last_lane_change_target_dist is not None:
-                # lane_change_pts.append(s.points[current_lane])
-                last_lane_change_target_dist = None
+            # print(l_limit, r_limit, current_lane)
+            if 0 < distance_to_next_lane_change <= distance_to_off_lanes_change:
+                # need to lane change here (the latest possibility)
+                l_change = l_change_allowed and number_of_lanes_off > 0  # must go left is isR
+                r_change = r_change_allowed and number_of_lanes_off < 0  # must go right if isL
+            elif distance_to_next_lane_change <= distance_to_off_plus_1_lanes_change:
+                # no lane changes in "wrong" direction allowed anymore
+                l_change_allowed = l_change_allowed and number_of_lanes_off > 0  # can go left if isR
+                r_change_allowed = r_change_allowed and number_of_lanes_off < 0  # can go right if isL
+            if lane_change_until_distance is not None:
+                lane_change_until_distance = None
                 l_change_allowed = l_change = False
                 r_change_allowed = r_change = False
 
@@ -165,10 +210,17 @@ class LocalPath:
             choice = np.random.choice(["left", "straight", "right"], p=probabilities)
 
             if choice == "left" or choice == "right":
-                # print(f"lane change {choice}, {l_change} {l_change_allowed} / {r_change} {r_change_allowed}")
+                last_lane = current_lane
                 current_lane += -1 if choice == "left" else 1
-                last_lane_change_target_dist = max(0, s.target_lanes_distance - distance_for_one_lane_change)
-                # lane_change_pts.append(s.points[current_lane])
+                # print(
+                #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
+                #     f"lane change {last_lane}->{current_lane} ({choice}), "
+                #     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}"
+                # )
+                lane_change_start_distance = distance_planned
+                lane_change_until_distance = distance_planned + distance_for_one_lane_change
+                if i + 1 < len(self.global_path):
+                    lane_change_pts.append(self.global_path.route.sections[i + 1].points[current_lane])
 
         if len(sparse_local_path) > 1:
             points = xy_to_pts(calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE))
@@ -189,8 +241,8 @@ class LocalPath:
         except Exception:
             pass
 
-        self._draw_path_pts(sparse_local_path)
-        # self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
+        # self._draw_path_pts(sparse_local_path)
+        self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
 
@@ -217,6 +269,7 @@ class LocalPath:
 
     @staticmethod
     def _choose_lane(can_go_left: bool, can_go_straight: bool, can_go_right: bool) -> Tuple[float, float, float]:
+        # print(f"can go left: {can_go_left}, can_go_straight: {can_go_straight}, can_go_right: {can_go_right}, ")
         left = can_go_left * 1
         right = can_go_right * 1
         straight = can_go_straight * 5

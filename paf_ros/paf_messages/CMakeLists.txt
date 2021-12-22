@@ -19,7 +19,6 @@ add_message_files(
   PafRoutingRequest.msg
   PafRoutingGraphNode.msg
   PafTrafficSignal.msg
-  PafTrafficSignalList.msg
   PafLogImage.msg
   PafLogScalar.msg
   PafLogText.msg

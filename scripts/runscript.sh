@@ -152,6 +152,7 @@ if [ ! -d "$HOME/carla-ros-bridge/catkin_ws/devel" ]; then
 fi
 if ((BUILD_ROS)); then
   echo building ros
+  close_all
   ./build_ros.sh --clean
   cd $paf_dir/scripts/ || exit
 fi
