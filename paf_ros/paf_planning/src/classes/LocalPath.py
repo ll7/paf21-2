@@ -3,7 +3,7 @@ from typing import Tuple, List
 import rospy
 from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
 from .GlobalPath import GlobalPath
-from .HelperFunctions import xy_to_pts, expand_sparse_list
+from .HelperFunctions import xy_to_pts, expand_sparse_list, dist_pts, closest_index_of_point_list
 
 import numpy as np
 
@@ -18,7 +18,10 @@ class LocalPath:
     TRANSMIT_FRONT_SEC = 10
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
-        self._local_path_start_section = None
+        self._local_path_start_section = 0
+        self._sparse_local_path_speeds = []
+        self._sparse_traffic_signals = []
+        self._sparse_local_path = []
         self.traffic_signals = []
         self.global_path = global_path
         self.message = PafLocalPath()
@@ -60,8 +63,7 @@ class LocalPath:
         try:
             p0 = np.array([s.points[from_lane].x, s.points[from_lane].y])
         except IndexError:
-            p0 = p1
-            from_lane = to_lane
+            return None, None, None
 
         # calculate intermediate point
 
@@ -94,8 +96,36 @@ class LocalPath:
         # Point2D[]             points
         # PafTrafficSignalList[]    signals
 
-        section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
         section_target, lane_target = self.global_path.get_section_and_lane_indices(self.global_path.route.target)
+        sparse_local_path, sparse_local_path_speeds, sparse_traffic_signals = None, None, None
+        prev_idx, _ = closest_index_of_point_list(self._sparse_local_path, from_position)
+
+        lane_change_secs = 5
+        min_lane_change_meters = 30
+        buffer = 5
+
+        target_distance = max([self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * current_speed])
+        distance_planned = 0
+
+        lane_change_pts = []  # debug points
+        section_from = -1
+        current_lane = 0
+
+        if prev_idx > 0:
+            prev_idx = max(0, prev_idx - 5)
+            end_index = min(prev_idx + 5, len(self._sparse_local_path_speeds) - 1)
+            sparse_local_path = self._sparse_local_path[prev_idx:end_index]
+            sparse_local_path_speeds = self._sparse_local_path_speeds[prev_idx:end_index]
+            sparse_traffic_signals = self._sparse_traffic_signals[prev_idx:end_index]
+            section_from, current_lane = self.global_path.get_section_and_lane_indices(self.message.points[end_index])
+            if dist_pts(self.global_path.route.sections[section_from].points[0], from_position) > 5:
+                prev_idx = -1  # sanity check
+        if prev_idx <= 0:
+            section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
+            point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
+            sparse_local_path = [point]
+            sparse_local_path_speeds = [current_speed]
+            sparse_traffic_signals = [signals]
 
         if section_from < 0 or section_target < 0:
             rospy.logerr("unable to calculate local path")
@@ -103,21 +133,6 @@ class LocalPath:
             return local_path
 
         self._local_path_start_section = section_from
-
-        lane_change_secs = 1
-        min_lane_change_meters = 30
-        buffer = 5
-
-        target_distance = max([self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * current_speed])
-        distance_planned = 0
-
-        point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
-
-        sparse_local_path = [point]
-        lane_change_pts = []  # debug points
-        sparse_local_path_speeds = [current_speed]
-        sparse_traffic_signals = [signals]
-
         lane_change_until_distance = None
         lane_change_start_distance = None
         last_lane = current_lane
@@ -157,15 +172,23 @@ class LocalPath:
                     point, speed, signs = self._calculate_intermediate_pts(
                         s, last_lane, current_lane, fraction_completed
                     )
-                    sparse_local_path.append(point)
-                    sparse_local_path_speeds.append(speed)
-                    sparse_traffic_signals.append(signs)
+                    if point is not None:
+                        sparse_local_path.append(point)
+                        if speed < 0:
+                            speed = 50 / 3.6
+                        sparse_local_path_speeds.append(speed)
+                        sparse_traffic_signals.append(signs)
                     continue
 
             distance_planned += s.distance_from_last_section
 
             sparse_local_path.append(s.points[current_lane])
-            sparse_local_path_speeds.append(s.speed_limits[current_lane])
+
+            speed = s.speed_limits[current_lane]
+            if s.speed_limits[current_lane] < 0:
+                rospy.logerr(f"[local planner] Speed limit < 0kmh, correcting.. {s.speed_limits[current_lane]}")
+                speed = 50 / 3.6
+            sparse_local_path_speeds.append(speed)
             if distance_planned < ignore_signs_distance:
                 sparse_traffic_signals.append([])
             else:
@@ -237,14 +260,19 @@ class LocalPath:
                 if i + 1 < len(self.global_path):
                     lane_change_pts.append(self.global_path.route.sections[i + 1].points[current_lane])
 
+        points = sparse_local_path
+        traffic_signals = sparse_traffic_signals
+        speed_limit = sparse_local_path_speeds
         if len(sparse_local_path) > 1:
-            points = xy_to_pts(calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE))
-            traffic_signals = expand_sparse_list(sparse_traffic_signals, len(points), fill_value=[])
-            speed_limit = expand_sparse_list(sparse_local_path_speeds, len(points))
-        else:
-            points = sparse_local_path
-            traffic_signals = sparse_traffic_signals
-            speed_limit = sparse_local_path_speeds
+            _points = calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE)
+            if not np.isnan(_points).any():
+                points = xy_to_pts(_points)
+                traffic_signals = expand_sparse_list(sparse_traffic_signals, len(points), fill_value=[])
+                speed_limit = expand_sparse_list(sparse_local_path_speeds, len(points))
+
+        self._sparse_local_path = sparse_local_path
+        self._sparse_traffic_signals = sparse_traffic_signals
+        self._sparse_local_path_speeds = sparse_local_path_speeds
 
         target_speed = self._update_target_speed(points, speed_limit, traffic_signals)
 

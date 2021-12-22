@@ -79,7 +79,8 @@ class SpeedCalculator:
             speed = SpeedCalculator._radius_to_speed_fast(curve_radius)
         if speed < 0:
             speed = -100
-        return np.clip(speed, SpeedCalculator.MIN_SPEED, SpeedCalculator.MAX_SPEED)
+        speed = np.clip(speed, SpeedCalculator.MIN_SPEED, SpeedCalculator.MAX_SPEED)
+        return speed
 
     @staticmethod
     def _get_curve_radius_list(path: List[Point2D]) -> List[float]:
@@ -152,7 +153,10 @@ class SpeedCalculator:
                     n += 1
                     break
             f = n - k
-            speed[n:j] = lin[f:]
+            try:
+                speed[n:j] = lin[f:]
+            except ValueError:
+                pass
         try:
             speed[0] = speed[1]
         except IndexError:

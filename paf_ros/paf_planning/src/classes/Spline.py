@@ -7,7 +7,6 @@ https://github.com/AtsushiSakai/PythonRobotics/blob/master/PathPlanning/CubicSpl
 """
 import math
 import bisect
-from typing import List, Tuple
 
 import numpy as np
 
@@ -175,12 +174,12 @@ class Spline2D:
         return yaw
 
 
-def calc_spline_course_from_point_list(xy_list, ds=0.1) -> List[Tuple[float, float]]:
+def calc_spline_course_from_point_list(xy_list, ds=0.1):
     if len(xy_list) > 0 and hasattr(xy_list[0], "x"):
         xy_list = [(p.x, p.y) for p in xy_list]
     x, y = list(zip(*xy_list))
     x_target, y_target = calc_spline_course_xy_only(x, y, ds)
-    return list(zip(x_target, y_target))
+    return np.array([np.array([x, y]) for x, y in zip(x_target, y_target)])
 
 
 def calc_spline_course_xy_only(x, y, ds=0.1):

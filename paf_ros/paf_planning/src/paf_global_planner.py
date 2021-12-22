@@ -16,7 +16,6 @@ from commonroad.scenario.trajectory import State
 from commonroad_route_planner.route_planner import RoutePlanner
 
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
-from std_msgs.msg import Bool
 from nav_msgs.msg import Odometry
 from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D, PafSpeedMsg
 from classes.HelperFunctions import dist, find_closest_lanelet
@@ -44,7 +43,7 @@ class GlobalPlanner:
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider)
-        rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Bool, self._routing_provider_random)
+        rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Empty, self._routing_provider_random)
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
         rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
@@ -98,12 +97,8 @@ class GlobalPlanner:
         # norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
         return position, self._yaw  # , float(get_angle_between_vectors(norm))
 
-    def _routing_provider_random(self, rules_enabled_msg: Bool):
+    def _routing_provider_random(self, _: Empty):
         msg = PafRoutingRequest()
-        msg.rules_enabled = rules_enabled_msg.data
-        rospy.loginfo_throttle(
-            10, f"[global planner] sending new route (rules {'en' if msg.rules_enabled else 'dis'}abled)"
-        )
         t0 = time.perf_counter()
         try:
             position, yaw = self._find_closest_position_on_lanelet_network()
@@ -117,6 +112,7 @@ class GlobalPlanner:
         rospy.loginfo_throttle(10, f"[global planner] success ({t0}s)")
 
     def _routing_provider(self, msg: PafRoutingRequest = None, position=None, yaw=None):
+        self._last_route = None
         if msg is None:
             msg = self._routing_target
         else:

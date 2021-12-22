@@ -285,8 +285,11 @@ class GlobalPath:
                 paf_sign.value = float(sign.traffic_sign_elements[0].additional_values[0])
                 if is_speed_limit:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
+
+                    rospy.logwarn(paf_sign.value)
             except IndexError:
                 paf_sign.value = self.UNKNOWN_SPEED_LIMIT_SPEED
+                rospy.logwarn(paf_sign.value)
             idx = self._locate_obj_on_lanelet(vertices, list(sign.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             if is_speed_limit:
@@ -309,7 +312,7 @@ class GlobalPath:
             try:
                 paf_sign.value /= paf_sign.value + red_value
             except ZeroDivisionError:
-                paf_sign.value = -1
+                paf_sign.value = -33
             idx = self._locate_obj_on_lanelet(vertices, list(light.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             traffic_signals += [paf_sign]
@@ -392,7 +395,9 @@ class GlobalPath:
                 pts.append(list(lanelet.center_vertices[int(len(lanelet.center_vertices) - 1 + rem_idx / 2)]))
                 new_pts = lanelet.center_vertices[:-1:5]
                 if len(new_pts) > 3:
-                    new_pts = calc_spline_course_from_point_list(new_pts, length / num_pts / 5)[::5]
+                    _new_pts = calc_spline_course_from_point_list(new_pts, length / num_pts / 5)[::5]
+                    if not np.isnan(_new_pts).any():
+                        new_pts = new_pts
                 vertices.append(np.array(new_pts))
             out.append((np.array(vertices), anchor, avg_len))
         return out
@@ -457,6 +462,11 @@ class GlobalPath:
                 # print(len(section_points))
                 msg.sections.append(paf_section)
 
+            if i == len(groups) - 1:
+                self.route = msg
+                section_idx, _ = self.get_section_and_lane_indices(self.target)
+                self.route.sections = self.route.sections[: section_idx + 1]
+
             if (lanes_l != 0 or anchor_l != 0 or anchor_r != len(lanelet_id_list) - 1) or i == len(groups) - 1:
                 # shift speed limit lanes
                 # print(lanes_l, anchor_l, anchor_r)
@@ -491,7 +501,9 @@ class GlobalPath:
 
                     distance_to_target += paf_section.distance_from_last_section
                     for target in paf_section.target_lanes:
-                        assert 0 <= target < len(paf_section.points), f"{paf_section}\n {anchor_l}->{anchor_r}"
+                        if not 0 <= target < len(paf_section.points):
+                            rospy.logerr(f"{paf_section}\n {anchor_l}->{anchor_r}")
+                            paf_section.target_lanes = [0]
         msg.target = self.target
 
         self.route = msg
