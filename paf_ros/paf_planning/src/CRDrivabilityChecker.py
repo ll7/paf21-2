@@ -67,7 +67,7 @@ class CRDriveabilityChecker(object):
             self.current_pose.orientation.w,
         )
         _, _, yaw = euler_from_quaternion(quaternion)
-        #current_orientation in rad
+        # current_orientation in rad
         self.current_orientation = yaw
 
         # update pose of ego vehicle in cr-scenario
