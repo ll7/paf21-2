@@ -20,6 +20,7 @@ from paf_messages.msg import (
 from classes.MapManager import MapManager
 from classes.GlobalPath import GlobalPath
 from classes.LocalPath import LocalPath
+from classes.HelperFunctions import closest_index_of_point_list, dist_pts
 from std_msgs.msg import Bool, Empty
 from tf.transformations import euler_from_quaternion
 
@@ -29,6 +30,7 @@ class LocalPlanner:
 
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
+    END_OF_ROUTE_REACHED_DIST = 5
     # END_OF_ROUTE_SPEED = 5
     # MAX_ANGULAR_ERROR = np.deg2rad(45)
 
@@ -87,11 +89,11 @@ class LocalPlanner:
     def _process_global_path(self, msg: PafLaneletRoute):
         if self._global_path.route.distance != msg.distance:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
-        self._global_path = GlobalPath(msg=msg)
-        self._local_path = LocalPath(self._global_path, self.rules_enabled)
-        self._create_paf_local_path_msg(
-            self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
-        )
+            self._global_path = GlobalPath(msg=msg)
+            self._local_path = LocalPath(self._global_path, self.rules_enabled)
+            self._create_paf_local_path_msg(
+                self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
+            )
 
     # def _get_track_angle(self, s_index, l_index):
     #     if len(self._global_path.sections) == 0:
@@ -148,26 +150,33 @@ class LocalPlanner:
 
     def _loop_handler(self):
         if len(self._global_path) == 0:
+            rospy.logwarn_throttle(5, "[local planner] no route, end of route handling activated")
             self._end_of_route_handling()
             return
-        elif not self._on_global_path():
-            self._create_paf_local_path_msg(send_empty=True)
-            self._send_global_path_request()
-            return
-        elif len(self._local_path) > 0 and self._planner_at_end_of_route(self._local_path):
+        elif self._planner_at_end_of_route():
+            rospy.logwarn_throttle(5, "[local planner] end of route reached, end of route handling activated")
             self._global_path = GlobalPath()
             self._local_path = LocalPath(self._global_path)
             self._end_of_route_handling()
             return
+        elif not self._on_global_path():
+            rospy.logwarn_throttle(5, "[local planner] not on global path, requesting new route")
+            self._create_paf_local_path_msg(send_empty=True)
+            self._send_global_path_request()
+            return
+        elif self._planner_at_end_of_route(self._local_path.message.points):
+            rospy.loginfo_throttle(5, "[local planner] local planner is replanning, end of local route near")
+            msg = self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
+            self._create_paf_local_path_msg(msg)
         elif self._local_path.current_indices(self._current_pose.position)[0] + 5 < len(self._local_path):
-            rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
+            rospy.loginfo_throttle(5, "[local planner] car is on route, no need to reroute")
         else:
-            rospy.loginfo_throttle(30, "[local planner] local planner is replanning")
+            rospy.loginfo_throttle(5, "[local planner] local planner is replanning")
             msg = self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
             self._create_paf_local_path_msg(msg)
 
-        if self._is_stopped():
-            self._handle_stop_event()
+        # if self._is_stopped():
+        #     self._handle_stop_event()
 
     def _handle_stop_event(self):
         p = self._current_pose.position
@@ -269,12 +278,19 @@ class LocalPlanner:
 
     def _planner_at_end_of_route(self, pth=None):
         if pth is not None:
-            return len(pth) < 100
+            index, d = closest_index_of_point_list(pth, self._current_pose.position)
+            return len(pth) - index < 200
         if len(self._global_path) == 0:
             return False
-        if len(self._local_path) < 50:
-            return True
-        return False
+        rospy.loginfo_throttle(
+            1, f"{dist_pts(self._global_path.target, self._current_pose.position)}m distance to target"
+        )
+        return (
+            len(self._global_path) > 0
+            and dist_pts(self._global_path.target, self._current_pose.position) <= self.END_OF_ROUTE_REACHED_DIST
+            or dist_pts(self._global_path.route.sections[-1].points[0], self._current_pose.position)
+            <= self.END_OF_ROUTE_REACHED_DIST * 2
+        )
 
     def _odometry_updated(self, odometry: Odometry):
         """Odometry Update Callback"""

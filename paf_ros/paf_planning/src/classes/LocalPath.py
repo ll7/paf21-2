@@ -61,6 +61,7 @@ class LocalPath:
             p0 = np.array([s.points[from_lane].x, s.points[from_lane].y])
         except IndexError:
             p0 = p1
+            from_lane = to_lane
 
         # calculate intermediate point
 
@@ -138,9 +139,12 @@ class LocalPath:
             #       f"target={list(s.target_lanes)}, dist={s.target_lanes_distance}")
 
             # test if current lane exists on this section
-            assert (
-                0 <= current_lane < len(s.points)
-            ), f"{current_lane} does not exist in available lanes: {list(range(len(s.points)))}"
+            if not 0 <= current_lane < len(s.points):
+                rospy.logerr(f"{current_lane} does not exist in available lanes: {list(range(len(s.points)))}")
+                if current_lane < 0:
+                    current_lane = 0
+                else:
+                    current_lane = len(s.points) - 1
 
             if lane_change_until_distance is not None and s.target_lanes_distance > 0:
                 fraction_completed = (distance_planned - lane_change_start_distance) / (
@@ -168,7 +172,12 @@ class LocalPath:
                 sparse_traffic_signals.append(self.global_path.get_signals(s, current_lane))
 
             if s.target_lanes_distance == 0:
-                assert current_lane in s.target_lanes
+                if not 0 <= current_lane < len(s.points):
+                    rospy.logerr(f"{current_lane} does not exist in available lanes: {list(range(len(s.points)))}")
+                    if current_lane < 0:
+                        current_lane = 0
+                    else:
+                        current_lane = len(s.points) - 1
                 current_lane += -s.target_lanes[0] + s.target_lanes_left_shift
                 continue
 
@@ -258,8 +267,8 @@ class LocalPath:
 
         if self.rules_enabled:
             speed = np.clip(speed, 0, speed_limit)
-            speed = self.speed_calc.add_stop_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
-            speed = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
+            # speed = self.speed_calc.add_stop_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
+            # speed = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
 
         speed = self.speed_calc.add_linear_deceleration(speed)
         return speed

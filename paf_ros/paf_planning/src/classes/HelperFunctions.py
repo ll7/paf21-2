@@ -25,9 +25,11 @@ def xy_to_pts(xy_list):
     return out
 
 
-def closest_index_of_point_list(pts_list: List[Point2D], target_pt: Tuple[float, float], acc: int = 1):
+def closest_index_of_point_list(pts_list: List[Point2D], target_pt, acc: int = 1):
     if len(pts_list) == 0:
         return -1, -1
+    if hasattr(target_pt, "x"):
+        target_pt = (target_pt.x, target_pt.y)
     distances = [dist([p.x, p.y], target_pt) for p in pts_list[::acc]]
     if len(distances) == 0:
         return len(pts_list) - 1
