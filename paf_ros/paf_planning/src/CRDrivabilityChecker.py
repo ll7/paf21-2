@@ -164,7 +164,7 @@ class CRDriveabilityChecker(object):
 
         # write new scenario
         fw = CommonRoadFileWriter(self.scenario, self.planning_problem_set, author, affiliation, source, tags)
-        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew5.xml", OverwriteExistingFile.ALWAYS)
+        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnewpresi2.xml", OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)
