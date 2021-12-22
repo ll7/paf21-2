@@ -27,13 +27,9 @@ from tf.transformations import euler_from_quaternion
 class LocalPlanner:
     """class used for the local planner. Task: return a local path"""
 
-    # STEP_SIZE = .125
-    # REPLANNING_THRES_DISTANCE_M = 15
-    # TRANSMIT_FRONT_MIN_M = 100
-    # TRANSMIT_FRONT_SEC = 5
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
-    # END_OF_ROUTE_SPEED = 5  # todo remove slowdown at end of route
+    # END_OF_ROUTE_SPEED = 5
     # MAX_ANGULAR_ERROR = np.deg2rad(45)
 
     rules_enabled = rospy.get_param("rules_enabled", False)
@@ -93,7 +89,9 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
         self._global_path = GlobalPath(msg=msg)
         self._local_path = LocalPath(self._global_path, self.rules_enabled)
-        self._create_paf_local_path_msg(self._local_path.calculate_new_local_path(self._current_pose.position))
+        self._create_paf_local_path_msg(
+            self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
+        )
 
     # def _get_track_angle(self, s_index, l_index):
     #     if len(self._global_path.sections) == 0:
@@ -165,7 +163,7 @@ class LocalPlanner:
             rospy.loginfo_throttle(30, "[local planner] car is on route, no need to reroute")
         else:
             rospy.loginfo_throttle(30, "[local planner] local planner is replanning")
-            msg = self._local_path.calculate_new_local_path(self._current_pose.position)
+            msg = self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
             self._create_paf_local_path_msg(msg)
 
         if self._is_stopped():
@@ -175,7 +173,7 @@ class LocalPlanner:
         p = self._current_pose.position
         rospy.sleep(3)  # todo remove
         if self._allowed_from_stop():
-            msg = self._local_path.calculate_new_local_path(p, ignore_signs_distance=10)
+            msg = self._local_path.calculate_new_local_path(p, current_speed=0, ignore_signs_distance=10)
             self._create_paf_local_path_msg(msg)
 
     # def _get_current_trajectory(self):

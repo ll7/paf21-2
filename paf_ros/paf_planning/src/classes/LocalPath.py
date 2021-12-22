@@ -2,7 +2,6 @@ from typing import Tuple, List
 
 import rospy
 from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
-from std_msgs.msg import Header
 from .GlobalPath import GlobalPath
 from .HelperFunctions import xy_to_pts, expand_sparse_list
 
@@ -15,6 +14,8 @@ from .Spline import calc_spline_course_from_point_list
 class LocalPath:
     REPLANNING_THRESHOLD_DISTANCE_M = 15
     STEP_SIZE = 0.125
+    TRANSMIT_FRONT_MIN_M = 100
+    TRANSMIT_FRONT_SEC = 10
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
         self._local_path_start_section = None
@@ -55,8 +56,11 @@ class LocalPath:
 
     def _calculate_intermediate_pts(self, s: PafRouteSection, from_lane: int, to_lane: int, fraction: float):
 
-        p0 = np.array([s.points[from_lane].x, s.points[from_lane].y])
         p1 = np.array([s.points[to_lane].x, s.points[to_lane].y])
+        try:
+            p0 = np.array([s.points[from_lane].x, s.points[from_lane].y])
+        except IndexError:
+            p0 = p1
 
         # calculate intermediate point
 
@@ -81,7 +85,9 @@ class LocalPath:
 
         return intermediate_p, speed, signals
 
-    def calculate_new_local_path(self, from_position: Point2D, ignore_signs_distance: float = 0):
+    def calculate_new_local_path(
+        self, from_position: Point2D, current_speed: float = 0, ignore_signs_distance: float = 0
+    ):
         local_path = PafLocalPath()
         # float32[]             target_speed
         # Point2D[]             points
@@ -101,13 +107,13 @@ class LocalPath:
         min_lane_change_meters = 30
         buffer = 5
 
-        target_distance = 250  # max(self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * self._current_speed)
+        target_distance = max([self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * current_speed])
         distance_planned = 0
 
         point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
 
         sparse_local_path = [point]
-        lane_change_pts = []
+        lane_change_pts = []  # debug points
         sparse_local_path_speeds = [current_speed]
         sparse_traffic_signals = [signals]
 
@@ -235,7 +241,6 @@ class LocalPath:
 
         local_path.points = points
         local_path.target_speed = target_speed
-        local_path.header = Header()
         try:
             local_path.header.stamp = rospy.Time()
         except Exception:

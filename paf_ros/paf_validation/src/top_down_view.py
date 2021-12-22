@@ -71,13 +71,19 @@ class TopDownRosNode(object):
         section: PafRouteSection
         nan = 0
         for section in msg.sections:
-            point = section.points[section.target_lanes[0]]
+            try:
+                point = section.points[section.target_lanes[0]]
+            except IndexError:
+                nan += 1
+                point = section.points[0]
             if np.isnan(point.x):
                 nan += 1
                 continue
             path.append([point.x, -point.y])
         if nan > 0:
-            rospy.logerr_throttle(5, f"[top down view] global path contains nan {nan}x")
+            rospy.logerr_throttle(
+                5, f"[top down view] global path contains {nan} invalid points " f"(nan or target lanes index error)"
+            )
         self.producer.set_path(coordinate_list_global_path=path)
 
     def update_local_path(self, msg: PafLocalPath):

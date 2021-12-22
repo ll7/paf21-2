@@ -490,10 +490,14 @@ class GlobalPath:
                     paf_section.target_lanes_left_shift = target_lanes_left_shift
 
                     distance_to_target += paf_section.distance_from_last_section
-
+                    for target in paf_section.target_lanes:
+                        assert 0 <= target < len(paf_section.points), f"{paf_section}\n {anchor_l}->{anchor_r}"
         msg.target = self.target
 
         self.route = msg
+
+        for paf_section in msg.sections:
+            assert len(paf_section.target_lanes) > 0 and len(paf_section.points) > 0, f"{paf_section}"
 
         return msg
 
