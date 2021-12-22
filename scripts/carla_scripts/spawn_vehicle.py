@@ -8,7 +8,7 @@ client.set_timeout(10.0)  # seconds
 world = client.get_world()
 blueprint_library = world.get_blueprint_library()
 
-vehicle_bp = np.random.choice(blueprint_library.filter("vehicle.bmw.*"))
+vehicle_bp = blueprint_library.find("vehicle.tesla.model3")
 spawn_points = world.get_map().get_spawn_points()
 model3_spawn_point = np.random.choice(spawn_points)
 

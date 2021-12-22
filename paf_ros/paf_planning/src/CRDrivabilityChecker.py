@@ -99,7 +99,7 @@ class CRDriveabilityChecker(object):
 
         # update pose of ego vehicle in cr-scenario
         self._update_ego_vehicle_to_CRScenario()
-        # self._overwrite_file()
+
 
     def _obstacle_list_updated(self, msg: PafObstacleList):
         # clear obstacles
@@ -131,6 +131,11 @@ class CRDriveabilityChecker(object):
 
         self._overwrite_file()
 
+        if self.check_collision(self.ego_vehicle.prediction):
+            self.on_predicted_collision()
+        else:
+            rospy.loginfo('no incoming collision detected')
+
     def _update_obstacles(self, msg: PafObstacleList) -> Obstacle:
         """get the obstacle information from the Obstacle topic without the type"""
         return msg.obstacles
@@ -146,19 +151,19 @@ class CRDriveabilityChecker(object):
         position = [self.current_pose.position.x, self.current_pose.position.y]
         orientation = self.current_orientation
 
-        #dummy velocity 
+        #dummy velocity
         initial_state = State(position=position, velocity=20,
                               orientation=orientation, time_step=0)
         predicted_trajectory = self._generate_trajectory_prediction_ego_vehicle(initial_state, EGO_VEHICLE_SHAPE)
 
         self.ego_vehicle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         self.scenario.add_objects(self.ego_vehicle)
-        # create collision object
-        co = create_collision_object(self.ego_vehicle)
 
-        #rospy.loginfo('Collision between the trajectory of the ego vehicle and objects in the environment: ' self.collision_checker.collide(co))
-        #cc = self.collision_checker.collide(co)
-        #self._is_collision_detected(co)
+
+
+
+
+
 
     def _add_all_pedestrians_to_cr(self, pedestrians: PafObstacleList):
         for obstacle in pedestrians:
@@ -175,10 +180,10 @@ class CRDriveabilityChecker(object):
     ) -> Obstacle:
         initial_state = State(position=np.array(
             [0.0, 0.0]), velocity=0, orientation=0, time_step=0)
-        
+
         predicted_trajectory = self._generate_trajectory_prediction_obstacle (initial_state, shape)
 
-        dynamic_obstacle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)  
+        dynamic_obstacle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         return dynamic_obstacle
 
     def _generate_trajectory_prediction_ego_vehicle(self, intialState: State, shape: Shape)-> TrajectoryPrediction:
@@ -220,7 +225,7 @@ class CRDriveabilityChecker(object):
     def _add_vehicle(self, id, obstacle: PafObstacle):
         vertices = np.array(
             [obstacle.closest, obstacle.bound_1, obstacle.bound_2])
-        # add dummy implementation, obstacles should have three different vertices 
+        # add dummy implementation, obstacles should have three different vertices
         new_vertices = vertices + np.array([[0.0, 0.0], [0.00001, 0.0], [0.0000, 0.00001]])
         shape = Polygon(vertices=new_vertices)
         # actual position should be fixed, dummy implementation
@@ -236,9 +241,16 @@ class CRDriveabilityChecker(object):
         self.scenario.add_objects(cr_obstacle)
         self.cr_obstacles_vehicles.append(cr_obstacle)
 
-    def _is_collision_detected(self, collision_object):
-        rospy.logwarn('Collision between the trajectory of the ego vehicle and objects in the environment: ', self.collision_checker.collide(collision_object))
-        
+    def check_collision(self, predicted_trajectory: Trajectory)-> bool:
+
+        # create a collision object using the trajectory prediction of the ego vehicle
+        co = create_collision_object(predicted_trajectory)
+        cc = self.collision_checker.collide(co)
+        return cc
+
+    def on_predicted_collision(self):
+        rospy.logwarn('Incoming collision between the trajectory of the ego vehicle and objects in the environment: ')
+
     def _overwrite_file(self):
         author = ""
         affiliation = ""
@@ -249,7 +261,7 @@ class CRDriveabilityChecker(object):
         fw = CommonRoadFileWriter(
             self.scenario, self.planning_problem_set, author, affiliation, source, tags)
         fw.write_to_file(
-            "/home/imech154/paf21-2/maps/Rules/Town03_modnew7.xml", OverwriteExistingFile.ALWAYS)
+            "/home/imech154/paf21-2/maps/Rules/Town03_modnew8.xml", OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)
@@ -257,43 +269,8 @@ class CRDriveabilityChecker(object):
         while not rospy.is_shutdown():
             rate.sleep()
 
-    def main1(self):
-        print("in main1")
-        print(self.scenario)
-
-        # time.sleep(10)
-        # plt.figure(figsize=(25, 10))
-
-        # self.scenario.draw(self.renderer)
-        # self.planning_problem_set.draw(self.renderer)
-        # self.renderer.render()
-
-        # plt.show()
-
-        # example trajectory
-
-        # trajectory_list = []
-        # start = [-9,207.5]
-        # trajectory_list.append(start)
-        # for i in range(0,20):
-        #     trajectory_list.append([start[0]+i*5, start[1]])
-
-        # #create collision checker
-        # self.collision_checker = create_collision_checker(self.scenario)
-
-        # state_list = list()
-        # for k in range(0, len(trajectory_list)):
-        #     state_list.append(State(**{'time_step':k,'position': trajectory_list[k], 'orientation': 0.0}))
-        # trajectory = Trajectory(0, state_list)
-
-        # # create the shape of the ego vehicle
-        # shape = Rectangle(length=4.5, width=2.0)
-        # # create a TrajectoryPrediction object consisting of the trajectory and the shape of the ego vehicle
-        # traj_pred = TrajectoryPrediction(trajectory=trajectory, shape=shape)
 
 
 if __name__ == "__main__":
-
     checker = CRDriveabilityChecker()
-
     checker.start()
