@@ -45,8 +45,7 @@ class VehicleController:
 
         # speed controller parameters
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
-        args_longitudinal = {"K_P": 0.6, "K_D": 0.0, "K_I": 0.1}
-        self._target_speed_offset = 1.1
+        self._target_speed_offset = 1.2
         # Stanley control parameters
         args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
