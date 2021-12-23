@@ -48,7 +48,7 @@ class VehicleController:
         # distance control parameters
         args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
         # Stanley control parameters
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2.9, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
         self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
@@ -56,14 +56,14 @@ class VehicleController:
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
-            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated
+            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated, queue_size=1
         )
         self.vehicle_control_publisher: rospy.Publisher = rospy.Publisher(
             f"/carla/{role_name}/vehicle_control_cmd", CarlaEgoVehicleControl, queue_size=1
         )
 
         self.local_path_subscriber: rospy.Subscriber = rospy.Subscriber(
-            "/paf/paf_local_planner/path", PafLocalPath, self.__local_path_received
+            "/paf/paf_local_planner/path", PafLocalPath, self.__local_path_received, queue_size=1
         )
 
         self.emergy_break_publisher: rospy.Publisher = rospy.Publisher(
@@ -79,6 +79,10 @@ class VehicleController:
         )
 
         self.target_speed_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        self.target_speed_error_log_publisher: rospy.Publisher = rospy.Publisher(
             "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
         )
 
@@ -103,19 +107,25 @@ class VehicleController:
 
         # self.__init_test_szenario()
         try:
-            steering, self._target_speed = self.__calculate_steering()
+            steering, self._target_speed, distance = self.__calculate_steering()
             self._is_reverse = self._target_speed < 0.0
             self._target_speed = abs(self._target_speed)
 
-            throttle: float = self.__calculate_throttle(dt)
+            throttle: float = self.__calculate_throttle(dt, distance)
         except RuntimeError:
             throttle = -1.0
             steering = 0.0
             self._is_reverse = False
             self._target_speed = 0.0
-            rospy.logerr_throttle(1, "No next points")
+            rospy.loginfo_throttle(10, "[Actor] waiting for new local path")
 
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
+
+        msg = PafLogScalar()
+        msg.section = "ACTOR speed error"
+        msg.value = (self._target_speed - self._current_speed) * 3.6
+
+        self.target_speed_error_log_publisher.publish(msg)
 
         msg = PafLogScalar()
         msg.section = "ACTOR speed"
@@ -126,6 +136,7 @@ class VehicleController:
         msg = PafLogScalar()
         msg.section = "ACTOR target_speed"
         msg.value = self._target_speed * 3.6
+        msg.step_as_distance = False
 
         self.target_speed_log_publisher.publish(msg)
 
@@ -169,6 +180,10 @@ class VehicleController:
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
 
+        if control.brake > 0 and self._current_speed > 5:
+            control.reverse = not self._is_reverse
+            control.throttle = control.brake
+
         if self._emergency_mode:
             control.hand_brake = True  # True
             control.steer = np.rad2deg(30.0)
@@ -177,7 +192,7 @@ class VehicleController:
             control.reverse = not self._is_reverse
         return control
 
-    def __calculate_throttle(self, dt: float) -> float:
+    def __calculate_throttle(self, dt: float, distance: float) -> float:
         """
         Calculate the throttle for the vehicle
 
@@ -188,8 +203,12 @@ class VehicleController:
             float: the throttle to use
         """
         # perform pid control step with distance and speed controllers
+        target_speed = self._target_speed
 
-        lon: float = self._lon_controller.run_step(self._target_speed, self._current_speed, dt)
+        if distance >= 0.5 and self._current_speed > 10:
+            target_speed = max(10, self._current_speed * (1 - 1e-8))
+
+        lon: float = self._lon_controller.run_step(target_speed, self._current_speed, dt)
 
         return lon
 

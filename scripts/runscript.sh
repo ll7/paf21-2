@@ -2,13 +2,16 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-#ros_launch_args="spawn_point:=199,9.5,0,0,0,0 validation:=true"
+#ros_launch_args="spawn_point:=15,70,0,0,0,90 validation:=true"
 ros_launch_args="validation:=true"
 npc_launch_args="-n 50 -w 50" # n=vehicles, w=pedestrians
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 export paf_dir="$SCRIPT_DIR/../"
 bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh" 1>/dev/null
+
+ln -sfn "$paf_dir/paf_ros/" ~/carla-ros-bridge/catkin_ws/src/
+ln -sfn "$paf_dir/Maps/" ~/.ros/
 
 eval "$(cat ~/.bashrc | tail -n +10)" 1>/dev/null
 function carla_available() {
@@ -104,6 +107,12 @@ NPCS=0
 CARLA_ARGS=""
 TOWN_ARGS="town:=Town03"
 for VAR in "$@"; do
+  if [ "$VAR" = "-h" ]; then
+    exit
+  fi
+  if [ "$VAR" = "--help" ]; then
+    exit
+  fi
   if [ "$VAR" = "--skip-carla-restart" ]; then
     CARLA_SKIP=1
   fi
@@ -178,7 +187,7 @@ fi
 echo "loaded the following nodes successfully:"
 rosnode list
 reduce_ros_log_noise
-gnome-terminal --title="rqt_console" -- rqt_console
+#gnome-terminal --title="rqt_console" -- rqt_console
 echo ""
 echo "press ctrl+c to kill all ros terminals."
 

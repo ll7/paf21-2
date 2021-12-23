@@ -2,7 +2,6 @@
 A file that contains the Stanley Lateral Controller (inspired by PSAF WS20/21 2)
 """
 import rospy
-from typing import Tuple
 
 import numpy as np
 from geometry_msgs.msg import PoseStamped
@@ -50,7 +49,8 @@ class StanleyLateralController:
            float: Steering angle
         """
         path = msg.points
-        current_target_idx, error_front_axle, target_speed = self.calc_target_index(msg, pose, is_reverse)
+        current_target_idx, error_front_axle, target_speed, distance = self.calc_target_index(msg, pose, is_reverse)
+
         # compute heading error correction
         theta_e = normalize_angle(
             calc_path_yaw(path, current_target_idx) + (calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
@@ -59,7 +59,7 @@ class StanleyLateralController:
             speed = self.min_speed
 
         # compute cross track error correction
-        theta_d = np.arctan2(self.k * error_front_axle / speed, speed)
+        theta_d = np.arctan2(self.k * error_front_axle / max([1, 0.4 * speed]), speed)
 
         # compute steer
         delta = theta_e + theta_d
@@ -67,9 +67,9 @@ class StanleyLateralController:
         # rospy.loginfo_throttle(
         #    1, f"theta_e: {theta_e}, theta_d: {theta_d}, delta: {delta}")
 
-        return np.clip(delta, -self.max_steer, self.max_steer), target_speed
+        return np.clip(delta, -self.max_steer, self.max_steer), target_speed, distance
 
-    def calc_target_index(self, msg: PafLocalPath, pose: PoseStamped, is_reverse: bool) -> Tuple[int, float]:
+    def calc_target_index(self, msg: PafLocalPath, pose: PoseStamped, is_reverse: bool):
         """
         Calculates the index of the closest Point on the Path relative to the front axle
 
@@ -83,8 +83,8 @@ class StanleyLateralController:
             error_front_axle [float]: Distance from front axle to target point
         """
         path = msg.points
-        if len(path) == 0:
-            return 0, 0, 0
+        if len(path) == 0 or len(msg.target_speed) == 0:
+            return 0, 0, 0, 0
 
         # Calc front axle position
         yaw = calc_egocar_yaw(pose)
@@ -111,12 +111,13 @@ class StanleyLateralController:
         dy = [fy - icy for icy in py]
         d = np.hypot(dx, dy)
         target_idx = np.argmin(d)
+        distance = d[target_idx]
 
         # Project RMS error onto front axle vector
         front_axle_vec = [-np.cos(yaw + np.pi / 2), -np.sin(yaw + np.pi / 2)]
         error_front_axle = np.dot([dx[target_idx], dy[target_idx]], front_axle_vec)
 
-        return target_idx, error_front_axle, msg.target_speed[target_idx]
+        return target_idx, error_front_axle, msg.target_speed[min([target_idx, len(msg.target_speed) - 1])], distance
 
     def _xy_to_point2d(self, points):
         liste = []
