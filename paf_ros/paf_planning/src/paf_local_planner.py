@@ -165,12 +165,18 @@ class LocalPlanner:
             rospy.logwarn_throttle(5, "[local planner] not on global path, requesting new route")
             self._create_paf_local_path_msg(send_empty=True)
             self._send_global_path_request()
+        elif not self._on_local_path():
+            rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
+            self._replan_local_path()
         elif self._planner_at_end_of_local_path():
             rospy.loginfo_throttle(5, "[local planner] local planner is replanning (end of local path)")
-            msg = self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
-            self._create_paf_local_path_msg(msg)
+            self._replan_local_path()
         else:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
+
+    def _replan_local_path(self):
+        msg = self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
+        self._create_paf_local_path_msg(msg)
 
     def _handle_stop_event(self):
         if self._allowed_from_stop():
@@ -350,6 +356,9 @@ class LocalPlanner:
         while not rospy.is_shutdown():
             self._loop_handler()
             rate.sleep()
+
+    def _on_local_path(self):
+        return self._distance_to_local_path < 15
 
 
 if __name__ == "__main__":

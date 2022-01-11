@@ -59,9 +59,10 @@ class GlobalPath:
             section = self.route.sections[section]
         return [sig for sig in section.signals if sig.index == lane_idx]
 
-    def get_local_path_values(self, section_idx, lane_idx):
-        section: PafRouteSection = self.route.sections[section_idx]
-        return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section_idx, lane_idx)
+    def get_local_path_values(self, section, lane_idx):
+        if type(section) is not PafRouteSection:
+            section: PafRouteSection = self.route.sections[section]
+        return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
 
     def get_section_and_lane_indices(self, position, not_found_threshold_meters=100):
         if hasattr(position, "x"):
