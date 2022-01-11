@@ -100,8 +100,8 @@ class SemanticLidarNode(object):
         t0 = rospy.Time.now().to_time()
         points = pc2.read_points(msg, skip_nans=True)
         sorted_points = self._process_lidar_points_by_tag_and_idx(points)
-        bounds_by_tag = self._process_sorted_points_calculate_bounds(sorted_points)
-        self._publish_object_information(bounds_by_tag)
+        pois_by_tag = self._process_sorted_points(sorted_points)
+        self._publish_object_information(pois_by_tag)
         time = rospy.Time.now().to_time()
         delta = time - t0
         if delta > 0:
@@ -111,55 +111,75 @@ class SemanticLidarNode(object):
             rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={1 / delta}")
         self.frame_time_lidar = time
 
-    def _process_sorted_points_calculate_bounds(self, sorted_points: dict) -> dict:
+    def _process_sorted_points(self, sorted_points: dict) -> dict:
         """
         Calculates bound1, bound2, closest point (each in x,y,d coords) and speed (in m/s)
+
         :param sorted_points: format { obj_index : { "tag" : tag, "pts": [[x,y,d],...] , ...}
-        :return: bounds in format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
+        :return: pois in format { tag : [ [bound1, bound2, closest, speed, int_id], ...] , ...} , speed (in m/s)
         """
-        bounds_by_tag = {}
+        poi_by_tag = {}
         previous_obstacles = self.previous_obstacles
         self.previous_obstacles = {}
         current_time = rospy.Time.now().to_time()
 
         for obj_idx, pts_and_tag in sorted_points.items():
             tag = pts_and_tag["tag"]
-            if tag not in bounds_by_tag:
-                bounds_by_tag[tag] = []
+            if tag not in poi_by_tag:
+                poi_by_tag[tag] = []
             for i, pts in enumerate(pts_and_tag["pts"]):
-                a_max_x, a_max_y, a_max_d = np.argmax(pts, axis=0)
-                a_min_x, a_min_y, a_min_d = np.argmin(pts, axis=0)
+                poi = self._calculate_bounds(pts)
 
-                # bounds: select two most distant points of interest (poi)
-                poi = [pts[a_max_x], pts[a_min_x], pts[a_max_y], pts[a_min_y]]
-                bound_1, bound_2 = self._get_vectors_with_maximum_angle(poi)
-
-                # closest: select closest point to sensor
-                closest = np.array((pts[a_min_d][:2]))
-                if self.SKIP_NORMALIZING_BOUND_DIST:
-                    # use original bound points
-                    bound_2 = np.array(bound_2[:2])
-                    bound_1 = np.array(bound_1[:2])
+                obj_id_string = f"{tag}-{obj_idx}-{i}"
+                # generate integer id
+                if tag == "Vehicles":
+                    tag_int = 1
                 else:
-                    # shorten bound vectors to len(closest)
-                    d_min = pts[a_min_d][-1]
-                    bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min
-                    bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min
+                    tag_int = 2
 
-                poi = [bound_1, bound_2, closest]
-                poi = [p + self.xy_position for p in poi]
+                obj_id_int = obj_idx * 10 + tag_int
 
-                obj_id = f"{tag}-{obj_idx}-{i}"
-
-                speed = self._get_obj_speed(previous_obstacles, poi, obj_id, obj_idx, current_time)
+                speed = self._get_obj_speed(previous_obstacles, poi, obj_id_string, obj_idx, current_time)
                 if speed is None and len(previous_obstacles) > 0:
                     pass
                 poi.append(speed)
-                bounds_by_tag[tag].append(poi)
-                self.previous_obstacles[obj_id] = poi
+                poi.append(obj_id_int)
+                poi_by_tag[tag].append(poi)
+                self.previous_obstacles[obj_id_string] = poi
 
         self.previous_time = current_time
-        return bounds_by_tag
+        return poi_by_tag
+
+    def _calculate_bounds(self, pts) -> list:
+        """calculate bound1, bound2, closest_point in (x,y,d)-coordinates of an object by given points
+        Args: points
+        Returns:
+            bounds in format [bound1, bound2, closest]
+        """
+        a_max_x, a_max_y, a_max_d = np.argmax(pts, axis=0)
+        a_min_x, a_min_y, a_min_d = np.argmin(pts, axis=0)
+
+        # bounds: select two most distant points of interest (poi)
+        poi = [pts[a_max_x], pts[a_min_x], pts[a_max_y], pts[a_min_y]]
+        bound_1, bound_2 = self._get_vectors_with_maximum_angle(poi)
+
+        # closest: select closest point to sensor
+        closest = np.array((pts[a_min_d][:2]))
+        if self.SKIP_NORMALIZING_BOUND_DIST:
+            # use original bound points
+            bound_2 = np.array(bound_2[:2])
+            bound_1 = np.array(bound_1[:2])
+        else:
+            # shorten bound vectors to len(closest)
+            d_min = pts[a_min_d][-1]
+            bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min
+            bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min
+
+        poi = [bound_1, bound_2, closest]
+        # add vehicle position to change to global coordinates
+        poi = [p + self.xy_position for p in poi]
+
+        return poi
 
     def _get_obj_speed(
         self, previous_obstacles: dict, obstacle_bounds: list, obj_id: str, obj_idx: int, current_time: float
@@ -218,19 +238,19 @@ class SemanticLidarNode(object):
                 objects[object_idx]["pts"].append([[x, y, d]])
         return objects
 
-    def _publish_object_information(self, bounds_by_tag: dict):
+    def _publish_object_information(self, pois_by_tag: dict):
         """
         publishes ObstacleList topic
         :param bounds_by_tag: format { tag : [ [bound1, bound2, closest, speed], ...] , ...}
         """
         header = Header()
         header.stamp = rospy.Time.now()
-        for tag, values in bounds_by_tag.items():
+        for tag, values in pois_by_tag.items():
             obstacles = PafObstacleList()
             obstacles.type = tag
             obstacles.header = header
             obstacles.obstacles = []
-            for i, (bound_1, bound_2, closest, speed) in enumerate(values):
+            for i, (bound_1, bound_2, closest, speed, id) in enumerate(values):
                 obstacle = PafObstacle()
                 obstacle.bound_1 = tuple(bound_1)
                 obstacle.bound_2 = tuple(bound_2)
@@ -238,8 +258,10 @@ class SemanticLidarNode(object):
                 obstacle.speed_known = speed is not None
                 if obstacle.speed_known:
                     obstacle.speed = speed
+                obstacle.id = id
 
                 obstacles.obstacles.append(obstacle)
+
             self._obstacle_publisher.publish(obstacles)
 
     @staticmethod
