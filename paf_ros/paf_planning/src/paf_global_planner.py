@@ -69,6 +69,7 @@ class GlobalPlanner:
         self._routing_provider()
 
     def _any_target_anywhere(self, p_home):
+        # return np.array([229., -100.])
         lanelets = self._scenario.lanelet_network.lanelets
         lanelet_p = None
         counter = 0

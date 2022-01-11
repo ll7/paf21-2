@@ -13,7 +13,7 @@ from commonroad_route_planner.route import Route as CommonroadRoute
 import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
 
-from .HelperFunctions import dist_pts, closest_index_of_point_list
+from .HelperFunctions import dist_pts, closest_index_of_point_list, dist
 from .Spline import calc_spline_course_from_point_list
 
 
@@ -120,16 +120,20 @@ class GlobalPath:
         :return: dict { lanelet_id1: [ allowed_other_lanelet_id, ...], ... }
         """
 
-        def valid_successor_from_list(let: Lanelet, l_id_check: list):
+        def valid_successor_from_list(check_lanelet: Lanelet, l_id_check: list):
             try:
-                l_id_check.remove(let.lanelet_id)
+                l_id_check.remove(check_lanelet.lanelet_id)
             except ValueError:
                 ...
-            if let.lanelet_id in l_id_check:
-                return let.lanelet_id
-            for l_successor in let.successor:
-                if l_successor in l_id_check:
-                    return l_successor
+            if check_lanelet.lanelet_id in l_id_check:
+                return check_lanelet.lanelet_id
+            for l_successor in check_lanelet.successor:
+                successor_lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(l_successor)
+                if l_successor not in l_id_check or 0.5 < dist(
+                    successor_lanelet.center_vertices[0], check_lanelet.center_vertices[-1]
+                ):
+                    continue
+                return l_successor
             return None
 
         lane_change_graph = {}
@@ -197,11 +201,6 @@ class GlobalPath:
 
     @staticmethod
     def _locate_obj_on_lanelet(route_pts: np.ndarray, object_position: List[float]):
-        def dist(a, b):
-            x1, y1 = a
-            x2, y2 = b
-            return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-
         if len(route_pts) == 0:
             return -1
         return int(np.argmin([dist(x, object_position) for x in route_pts]))
@@ -507,9 +506,13 @@ class GlobalPath:
         msg.target = self.target
 
         self.route = msg
-
-        for paf_section in msg.sections:
+        for i, paf_section in enumerate(msg.sections):
+            # rospy.logwarn(f"section {i}: {[(round(p.x), round(p.y)) for p in paf_section.points]}, "
+            #               f"{paf_section.target_lanes}, {paf_section.target_lanes_left_shift}, "
+            #               f"{paf_section.target_lanes_distance}")
             assert len(paf_section.target_lanes) > 0 and len(paf_section.points) > 0, f"{paf_section}"
+
+        # rospy.logwarn(groups)
 
         return msg
 

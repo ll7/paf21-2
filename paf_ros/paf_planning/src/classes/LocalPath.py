@@ -113,7 +113,7 @@ class LocalPath:
 
         if prev_idx > 0:
             prev_idx = max(0, prev_idx - 5)
-            end_index = min(prev_idx + 5, len(self._sparse_local_path_speeds) - 1)
+            end_index = min(prev_idx + 5, len(self.message.points) - 1)
             sparse_local_path = self._sparse_local_path[prev_idx:end_index]
             sparse_local_path_speeds = self._sparse_local_path_speeds[prev_idx:end_index]
             sparse_traffic_signals = self._sparse_traffic_signals[prev_idx:end_index]
@@ -165,8 +165,9 @@ class LocalPath:
                 fraction_completed = (distance_planned - lane_change_start_distance) / (
                     lane_change_until_distance - lane_change_start_distance
                 )
+                rospy.logwarn(fraction_completed)
 
-                if fraction_completed < 1 and i < len(self.global_path) - 1:
+                if 0 <= fraction_completed < 1 and i <= len(self.global_path) - 1:
                     distance_planned += s.distance_from_last_section
 
                     point, speed, signs = self._calculate_intermediate_pts(
@@ -180,8 +181,8 @@ class LocalPath:
                         sparse_traffic_signals.append(signs)
                     continue
 
+            lane_change_until_distance = None
             distance_planned += s.distance_from_last_section
-
             sparse_local_path.append(s.points[current_lane])
 
             speed = s.speed_limits[current_lane]
@@ -250,13 +251,18 @@ class LocalPath:
             if choice == "left" or choice == "right":
                 last_lane = current_lane
                 current_lane += -1 if choice == "left" else 1
+                lane_change_start_distance = distance_planned
+                lane_change_until_distance = min(
+                    [s.target_lanes_distance, distance_planned + distance_for_one_lane_change]
+                )
+
                 # print(
                 #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
                 #     f"lane change {last_lane}->{current_lane} ({choice}), "
-                #     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}"
+                #     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
+                #     f"dist={round(lane_change_start_distance)}->"
+                #     f"{round(lane_change_until_distance)}, {s.target_lanes_distance}"
                 # )
-                lane_change_start_distance = distance_planned
-                lane_change_until_distance = distance_planned + distance_for_one_lane_change
                 if i + 1 < len(self.global_path):
                     lane_change_pts.append(self.global_path.route.sections[i + 1].points[current_lane])
 
@@ -283,7 +289,7 @@ class LocalPath:
         except Exception:
             pass
 
-        # self._draw_path_pts(sparse_local_path)
+        self._draw_path_pts(sparse_local_path[::2])
         self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
