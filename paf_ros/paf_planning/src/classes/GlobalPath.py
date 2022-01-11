@@ -510,7 +510,11 @@ class GlobalPath:
             # rospy.logwarn(f"section {i}: {[(round(p.x), round(p.y)) for p in paf_section.points]}, "
             #               f"{paf_section.target_lanes}, {paf_section.target_lanes_left_shift}, "
             #               f"{paf_section.target_lanes_distance}")
-            assert len(paf_section.target_lanes) > 0 and len(paf_section.points) > 0, f"{paf_section}"
+            if len(paf_section.target_lanes) == 0:
+                paf_section.target_lanes = [0]
+                rospy.logerr(f"[global planner] no target lanes specified in section {i}")
+            if len(paf_section.points) == 0:
+                rospy.logerr(f"[global planner] section {i} has no points")
 
         # rospy.logwarn(groups)
 

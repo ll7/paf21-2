@@ -273,7 +273,7 @@ class LocalPlanner:
     def _planner_at_end_of_local_path(self):
         if len(self._local_path) == 0:
             return True
-        return len(self._local_path) - self._local_path_idx < 500
+        return len(self._local_path) - self._local_path_idx < 300
 
     def _planner_at_end_of_global_path(self):
         if len(self._global_path) == 0:

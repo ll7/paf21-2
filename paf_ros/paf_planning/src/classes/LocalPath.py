@@ -169,7 +169,8 @@ class LocalPath:
 
                 if 0 <= fraction_completed < 1 and i <= len(self.global_path) - 1:
                     distance_planned += s.distance_from_last_section
-
+                    if fraction_completed > 0.7:
+                        continue
                     point, speed, signs = self._calculate_intermediate_pts(
                         s, last_lane, current_lane, fraction_completed
                     )
@@ -250,11 +251,15 @@ class LocalPath:
 
             if choice == "left" or choice == "right":
                 last_lane = current_lane
-                current_lane += -1 if choice == "left" else 1
+
                 lane_change_start_distance = distance_planned
                 lane_change_until_distance = min(
                     [s.target_lanes_distance, distance_planned + distance_for_one_lane_change]
                 )
+                if lane_change_until_distance == s.target_lanes_distance:
+                    current_lane -= number_of_lanes_off
+                else:
+                    current_lane += -1 if choice == "left" else 1
 
                 # print(
                 #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
@@ -289,7 +294,7 @@ class LocalPath:
         except Exception:
             pass
 
-        self._draw_path_pts(sparse_local_path[::2])
+        # self._draw_path_pts(sparse_local_path[::2])
         self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
