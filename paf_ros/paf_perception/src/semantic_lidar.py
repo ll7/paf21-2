@@ -131,17 +131,12 @@ class SemanticLidarNode(object):
                 poi = self._calculate_bounds(pts)
 
                 obj_id_string = f"{tag}-{obj_idx}-{i}"
-                # generate integer id
-                if tag == "Vehicles":
-                    tag_int = 1
-                else:
-                    tag_int = 2
-
-                obj_id_int = obj_idx * 10 + tag_int
-
+                obj_id_int = self._create_int_id(tag, obj_idx)
                 speed = self._get_obj_speed(previous_obstacles, poi, obj_id_string, obj_idx, current_time)
                 if speed is None and len(previous_obstacles) > 0:
                     pass
+                distance = self._dist(poi[2], self.xy_position)
+                poi.append(distance)
                 poi.append(speed)
                 poi.append(obj_id_int)
                 poi_by_tag[tag].append(poi)
@@ -149,6 +144,18 @@ class SemanticLidarNode(object):
 
         self.previous_time = current_time
         return poi_by_tag
+
+    def _create_int_id(self, tag, obj_idx):
+        """[create an integer id from a string tag and an idex"""
+        if tag == "Vehicles":
+            tag_int = 1
+        elif tag == "Pedestrians":
+            tag_int = 2
+        else:
+            tag_int = 3
+
+        obj_id_int = obj_idx * 10 + tag_int
+        return obj_id_int
 
     def _calculate_bounds(self, pts) -> list:
         """calculate bound1, bound2, closest_point in (x,y,d)-coordinates of an object by given points
@@ -250,11 +257,12 @@ class SemanticLidarNode(object):
             obstacles.type = tag
             obstacles.header = header
             obstacles.obstacles = []
-            for i, (bound_1, bound_2, closest, speed, id) in enumerate(values):
+            for i, (bound_1, bound_2, closest, distance, speed, id) in enumerate(values):
                 obstacle = PafObstacle()
                 obstacle.bound_1 = tuple(bound_1)
                 obstacle.bound_2 = tuple(bound_2)
                 obstacle.closest = tuple(closest)
+                obstacle.distance = distance
                 obstacle.speed_known = speed is not None
                 if obstacle.speed_known:
                     obstacle.speed = speed
