@@ -132,11 +132,19 @@ class SemanticLidarNode(object):
 
                 obj_id_string = f"{tag}-{obj_idx}-{i}"
                 obj_id_int = self._create_int_id(tag, obj_idx)
-                speed, velocity_vector = self._get_obj_speed(
-                    previous_obstacles, poi, obj_id_string, obj_idx, current_time
-                )
-                if speed is None and len(previous_obstacles) > 0:
+
+                velocity = self._get_obj_speed(previous_obstacles, poi, obj_id_string, obj_idx, current_time)
+                if velocity is None and len(previous_obstacles) > 0:
                     pass
+
+                # error in velocity calculation
+                if velocity is not None:
+                    speed = velocity[0]
+                    velocity_vector = velocity[1]
+                else:
+                    speed = 0
+                    velocity_vector = np.zeros(2)
+
                 distance = self._dist(poi[2], self.xy_position)
                 poi.append(distance)
                 poi.append(speed)
@@ -202,16 +210,20 @@ class SemanticLidarNode(object):
 
             if time_delta > 0:
                 speed = distance_delta / time_delta
-                velocity_vector = np.linalg.norm(cur_closest - prev_closest)
+                if speed != 0.0:
+                    velocity_vector = self.normalize(cur_closest - prev_closest)
+
+                velocity_vector = self.normalize(cur_closest - prev_closest)
+
                 return [speed, velocity_vector] if speed <= self._get_max_ai_speed(xy) else None
 
-        velocity_vector = np.zeros(2)
         cur_closest = obstacle_bounds[2]
         if obj_idx != 0 and obj_id in previous_obstacles:
             prev_closest = previous_obstacles[obj_id][2]
-            speed, velocity_vector = speed_calc(prev_closest)
-            if speed is not None:
-                return [speed, velocity_vector]
+            velocity = speed_calc(prev_closest)
+            if velocity is not None:
+                return velocity
+
         min_point, min_dist = None, None
         for poi in previous_obstacles.values():
             prev_closest = poi[2]
@@ -219,7 +231,7 @@ class SemanticLidarNode(object):
             if min_point is None or dist < min_dist:
                 min_point, min_dist = prev_closest, dist
 
-        return [speed_calc(min_point), velocity_vector]
+        return speed_calc(min_point)
 
     def _process_lidar_points_by_tag_and_idx(self, points: list) -> dict:
         """
@@ -334,6 +346,12 @@ class SemanticLidarNode(object):
         starts ROS node
         """
         rospy.spin()
+
+    def normalize(self, v):
+        length = self._dist(v)
+        if length != 0.0:
+            return v / length
+        return v * 0
 
 
 if __name__ == "__main__":
