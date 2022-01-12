@@ -32,6 +32,7 @@ from tf.transformations import euler_from_quaternion
 # generate path of the file to be opened
 file_path = "/home/imech154/paf21-2/maps/Rules/Town03.xml"
 EGO_VEHICLE_SHAPE = Rectangle(width=2.0, length=4.5)
+LOOK_AHEAD_STEPS = 10
 
 
 class CRDriveabilityChecker(object):
@@ -118,16 +119,11 @@ class CRDriveabilityChecker(object):
 
         self._overwrite_file()
 
-        # if self.check_collision(self.ego_vehicle.prediction):
-        #     self.on_predicted_collision()
-        # else:
-        #     rospy.loginfo('no incoming collision detected')
-
         potential_collisions = self.check_collision(self.ego_vehicle.prediction)
         if potential_collisions.__contains__(-1):
             rospy.loginfo(f"no incoming collision detected {potential_collisions}")
         else:
-            self.on_predicted_collision()
+            self.on_predicted_collision(potential_collisions[0])
 
     def _update_obstacles(self, msg: PafObstacleList) -> Obstacle:
         """get the obstacle information from the Obstacle topic without the type"""
@@ -164,33 +160,47 @@ class CRDriveabilityChecker(object):
     def _create_obstacle(
         self, id, obstacle: PafObstacle, shape: Shape, type: ObstacleType, position: np.ndarray
     ) -> Obstacle:
-        initial_state = State(position=np.array([0.0, 0.0]), velocity=0, orientation=0, time_step=0)
-
-        predicted_trajectory = self._generate_trajectory_prediction_obstacle(initial_state, shape)
+        initial_state = State(position=np.array([0.0, 0.0]), velocity=obstacle.speed, orientation=0, time_step=0)
+        velocity_vector = np.array(obstacle.velocity_vector) * obstacle.speed
+        predicted_trajectory = self._generate_trajectory_prediction_obstacle(initial_state, velocity_vector, shape)
 
         dynamic_obstacle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         return dynamic_obstacle
 
     def _generate_trajectory_prediction_ego_vehicle(self, intialState: State, shape: Shape) -> TrajectoryPrediction:
         state_list = []
-        for i in range(1, 21):
+        for i in range(1, LOOK_AHEAD_STEPS):
             # compute new position
-            new_position = np.array([intialState.position[0] + self.scenario.dt * i * 20, self.current_pose.position.y])
+            velocity = 15
+            new_position = np.array(
+                [intialState.position[0] + self.scenario.dt * i * velocity, self.current_pose.position.y]
+            )
             # create new state
-            new_state = State(position=new_position, velocity=20, orientation=self.current_orientation, time_step=i)
+            new_state = State(
+                position=new_position, velocity=velocity, orientation=self.current_orientation, time_step=i
+            )
             # add new state to state_list
             state_list.append(new_state)
         dynamic_obstacle_trajectory = Trajectory(1, state_list)
         dynamic_obstacle_prediction = TrajectoryPrediction(dynamic_obstacle_trajectory, shape)
         return dynamic_obstacle_prediction
 
-    def _generate_trajectory_prediction_obstacle(self, initial_state: State, shape: Shape) -> TrajectoryPrediction:
+    def _generate_trajectory_prediction_obstacle(
+        self, initial_state: State, velocity_vector, shape: Shape
+    ) -> TrajectoryPrediction:
         state_list = []
-        for i in range(1, 21):
+
+        for i in range(1, LOOK_AHEAD_STEPS):
             # compute new position
-            new_position = np.array([initial_state.position[0] + self.scenario.dt * i * 0, 0])
+            new_position = np.array(
+                [
+                    initial_state.position[0] + self.scenario.dt * i * velocity_vector[0],
+                    initial_state.position[1] + self.scenario.dt * i * velocity_vector[1],
+                ]
+            )
             # create new state
-            new_state = State(position=new_position, velocity=0, orientation=0.02, time_step=i)
+            speed = np.linalg.norm(velocity_vector)
+            new_state = State(position=new_position, velocity=speed, orientation=0.02, time_step=i)
             # add new state to state_list
             state_list.append(new_state)
         dynamic_obstacle_trajectory = Trajectory(1, state_list)
@@ -233,8 +243,11 @@ class CRDriveabilityChecker(object):
         cc = trajectories_collision_dynamic_obstacles([collision_trajectory], collision_vehicles, method="fcl")
         return cc
 
-    def on_predicted_collision(self):
-        rospy.logwarn("Incoming collision between the trajectory of the ego vehicle and objects in the environment: ")
+    def on_predicted_collision(self, timestamp):
+        rospy.logwarn(
+            f"""Incoming collision between the trajectory of the ego vehicle and objects in the environment at,
+        timestamp: {timestamp}: """
+        )
 
     def _overwrite_file(self):
         author = ""
@@ -251,6 +264,10 @@ class CRDriveabilityChecker(object):
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             rate.sleep()
+
+    @staticmethod
+    def orientation_vector_to_angle(vector) -> int:
+        return np.arctan(vector[0] / vector[1])
 
 
 if __name__ == "__main__":
