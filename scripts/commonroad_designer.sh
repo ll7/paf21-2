@@ -14,12 +14,15 @@ if (which crdesigner); then
     match="                                                                'type = {}'.format(type(shape))"
     sudo cp -n $lanelet_py "$lanelet_py.original"
     sudo sed -i "s/$match/$match\n$lanelet_py_fix/" $lanelet_py
-exit
+    exit
   fi
-  crdesigner "$@"
+  if [ $# -eq 0 ]; then
+    crdesigner "$@"
+  else
+    crdesigner -i ~/.ros/maps/Rules/"$1".xml
+  fi
   exit
 fi
-
 mkdir ~/commonroad-tools 2>/dev/null
 cd ~/commonroad-tools || exit 1
 
