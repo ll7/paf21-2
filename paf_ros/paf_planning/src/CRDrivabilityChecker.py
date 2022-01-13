@@ -44,6 +44,7 @@ class CRDriveabilityChecker(object):
         odometry_topic = f"/carla/{role_name}/odometry"
         obstacle_topic = rospy.get_param("obstacles_topic")
 
+        self.counter = 1
         self.paf_obstacles_pedestrians = None
         self.paf_obstacles_vehicles = None
 
@@ -65,8 +66,6 @@ class CRDriveabilityChecker(object):
 
         # collision checker
         self.collision_checker = create_collision_checker(self.scenario)
-
-        self.counter = 0
 
     def _odometry_updated(self, odo: Odometry):
         """
@@ -97,8 +96,8 @@ class CRDriveabilityChecker(object):
     def _obstacle_list_updated(self, msg: PafObstacleList):
         if self.counter % PERCEPTS_PER_COMPUTATION == 0:
             self._update_obstacles(msg)
-            counter = 0
-        counter += 1
+            self.counter = 0
+        self.counter += 1
 
     def _update_obstacles(self, msg):
         # clear obstacles
