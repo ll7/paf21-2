@@ -30,9 +30,11 @@ from tf.transformations import euler_from_quaternion
 
 
 # generate path of the file to be opened
-file_path = "/home/imech154/paf21-2/maps/Rules/Town03.xml"
+file_path = "/home/imech158/paf21-2/maps/Rules/Town03.xml"
 EGO_VEHICLE_SHAPE = Rectangle(width=2.0, length=4.5)
 LOOK_AHEAD_STEPS = 10
+
+PERCEPTS_PER_COMPUTATION = 10
 
 
 class CRDriveabilityChecker(object):
@@ -64,6 +66,8 @@ class CRDriveabilityChecker(object):
         # collision checker
         self.collision_checker = create_collision_checker(self.scenario)
 
+        self.counter = 0
+
     def _odometry_updated(self, odo: Odometry):
         """
         Odometry update Callback
@@ -91,8 +95,14 @@ class CRDriveabilityChecker(object):
         self._update_ego_vehicle_to_CRScenario()
 
     def _obstacle_list_updated(self, msg: PafObstacleList):
-        # clear obstacles
+        if self.counter % PERCEPTS_PER_COMPUTATION == 0:
+            self._update_obstacles(msg)
+            counter = 0
+        counter += 1
 
+    def _update_obstacles(self, msg):
+        # clear obstacles
+        print(msg.obstacles)
         # add all obstacle from obstacle list to commonroad-scenario
         """
         Update obstacle mask
@@ -114,6 +124,7 @@ class CRDriveabilityChecker(object):
 
             # add new obstacles
             self._add_all_vehicles_to_cr(msg.obstacles)
+
         else:
             rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to node")
 
@@ -124,10 +135,6 @@ class CRDriveabilityChecker(object):
             rospy.loginfo(f"no incoming collision detected {potential_collisions}")
         else:
             self.on_predicted_collision(potential_collisions[0])
-
-    def _update_obstacles(self, msg: PafObstacleList) -> Obstacle:
-        """get the obstacle information from the Obstacle topic without the type"""
-        return msg.obstacles
 
     def _update_ego_vehicle_to_CRScenario(self):
         """create a new ego vehicel graphical representation"""
@@ -161,8 +168,10 @@ class CRDriveabilityChecker(object):
         self, id, obstacle: PafObstacle, shape: Shape, type: ObstacleType, position: np.ndarray
     ) -> Obstacle:
         initial_state = State(position=np.array([0.0, 0.0]), velocity=obstacle.speed, orientation=0, time_step=0)
-        velocity_vector = np.array(obstacle.velocity_vector) * obstacle.speed
-        predicted_trajectory = self._generate_trajectory_prediction_obstacle(initial_state, velocity_vector, shape)
+
+        predicted_trajectory = self._generate_trajectory_prediction_obstacle(
+            initial_state, obstacle.velocity_vector, obstacle.speed, shape
+        )
 
         dynamic_obstacle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         return dynamic_obstacle
@@ -186,7 +195,7 @@ class CRDriveabilityChecker(object):
         return dynamic_obstacle_prediction
 
     def _generate_trajectory_prediction_obstacle(
-        self, initial_state: State, velocity_vector, shape: Shape
+        self, initial_state: State, velocity_vector, speed, shape: Shape
     ) -> TrajectoryPrediction:
         state_list = []
 
@@ -194,12 +203,13 @@ class CRDriveabilityChecker(object):
             # compute new position
             new_position = np.array(
                 [
-                    initial_state.position[0] + self.scenario.dt * i * velocity_vector[0],
-                    initial_state.position[1] + self.scenario.dt * i * velocity_vector[1],
+                    initial_state.position[0] + self.scenario.dt * i * velocity_vector[0] * speed,
+                    initial_state.position[1] + self.scenario.dt * i * velocity_vector[1] * speed,
                 ]
             )
-            # create new state
-            speed = np.linalg.norm(velocity_vector)
+
+            # print(f"vel = {velocity_vector}")
+            # print(f"speed={speed}")
             new_state = State(position=new_position, velocity=speed, orientation=0.02, time_step=i)
             # add new state to state_list
             state_list.append(new_state)
@@ -218,7 +228,7 @@ class CRDriveabilityChecker(object):
     def _add_vehicle(self, id, obstacle: PafObstacle):
         vertices = np.array([obstacle.closest, obstacle.bound_1, obstacle.bound_2])
         # add dummy implementation, obstacles should have three different vertices
-        new_vertices = vertices + np.array([[0.0, 0.0], [0.00001, 0.0], [0.0000, 0.00001]])
+        new_vertices = vertices + np.array([[0.0, 0.0], [1.00001, 0.0], [0.0000, 1.00001]])
         shape = Polygon(vertices=new_vertices)
         # actual position should be fixed, dummy implementation
         position = np.array(obstacle.closest)
@@ -257,7 +267,7 @@ class CRDriveabilityChecker(object):
 
         # write new scenario
         fw = CommonRoadFileWriter(self.scenario, self.planning_problem_set, author, affiliation, source, tags)
-        fw.write_to_file("/home/imech154/paf21-2/maps/Rules/Town03_modnew9.xml", OverwriteExistingFile.ALWAYS)
+        fw.write_to_file("/home/imech158/paf21-2/maps/Rules/Town03_modnew9.xml", OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)

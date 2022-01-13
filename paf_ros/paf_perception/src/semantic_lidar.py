@@ -101,7 +101,9 @@ class SemanticLidarNode(object):
         points = pc2.read_points(msg, skip_nans=True)
         sorted_points = self._process_lidar_points_by_tag_and_idx(points)
         pois_by_tag = self._process_sorted_points(sorted_points)
+
         self._publish_object_information(pois_by_tag)
+
         time = rospy.Time.now().to_time()
         delta = time - t0
         if delta > 0:
