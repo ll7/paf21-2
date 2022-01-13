@@ -45,14 +45,12 @@ class VehicleController:
 
         # speed controller parameters
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
-        # distance control parameters
-        args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
+        self._target_speed_offset = 1.2
         # Stanley control parameters
         args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
         self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
-        self._dist_controller: PIDLongitudinalController = PIDLongitudinalController(**args_dist)
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
@@ -148,7 +146,7 @@ class VehicleController:
 
         msg = PafLogScalar()
         msg.section = "ACTOR throttle"
-        msg.value = throttle
+        msg.value = np.clip(throttle, -1, 1)
 
         self.throttle_log_publisher.publish(msg)
 
@@ -203,7 +201,7 @@ class VehicleController:
             float: the throttle to use
         """
         # perform pid control step with distance and speed controllers
-        target_speed = self._target_speed
+        target_speed = self._target_speed * self._target_speed_offset
 
         if distance >= 0.5 and self._current_speed > 10:
             target_speed = max(10, self._current_speed * (1 - 1e-8))
