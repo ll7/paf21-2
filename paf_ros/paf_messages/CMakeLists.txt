@@ -14,6 +14,7 @@ add_message_files(
   FILES
   PafLocalPath.msg
   PafObstacle.msg
+  PafObstacleFollowInfo.msg
   PafObstacleList.msg
   Point2D.msg
   PafRoutingRequest.msg
