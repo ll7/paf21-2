@@ -16,6 +16,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad.scenario.traffic_sign_interpreter import SupportedTrafficSignCountry
 
 from crdesigner.input_output.gui.toolboxes.gui_sumo_simulation import SUMO_AVAILABLE
+from zmq import NULL
 if SUMO_AVAILABLE:
     from crdesigner.map_conversion.sumo_map.config import SumoConfig
 from crdesigner.input_output.gui.misc.util import Observable
@@ -500,6 +501,8 @@ class AnimatedViewer:
         mouse_pos = np.array(
             [mouse_clicked_event.xdata, mouse_clicked_event.ydata])
         click_shape = Circle(radius=0.01, center=mouse_pos)
+
+        self.callback_function(selected_object=[], output="", pos_x=mouse_clicked_event.xdata, pos_y=mouse_clicked_event.ydata, vertices_click=True)
 
         if self.current_scenario is None:
             return

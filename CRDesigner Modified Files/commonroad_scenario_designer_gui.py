@@ -128,7 +128,13 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.obstacle_toolbox = ObstacleToolbox(self.cr_viewer.current_scenario, self.toolbox_callback, self.tmp_folder)
         self.addDockWidget(Qt.RightDockWidgetArea, self.obstacle_toolbox)
 
-    def viewer_callback(self, selected_object: Union[Lanelet, Obstacle], output: str, pos_x=0.0, pos_y=0.0):
+    def click_callback(self, pos_x: float, pos_y: float):
+        self.road_network_toolbox.update_create_lane_table(pos_x=pos_x, pos_y=pos_y)
+    
+    def viewer_callback(self, selected_object: Union[Lanelet, Obstacle], output: str, pos_x=0.0, pos_y=0.0, vertices_click=False):
+        if vertices_click:
+            self.click_callback(pos_x=pos_x, pos_y=pos_y)
+            return
         if isinstance(selected_object, Lanelet):
             self.road_network_toolbox.road_network_toolbox.selected_lanelet_two.setCurrentText(
                 self.road_network_toolbox.road_network_toolbox.selected_lanelet_one.currentText())

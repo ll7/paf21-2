@@ -640,5 +640,39 @@ class RoadNetworkToolboxUI(Toolbox):
         split_lanelets_layout.addRow(self.button_split_selected_lanelet)
         layout_lanelet_editor.addWidget(split_lanelets_groupbox)
 
+        label_create_lanelet = QLabel("Create Lanelet")
+        label_create_lanelet.setFont(QFont("Arial", 11, QFont.Bold))
+
+        self.create_lanelet_vertices_click = QCheckBox("Create Center Vertices Per Click")
+
+        self.create_lanelet_width = QLineEdit()
+        self.create_lanelet_width.setValidator(QDoubleValidator())
+        self.create_lanelet_width.setMaxLength(8)
+        self.create_lanelet_width.setAlignment(Qt.AlignRight)
+        self.create_lanelet_width.setText("4.0")
+        
+        self.center_vertices_label = QLabel("Center Vertices:")
+        self.center_vertices_table = QTableWidget()
+        self.center_vertices_table.setColumnCount(2)
+        self.center_vertices_table.setHorizontalHeaderLabels(['X-Pos', 'Y-Pos'])
+        self.center_vertices_table.resizeColumnsToContents()
+        self.center_vertices_table.setColumnWidth(0, 195)
+        self.center_vertices_table.setMaximumHeight(1000)
+
+        self.button_remove_center_vertices = QPushButton("Remove Selected Entry")
+        self.button_create_lanelet_from_vertices = QPushButton("Create New Lanelet")
+
+        create_lanelet_layout = QFormLayout()
+        create_lanelet_groupbox = QGroupBox()
+        create_lanelet_groupbox.setLayout(create_lanelet_layout)
+        create_lanelet_layout.addRow(label_create_lanelet)
+        create_lanelet_layout.addRow(self.center_vertices_label)
+        create_lanelet_layout.addRow(self.create_lanelet_vertices_click)
+        create_lanelet_layout.addRow("Lanelet Width:", self.create_lanelet_width)
+        create_lanelet_layout.addRow(self.center_vertices_table)
+        create_lanelet_layout.addRow(self.button_remove_center_vertices)
+        create_lanelet_layout.addRow(self.button_create_lanelet_from_vertices)
+        layout_lanelet_editor.addWidget(create_lanelet_groupbox)
+
         title_lanelet_editor = "Lanelet Editor"
         return title_lanelet_editor, widget_lanelet_editor

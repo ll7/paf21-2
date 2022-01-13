@@ -7,7 +7,7 @@ export LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
 bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh"
 lanelet_py_fix="        if self._buffered_strtee is None:\n            self._create_buffered_strtree()"
 lanelet_py=~/.local/lib/python3.8/site-packages/commonroad/scenario/lanelet.py
-if (which crdesigner); then
+if [ -d "$HOME/commonroad-tools/commonroad-scenario-designer/" ]; then
   fixed=$(cat $lanelet_py | grep -q "if self._buffered_strtee is None")
   if (! $fixed); then
     echo "sudo required for fixing commonroad.scenario.lanelet.py (line 1423)"
