@@ -41,7 +41,7 @@ fi
 cd ~/commonroad-tools || exit 1
 
 if [ ! -d "$HOME/commonroad-tools/commonroad-scenario-designer/" ]; then
-  git clone https://gitlab.lrz.de/tum-cps/commonroad-scenario-designer
+  git clone --depth 1 --branch release_0.3 https://gitlab.lrz.de/tum-cps/commonroad-scenario-designer
 fi
 sudo pip install cartopy
 cd commonroad-scenario-designer || exit 1
