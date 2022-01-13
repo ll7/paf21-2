@@ -37,6 +37,14 @@ class VehicleController:
         self._target_speed: float = target_speed
         self._is_reverse: bool = False
         self._emergency_mode: bool = False
+
+        self._stuck_check_time: float = 4.0  # timespan until the actor recognizes a stuck situation
+        self._stuck_value_threshold: float = 1.0  # speed threshold which is considered stuck
+        self._stuck_start_time: float = 0.0  # time when the car got stuck
+        self._unstuck_start_time: float = 0.0  # time when the unstuck operation started (a.k.a. rear gear)
+        self._unstuck_check_time: float = 0.5  # max duration for the rear gear
+        self._is_unstucking: bool = False  # true while the car is driving backwards to unstuck
+
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
 
@@ -111,6 +119,24 @@ class VehicleController:
             self._target_speed = abs(self._target_speed)
 
             throttle: float = self.__calculate_throttle(dt, distance)
+
+            rear_gear = False
+            if self._is_unstucking:
+                rospy.loginfo("UNSTUCKING STEPBRO")
+                if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
+                    self._is_unstucking = False
+                else:
+                    rear_gear = True
+            elif self.__check_stuck():
+                self._is_unstucking = True
+                self._unstuck_start_time = rospy.get_rostime().secs
+                rear_gear = True
+
+            if rear_gear:
+                throttle = 1.0
+                steering = 0.0
+                self._is_reverse = True
+
         except RuntimeError:
             throttle = -1.0
             steering = 0.0
@@ -152,6 +178,16 @@ class VehicleController:
         self.throttle_log_publisher.publish(msg)
 
         return control
+
+    def __check_stuck(self):
+        if self._current_speed < self._stuck_value_threshold and self._target_speed > self._stuck_value_threshold:
+            if self._stuck_start_time == 0.0:
+                self._stuck_start_time = rospy.get_rostime().secs
+                return False
+            elif rospy.get_rostime().secs - self._stuck_start_time >= self._stuck_check_time:
+                self._stuck_start_time = 0.0
+                return True
+        return False
 
     def __generate_control_message(self, throttle: float, steering: float) -> CarlaEgoVehicleControl:
         """
