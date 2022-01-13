@@ -48,6 +48,7 @@ class VehicleController:
         self._target_speed_offset = 1.2
         # Stanley control parameters
         args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
         self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
