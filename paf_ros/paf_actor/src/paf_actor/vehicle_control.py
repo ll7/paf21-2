@@ -12,7 +12,7 @@ from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
-from paf_messages.msg import PafLocalPath, PafLogScalar
+from paf_messages.msg import PafLocalPath, PafLogScalar, PafObstacleFollowInfo
 
 
 class VehicleController:
@@ -44,6 +44,9 @@ class VehicleController:
         self._unstuck_start_time: float = 0.0  # time when the unstuck operation started (a.k.a. rear gear)
         self._unstuck_check_time: float = 0.5  # max duration for the rear gear
         self._is_unstucking: bool = False  # true while the car is driving backwards to unstuck
+
+        self._obstacle_follow_speed: float = float("inf")
+        self._obstacle_follow_min_distance: float = 4.0
 
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
@@ -101,7 +104,24 @@ class VehicleController:
             "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
         )
 
+        self.obstacle_subscriber: rospy.Subscriber = rospy.Subscriber(
+            "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
+        )
+
+        self.obstacle_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, queue_size=1
+        )
+
+        rospy.Timer(rospy.Duration(10), self.lost_obst, oneshot=True)
         # self.__init_test_szenario()
+
+    def found_obst(self, event):
+        self.obstacle_publisher.publish(PafObstacleFollowInfo(20 / 3.6, 4.0, True))
+        rospy.Timer(rospy.Duration(10), self.lost_obst, oneshot=True)
+
+    def lost_obst(self, event):
+        self.obstacle_publisher.publish(PafObstacleFollowInfo(20 / 3.6, 4.0, False))
+        rospy.Timer(rospy.Duration(10), self.found_obst, oneshot=True)
 
     def __run_step(self):
         """
@@ -112,17 +132,23 @@ class VehicleController:
         """
         self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
 
+        # http://wiki.ros.org/rospy/Overview/Time
+        # rospy.Timer(rospy.Duration(10), self.found_obst, oneshot=False)
+
         # self.__init_test_szenario()
         try:
             steering, self._target_speed, distance = self.__calculate_steering()
             self._is_reverse = self._target_speed < 0.0
             self._target_speed = abs(self._target_speed)
 
+            if not self._is_reverse:
+                if self._target_speed > self._obstacle_follow_speed:
+                    self._target_speed = self._obstacle_follow_speed
+
             throttle: float = self.__calculate_throttle(dt, distance)
 
             rear_gear = False
             if self._is_unstucking:
-                rospy.loginfo("UNSTUCKING STEPBRO")
                 if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
                     self._is_unstucking = False
                 else:
@@ -303,6 +329,21 @@ class VehicleController:
         )
 
         self._current_pose = odo.pose.pose
+
+    def __handle_obstacle_msg(self, obstacle_follow_info: PafObstacleFollowInfo):
+        """
+        Handles the obstacle follow information
+
+        Args:
+            obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
+        """
+        if not obstacle_follow_info.no_target:
+            if obstacle_follow_info.distance <= self._obstacle_follow_min_distance:
+                rospy.loginfo("AHH OBSTACLE")
+                self._obstacle_follow_speed = obstacle_follow_info.speed
+        else:
+            rospy.loginfo("Puhhh no  OBSTACLE")
+            self._obstacle_follow_speed = float("inf")
 
     def run(self):
         """
