@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import math
+import black
 
 from commonroad.scenario.lanelet import LineMarking, LaneletType, RoadUser, StopLine, Lanelet
 from commonroad.scenario.intersection import IntersectionIncomingElement, Intersection
@@ -101,6 +102,8 @@ class RoadNetworkToolbox(QDockWidget):
 
         #Lanelet-Editor:
         self.road_network_toolbox.button_split_selected_lanelet.clicked.connect(lambda: self.split_selected_lanelet())
+        self.road_network_toolbox.button_remove_center_vertices.clicked.connect(lambda: self.remove_selected_vertex())
+        self.road_network_toolbox.button_create_lanelet_from_vertices.clicked.connect(lambda: self.create_lanelet_from_vertices())
 
     def refresh_toolbox(self, scenario: Scenario):
         self.current_scenario = scenario
@@ -1317,6 +1320,89 @@ class RoadNetworkToolbox(QDockWidget):
                                                        self.current_scenario.lanelet_network)
             self.callback(self.current_scenario)
 
+    def update_create_lane_table(self,  pos_x: float, pos_y: float):
+        if self.road_network_toolbox.create_lanelet_vertices_click.isChecked():
+            num_rows = self.road_network_toolbox.center_vertices_table.rowCount()
+            x_pos = QLineEdit()
+            x_pos.setValidator(QDoubleValidator())
+            x_pos.setMaxLength(10)
+            x_pos.setAlignment(Qt.AlignCenter)
+            x_pos.setText(str(pos_x))
+            y_pos = QLineEdit()
+            y_pos.setValidator(QDoubleValidator())
+            y_pos.setMaxLength(10)
+            y_pos.setAlignment(Qt.AlignCenter)
+            y_pos.setText(str(pos_y))
+            self.road_network_toolbox.center_vertices_table.insertRow(num_rows)
+            self.road_network_toolbox.center_vertices_table.setCellWidget(num_rows, 0, x_pos)
+            self.road_network_toolbox.center_vertices_table.setCellWidget(num_rows, 1, y_pos)
+            self.road_network_toolbox.center_vertices_table.resizeColumnsToContents()
+            self.road_network_toolbox.center_vertices_table.resizeRowsToContents()
+    
+    def create_lanelet_from_vertices(self):
+        num_vertices = self.road_network_toolbox.center_vertices_table.rowCount()
+        if num_vertices < 2:
+            print("Can't create lanelet: Not enough center vertices specified.")
+            return
+
+        width = float(self.road_network_toolbox.create_lanelet_width.text())
+        
+        lane_id = self._get_new_lanelet_id()
+        left_vertices = []
+        center_vertices = []
+        right_vertices = []
+
+        for i in range(0, num_vertices):
+            center_vertices.append([float(self.road_network_toolbox.center_vertices_table.cellWidget(i, 0).text()), float(self.road_network_toolbox.center_vertices_table.cellWidget(i, 1).text())])
+        for i in range(0, num_vertices):
+            left_x = 0.0
+            left_y = 0.0
+            right_x = 0.0
+            right_y = 0.0
+            if i == num_vertices - 1:
+                current_vertex = center_vertices[i]
+                last_vertex = center_vertices[i-1]
+                length = math.dist(current_vertex, last_vertex)
+                v = [(current_vertex[0] - last_vertex[0]), (current_vertex[1] - last_vertex[1])]
+                n_left = [-v[1] / length, v[0] / length]
+                n_right = [v[1] / length, -v[0] / length]
+                left_x = current_vertex[0] + (width * 0.5) * n_left[0]
+                left_y = current_vertex[1] + (width * 0.5) * n_left[1]
+                right_x = current_vertex[0] + (width * 0.5) * n_right[0]
+                right_y = current_vertex[1] + (width * 0.5) * n_right[1]
+            else:
+                current_vertex = center_vertices[i]
+                next_vertex = center_vertices[i+1]
+                length = math.dist(current_vertex, next_vertex)
+                v = [(next_vertex[0] - current_vertex[0]), (next_vertex[1] - current_vertex[1])]
+                n_left = [-v[1] / length, v[0] / length]
+                n_right = [v[1] / length, -v[0] / length]
+                left_x = current_vertex[0] + (width * 0.5) * n_left[0]
+                left_y = current_vertex[1] + (width * 0.5) * n_left[1]
+                right_x = current_vertex[0] + (width * 0.5) * n_right[0]
+                right_y = current_vertex[1] + (width * 0.5) * n_right[1]
+            left_vertices.append([left_x, left_y])
+            right_vertices.append([right_x, right_y])
+
+        left_v = np.array(left_vertices)
+        center_v = np.array(center_vertices)
+        right_v = np.array(right_vertices)
+
+        new_lanelet = Lanelet(lanelet_id=lane_id,
+                                left_vertices=left_v, center_vertices=center_v, right_vertices=right_v,
+                                lanelet_type={LaneletType.URBAN}
+                                )
+        self.current_scenario.lanelet_network.add_lanelet(new_lanelet)
+
+        self.callback(self.current_scenario)
+    
+    def remove_selected_vertex(self):
+        sel_row = -1
+        sel_row = self.road_network_toolbox.center_vertices_table.currentRow()
+        if sel_row == -1:
+            return
+        self.road_network_toolbox.center_vertices_table.removeRow(sel_row)
+    
     def split_selected_lanelet(self):
         if self.road_network_toolbox.selected_lanelet_split.currentText() in ["", "None"]:
             return
