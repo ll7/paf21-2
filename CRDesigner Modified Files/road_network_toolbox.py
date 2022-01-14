@@ -1426,13 +1426,12 @@ class RoadNetworkToolbox(QDockWidget):
         self.neighbourhood = self._analyze_neighbourhood(self.current_scenario)
         
         id_lane_1 = self._get_new_lanelet_id()
-        id_lane_2 = self._get_new_lanelet_id()
+        id_lane_2 = id_lane_1 + 1
 
         lanelet_copy = self.current_scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         if lanelet_copy is None:
             print("Could not find lanelet " + str(lanelet_id))
             return None, None
-        
         sep_index = 0
         lanelet_center_list = lanelet_copy.center_vertices.tolist()
         end_index = self._find_closest_path_index(lanelet_center_list, split_pos_x, split_pos_y)
@@ -1498,8 +1497,9 @@ class RoadNetworkToolbox(QDockWidget):
                     signs_2.add(sign_id)
                     sign.first_occurrence.add(id_lane_2)
             # delete lanelet
-            del self.current_scenario.lanelet_network._lanelets[lanelet_id]
-            # create new lanelets: lanelet_2 lane without obstacle; lanelet_1 lane with obstacle
+            self.current_scenario.lanelet_network.remove_lanelet(lanelet_id)
+            del self.neighbourhood[lanelet_id]
+            # create new lanelets:
             lanelet_1 = Lanelet(lanelet_id=id_lane_1, predecessor=lanelet_copy.predecessor,
                                 left_vertices=left_1, center_vertices=center_1, right_vertices=right_1,
                                 successor=[id_lane_2], adjacent_left=lanelet_copy.adj_left,
@@ -1546,8 +1546,6 @@ class RoadNetworkToolbox(QDockWidget):
             # then add "back" to the lanelet_network
             self.current_scenario.lanelet_network.add_lanelet(lanelet_1)
             self.current_scenario.lanelet_network.add_lanelet(lanelet_2)
-            # clean references
-            self._fast_reference_cleanup(lanelet_id)
             return id_lane_1, id_lane_2
         return None, None
 
@@ -1585,8 +1583,12 @@ class RoadNetworkToolbox(QDockWidget):
         # update neighbourhood
         if right_1 is not None and right_2 is not None:
             # update right side of current lanelet
-            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_right = right_1
-            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_right = right_2
+            if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_right_same_direction:
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_right = right_1
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_right = right_2
+            else:
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_right = right_2
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_right = right_1
             next = None
             next_dir = None
             if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_right_same_direction:
@@ -1596,8 +1598,8 @@ class RoadNetworkToolbox(QDockWidget):
                 next_dir = True
             else:
                 next = self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_left
-                self.current_scenario.lanelet_network.find_lanelet_by_id(right_2)._adj_right = matching_2
-                self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_right = matching_1
+                self.current_scenario.lanelet_network.find_lanelet_by_id(right_2)._adj_right = matching_1
+                self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_right = matching_2
                 next_dir = False
 
             # make sure that the changes propagate through, but only in the same direction
@@ -1612,8 +1614,8 @@ class RoadNetworkToolbox(QDockWidget):
                     self.current_scenario.lanelet_network.find_lanelet_by_id(right_2_old)._adj_right = right_2
                     next_dir = self.current_scenario.lanelet_network.find_lanelet_by_id(right_1_old)._adj_right_same_direction
                 else:
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_1_old)._adj_left = right_1
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_2_old)._adj_left = right_2
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_1_old)._adj_left = right_2
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_2_old)._adj_left = right_1
                     next_dir = not self.current_scenario.lanelet_network.find_lanelet_by_id(right_1_old)._adj_left_same_direction
 
                 if next_dir:
@@ -1621,14 +1623,18 @@ class RoadNetworkToolbox(QDockWidget):
                     self.current_scenario.lanelet_network.find_lanelet_by_id(right_2)._adj_left = right_2_old
                     next = self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_right
                 else:
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_right = right_1_old
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_2)._adj_right = right_2_old
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_right = right_2_old
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(right_2)._adj_right = right_1_old
                     next = self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_left
 
         if left_1 is not None and left_2 is not None:
             # update left side of current lanelet
-            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_left = left_1
-            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_left = left_2
+            if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_left_same_direction:
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_left = left_1
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_left = left_2
+            else:
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_left = left_2
+                self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_left = left_1
             next = None
             next_dir = None
             if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_left_same_direction:
@@ -1638,8 +1644,8 @@ class RoadNetworkToolbox(QDockWidget):
                 next_dir = True
             else:
                 next = self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_right
-                self.current_scenario.lanelet_network.find_lanelet_by_id(left_2)._adj_left = matching_2
-                self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_left = matching_1
+                self.current_scenario.lanelet_network.find_lanelet_by_id(left_2)._adj_left = matching_1
+                self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_left = matching_2
                 next_dir = False
 
             # make sure that the changes propagate through, but only in the same direction
@@ -1654,8 +1660,8 @@ class RoadNetworkToolbox(QDockWidget):
                     self.current_scenario.lanelet_network.find_lanelet_by_id(left_2_old)._adj_left = left_2
                     next_dir = self.current_scenario.lanelet_network.find_lanelet_by_id(left_1_old)._adj_left_same_direction
                 else:
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_1_old)._adj_right = left_1
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_2_old)._adj_right = left_2
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_1_old)._adj_right = left_2
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_2_old)._adj_right = left_1
                     next_dir = not self.current_scenario.lanelet_network.find_lanelet_by_id(left_1_old)._adj_right_same_direction
 
                 if next_dir:
@@ -1663,26 +1669,20 @@ class RoadNetworkToolbox(QDockWidget):
                     self.current_scenario.lanelet_network.find_lanelet_by_id(left_2)._adj_right = left_2_old
                     next = self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_left
                 else:
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_left = left_1_old
-                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_2)._adj_left = left_2_old
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_left = left_2_old
+                    self.current_scenario.lanelet_network.find_lanelet_by_id(left_2)._adj_left = left_1_old
                     next = self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_right
 
-    def _get_new_lanelet_id(self, id_start=-1, exclude: int=-1) -> int:
+    def _get_new_lanelet_id(self) -> int:
         """
         generates new unique lanelet id
-        :param id_start: starting point for id selection
-        :param exclude: id that should not be used
         :return: new unique lanelet id
         """
-        max_uint16 = 2 ** 16
-        while True:
-            lane_id = 0
-            if id_start == -1:
-                lane_id = np.random.randint(0, max_uint16)
-            else:
-                lane_id = np.random.randint(id_start, max_uint16)
-            if self.current_scenario.lanelet_network.find_lanelet_by_id(lane_id) is None and lane_id != exclude:
-                return lane_id
+        max_id = 0
+        for lane in self.current_scenario.lanelet_network.lanelets:
+            if lane.lanelet_id > max_id:
+                max_id = lane.lanelet_id
+        return max_id + 1
 
     def _find_closest_path_index(self, center_point_list: ndarray, point_x: float, point_y: float):
         min_dist = float("inf")
@@ -1732,16 +1732,3 @@ class RoadNetworkToolbox(QDockWidget):
                 neighbourhood[lane.lanelet_id][1].append(entry)
 
         return neighbourhood
-
-    def _fast_reference_cleanup(self, lanelet_id: int):
-        """
-        Remove the all references of the given lanelet
-        :param lanelet_id: id of the given lanelet
-        """
-        # remove lanelet_id from all successors
-        for succ in self.neighbourhood[lanelet_id][0]:
-            self.current_scenario.lanelet_network.find_lanelet_by_id(succ)._predecessor.remove(lanelet_id)
-        for pred in self.neighbourhood[lanelet_id][1]:
-            self.current_scenario.lanelet_network.find_lanelet_by_id(pred)._successor.remove(lanelet_id)
-        # remove lanelet_id from neighbourhood dict
-        del self.neighbourhood[lanelet_id]

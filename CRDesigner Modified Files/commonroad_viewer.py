@@ -512,19 +512,17 @@ class AnimatedViewer:
         selected_obstacles = [obs for obs in self.current_scenario.obstacles
                               if obs.occupancy_at_time(self.time_step.value) is not None and
                               obs.occupancy_at_time(self.time_step.value).shape.contains_point(mouse_pos)]
-        
+
         # get selected traffic signs/lights id:
+        info_output = ""
         t_sign_interpreter = TrafficSigInterpreter(country=SupportedTrafficSignCountry.GERMANY, lanelet_network=l_network)
         click_shape2 = Circle(radius=2.0, center=mouse_pos)
         for sign in l_network.traffic_signs:
             if click_shape2.contains_point(sign.position):
-                print("Click Info: Traffic Sign with ID " + str(sign.traffic_sign_id))
+                info_output += "\nClick Info: Traffic Sign with ID " + str(sign.traffic_sign_id)
         for light in l_network.traffic_lights:
             if click_shape2.contains_point(light.position):
-                print("Click Info: Traffic Light with ID " + str(light.traffic_light_id))
-        if len(selected_lanelets) > 0:
-            print("Click Info: Speed limit of selected lanelet with ID " + str(selected_l_ids[0]) + ": " + str(t_sign_interpreter.speed_limit(frozenset({selected_l_ids[0]}))))
-
+                info_output += "\nClick Info: Traffic Light with ID " + str(light.traffic_light_id)
 
         if len(selected_lanelets) > 0 and len(selected_obstacles) == 0:
             self.update_plot(sel_lanelet=selected_lanelets[0], time_step=self.time_step.value)
@@ -548,10 +546,10 @@ class AnimatedViewer:
 
         if len(selected_obstacles) > 0:
             selection = " Obstacle with ID " + str(selected_obstacles[0].obstacle_id) + " is selected."
-            self.callback_function(selected_obstacles[0], output + selection)
+            self.callback_function(selected_obstacles[0], output + selection + info_output)
         elif len(selected_lanelets) > 0:
             selection = " Lanelet with ID " + str(selected_lanelets[0].lanelet_id) + " is selected."
-            self.callback_function(selected_lanelets[0], output + selection, mouse_clicked_event.xdata, mouse_clicked_event.ydata)
+            self.callback_function(selected_lanelets[0], output + selection + info_output, mouse_clicked_event.xdata, mouse_clicked_event.ydata)
 
     def update_plot(self,
                     sel_lanelet: Lanelet = None,
