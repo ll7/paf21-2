@@ -1230,7 +1230,7 @@ class RoadNetworkToolbox(QDockWidget):
             return
 
         connected_lanelet = MapCreator.connect_lanelets(selected_lanelet_one, selected_lanelet_two,
-                                                        self.current_scenario.generate_object_id())
+                                                        self._get_new_lanelet_id())
         self.last_added_lanelet_id = connected_lanelet.lanelet_id
         self.current_scenario.add_objects(connected_lanelet)
         self.set_default_road_network_list_information()
@@ -1320,6 +1320,21 @@ class RoadNetworkToolbox(QDockWidget):
                                                        self.current_scenario.lanelet_network)
             self.callback(self.current_scenario)
 
+    def optimize_vertices(self):
+        for i in range(3, len(self.center_vertices)):
+            t1 = 1.0/3.0
+            t2 = 2.0/3.0
+            p1 = self.center_vertices[i-3]
+            p2 = self.center_vertices[i-2]
+            p3 = self.center_vertices[i-1]
+            p4 = self.center_vertices[i]
+            v1x = pow((1.0 - t1), 3) * p1[0] + 3 * t1 * pow((1.0 - t1), 2) * p2[0] + 3 * pow(t1, 2) * (1.0 - t1) * p3[0] + pow(t1, 3) * p4[0]
+            v1y = pow((1.0 - t1), 3) * p1[1] + 3 * t1 * pow((1.0 - t1), 2) * p2[1] + 3 * pow(t1, 2) * (1.0 - t1) * p3[1] + pow(t1, 3) * p4[1]
+            v2x = pow((1.0 - t2), 3) * p1[0] + 3 * t2 * pow((1.0 - t2), 2) * p2[0] + 3 * pow(t2, 2) * (1.0 - t2) * p3[0] + pow(t2, 3) * p4[0]
+            v2y = pow((1.0 - t2), 3) * p1[1] + 3 * t2 * pow((1.0 - t2), 2) * p2[1] + 3 * pow(t2, 2) * (1.0 - t2) * p3[1] + pow(t2, 3) * p4[1]
+            self.center_vertices[i-2] = [v1x, v1y]
+            self.center_vertices[i-1] = [v2x, v2y]
+    
     def update_create_lane_table(self,  pos_x: float, pos_y: float):
         if self.road_network_toolbox.create_lanelet_vertices_click.isChecked():
             num_rows = self.road_network_toolbox.center_vertices_table.rowCount()
@@ -1349,19 +1364,22 @@ class RoadNetworkToolbox(QDockWidget):
         
         lane_id = self._get_new_lanelet_id()
         left_vertices = []
-        center_vertices = []
+        self.center_vertices = []
         right_vertices = []
 
         for i in range(0, num_vertices):
-            center_vertices.append([float(self.road_network_toolbox.center_vertices_table.cellWidget(i, 0).text()), float(self.road_network_toolbox.center_vertices_table.cellWidget(i, 1).text())])
+            self.center_vertices.append([float(self.road_network_toolbox.center_vertices_table.cellWidget(i, 0).text()), float(self.road_network_toolbox.center_vertices_table.cellWidget(i, 1).text())])
+        if self.road_network_toolbox.create_lanelet_optimize.isChecked() and num_vertices >= 4:
+            self.optimize_vertices()
+        
         for i in range(0, num_vertices):
             left_x = 0.0
             left_y = 0.0
             right_x = 0.0
             right_y = 0.0
             if i == num_vertices - 1:
-                current_vertex = center_vertices[i]
-                last_vertex = center_vertices[i-1]
+                current_vertex = self.center_vertices[i]
+                last_vertex = self.center_vertices[i-1]
                 length = math.dist(current_vertex, last_vertex)
                 v = [(current_vertex[0] - last_vertex[0]), (current_vertex[1] - last_vertex[1])]
                 n_left = [-v[1] / length, v[0] / length]
@@ -1371,8 +1389,8 @@ class RoadNetworkToolbox(QDockWidget):
                 right_x = current_vertex[0] + (width * 0.5) * n_right[0]
                 right_y = current_vertex[1] + (width * 0.5) * n_right[1]
             else:
-                current_vertex = center_vertices[i]
-                next_vertex = center_vertices[i+1]
+                current_vertex = self.center_vertices[i]
+                next_vertex = self.center_vertices[i+1]
                 length = math.dist(current_vertex, next_vertex)
                 v = [(next_vertex[0] - current_vertex[0]), (next_vertex[1] - current_vertex[1])]
                 n_left = [-v[1] / length, v[0] / length]
@@ -1385,7 +1403,7 @@ class RoadNetworkToolbox(QDockWidget):
             right_vertices.append([right_x, right_y])
 
         left_v = np.array(left_vertices)
-        center_v = np.array(center_vertices)
+        center_v = np.array(self.center_vertices)
         right_v = np.array(right_vertices)
 
         new_lanelet = Lanelet(lanelet_id=lane_id,
@@ -1393,6 +1411,9 @@ class RoadNetworkToolbox(QDockWidget):
                                 lanelet_type={LaneletType.URBAN}
                                 )
         self.current_scenario.lanelet_network.add_lanelet(new_lanelet)
+
+        while self.road_network_toolbox.center_vertices_table.rowCount() > 0:
+            self.road_network_toolbox.center_vertices_table.removeRow(0)
 
         self.callback(self.current_scenario)
     

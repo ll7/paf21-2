@@ -660,6 +660,7 @@ class RoadNetworkToolboxUI(Toolbox):
         self.center_vertices_table.setMaximumHeight(1000)
 
         self.button_remove_center_vertices = QPushButton("Remove Selected Entry")
+        self.create_lanelet_optimize = QCheckBox("Optimize Lanelet")
         self.button_create_lanelet_from_vertices = QPushButton("Create New Lanelet")
 
         create_lanelet_layout = QFormLayout()
@@ -671,6 +672,7 @@ class RoadNetworkToolboxUI(Toolbox):
         create_lanelet_layout.addRow("Lanelet Width:", self.create_lanelet_width)
         create_lanelet_layout.addRow(self.center_vertices_table)
         create_lanelet_layout.addRow(self.button_remove_center_vertices)
+        create_lanelet_layout.addRow(self.create_lanelet_optimize)
         create_lanelet_layout.addRow(self.button_create_lanelet_from_vertices)
         layout_lanelet_editor.addWidget(create_lanelet_groupbox)
 
