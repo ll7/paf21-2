@@ -37,13 +37,18 @@ class VehicleController:
         self._target_speed: float = target_speed
         self._is_reverse: bool = False
         self._emergency_mode: bool = False
+        self._steering: float = 0.0
 
-        self._stuck_check_time: float = 4.0  # timespan until the actor recognizes a stuck situation
-        self._stuck_value_threshold: float = 1.0  # speed threshold which is considered stuck
+        # timespan until the actor recognizes a stuck situation
+        self._stuck_check_time: float = 4.0
+        # speed threshold which is considered stuck
+        self._stuck_value_threshold: float = 1.0
         self._stuck_start_time: float = 0.0  # time when the car got stuck
-        self._unstuck_start_time: float = 0.0  # time when the unstuck operation started (a.k.a. rear gear)
+        # time when the unstuck operation started (a.k.a. rear gear)
+        self._unstuck_start_time: float = 0.0
         self._unstuck_check_time: float = 0.5  # max duration for the rear gear
-        self._is_unstucking: bool = False  # true while the car is driving backwards to unstuck
+        # true while the car is driving backwards to unstuck
+        self._is_unstucking: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
         self._obstacle_follow_min_distance: float = 4.0
@@ -57,8 +62,9 @@ class VehicleController:
         # speed controller parameters
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
         self._target_speed_offset = 1.2
-        # Stanley control parameters
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
+        # LatVel control parameters
+        # args_lateral = {"K_theta": 0.25, "L": 2.4,
+        #                "max_steer": 30.0, "min_speed": 0.1}
         args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
@@ -108,21 +114,6 @@ class VehicleController:
             "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
         )
 
-        self.obstacle_publisher: rospy.Publisher = rospy.Publisher(
-            "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, queue_size=1
-        )
-
-        rospy.Timer(rospy.Duration(10), self.lost_obst, oneshot=True)
-        # self.__init_test_szenario()
-
-    def found_obst(self, event):
-        self.obstacle_publisher.publish(PafObstacleFollowInfo(20 / 3.6, 4.0, True))
-        rospy.Timer(rospy.Duration(10), self.lost_obst, oneshot=True)
-
-    def lost_obst(self, event):
-        self.obstacle_publisher.publish(PafObstacleFollowInfo(20 / 3.6, 4.0, False))
-        rospy.Timer(rospy.Duration(10), self.found_obst, oneshot=True)
-
     def __run_step(self):
         """
         This function should be called periodically to compute steering, throttle and brake commands
@@ -131,9 +122,6 @@ class VehicleController:
             carla_msgs_.msg.CarlaEgoVehicleControl: Ego Vehicle Control command
         """
         self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
-
-        # http://wiki.ros.org/rospy/Overview/Time
-        # rospy.Timer(rospy.Duration(10), self.found_obst, oneshot=False)
 
         # self.__init_test_szenario()
         try:
@@ -266,8 +254,8 @@ class VehicleController:
         # perform pid control step with distance and speed controllers
         target_speed = self._target_speed * self._target_speed_offset
 
-        if distance >= 0.5 and self._current_speed > 10:
-            target_speed = max(10, self._current_speed * (1 - 1e-8))
+        # if distance >= 0.5 and self._current_speed > 10:
+        #    target_speed = max(10, self._current_speed * (1 - 1e-8))
 
         lon: float = self._lon_controller.run_step(target_speed, self._current_speed, dt)
 
@@ -280,7 +268,11 @@ class VehicleController:
         Returns:
             float: The steering angle to steer
         """
-        return self._lat_controller.run_step(self._route, self._current_pose, self._current_speed, self._is_reverse)
+        self._steering, target_speed, distance = self._lat_controller.run_step(
+            self._route, self._current_pose, self._current_speed, self._is_reverse, self._steering
+        )
+
+        return self._steering, target_speed, distance
 
     def __local_path_received(self, local_path: PafLocalPath) -> None:
         """
