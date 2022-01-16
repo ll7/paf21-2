@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import math
-import black
 
 from commonroad.scenario.lanelet import LineMarking, LaneletType, RoadUser, StopLine, Lanelet
 from commonroad.scenario.intersection import IntersectionIncomingElement, Intersection
@@ -45,6 +44,8 @@ class RoadNetworkToolbox(QDockWidget):
         self.connect_gui_elements()
 
         self.neighbourhood: Dict
+
+        self.highest_lanelet_id = -1
 
     def adjust_ui(self):
         """Updates GUI properties like width, etc."""
@@ -1447,7 +1448,7 @@ class RoadNetworkToolbox(QDockWidget):
         self.neighbourhood = self._analyze_neighbourhood(self.current_scenario)
         
         id_lane_1 = self._get_new_lanelet_id()
-        id_lane_2 = id_lane_1 + 1
+        id_lane_2 = self._get_new_lanelet_id()
 
         lanelet_copy = self.current_scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         if lanelet_copy is None:
@@ -1582,6 +1583,8 @@ class RoadNetworkToolbox(QDockWidget):
         # if a lanelet can't be found -> exit
         if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_lanelet_id) is None:
             return None, None
+        right_same_dir = self.current_scenario.lanelet_network.find_lanelet_by_id(matching_lanelet_id).adj_right_same_direction
+        left_same_dir = self.current_scenario.lanelet_network.find_lanelet_by_id(matching_lanelet_id).adj_left_same_direction
         # also split neighbours
         if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_lanelet_id).adj_right is not None:
             right_1, right_2 = self._split_lanelet_internal(
@@ -1604,23 +1607,29 @@ class RoadNetworkToolbox(QDockWidget):
         # update neighbourhood
         if right_1 is not None and right_2 is not None:
             # update right side of current lanelet
-            if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_right_same_direction:
+            if right_same_dir:
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_right = right_1
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_right = right_2
             else:
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_right = right_2
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_right = right_1
+            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_right_same_direction = right_same_dir
+            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2).adj_right_same_direction = right_same_dir
             next = None
             next_dir = None
-            if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_right_same_direction:
+            if right_same_dir:
                 next = self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_right
                 self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_left = matching_1
                 self.current_scenario.lanelet_network.find_lanelet_by_id(right_2)._adj_left = matching_2
+                self.current_scenario.lanelet_network.find_lanelet_by_id(right_1).adj_left_same_direction = right_same_dir
+                self.current_scenario.lanelet_network.find_lanelet_by_id(right_2).adj_left_same_direction = right_same_dir
                 next_dir = True
             else:
                 next = self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_left
                 self.current_scenario.lanelet_network.find_lanelet_by_id(right_2)._adj_right = matching_1
                 self.current_scenario.lanelet_network.find_lanelet_by_id(right_1)._adj_right = matching_2
+                self.current_scenario.lanelet_network.find_lanelet_by_id(right_1).adj_right_same_direction = right_same_dir
+                self.current_scenario.lanelet_network.find_lanelet_by_id(right_2).adj_right_same_direction = right_same_dir
                 next_dir = False
 
             # make sure that the changes propagate through, but only in the same direction
@@ -1650,23 +1659,29 @@ class RoadNetworkToolbox(QDockWidget):
 
         if left_1 is not None and left_2 is not None:
             # update left side of current lanelet
-            if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_left_same_direction:
+            if left_same_dir:
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_left = left_1
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_left = left_2
             else:
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1)._adj_left = left_2
                 self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2)._adj_left = left_1
+            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_left_same_direction = left_same_dir
+            self.current_scenario.lanelet_network.find_lanelet_by_id(matching_2).adj_left_same_direction = left_same_dir
             next = None
             next_dir = None
-            if self.current_scenario.lanelet_network.find_lanelet_by_id(matching_1).adj_left_same_direction:
+            if left_same_dir:
                 next = self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_left
                 self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_right = matching_1
                 self.current_scenario.lanelet_network.find_lanelet_by_id(left_2)._adj_right = matching_2
+                self.current_scenario.lanelet_network.find_lanelet_by_id(left_1).adj_right_same_direction = left_same_dir
+                self.current_scenario.lanelet_network.find_lanelet_by_id(left_2).adj_right_same_direction = left_same_dir
                 next_dir = True
             else:
                 next = self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_right
                 self.current_scenario.lanelet_network.find_lanelet_by_id(left_2)._adj_left = matching_1
                 self.current_scenario.lanelet_network.find_lanelet_by_id(left_1)._adj_left = matching_2
+                self.current_scenario.lanelet_network.find_lanelet_by_id(left_1).adj_left_same_direction = left_same_dir
+                self.current_scenario.lanelet_network.find_lanelet_by_id(left_2).adj_left_same_direction = left_same_dir
                 next_dir = False
 
             # make sure that the changes propagate through, but only in the same direction
@@ -1699,11 +1714,14 @@ class RoadNetworkToolbox(QDockWidget):
         generates new unique lanelet id
         :return: new unique lanelet id
         """
-        max_id = 0
-        for lane in self.current_scenario.lanelet_network.lanelets:
-            if lane.lanelet_id > max_id:
-                max_id = lane.lanelet_id
-        return max_id + 1
+        if self.highest_lanelet_id == -1:
+            max_id = 0
+            for lane in self.current_scenario.lanelet_network.lanelets:
+                if lane.lanelet_id > max_id:
+                    max_id = lane.lanelet_id
+            self.highest_lanelet_id = max_id
+        self.highest_lanelet_id += 1
+        return self.highest_lanelet_id
 
     def _find_closest_path_index(self, center_point_list: ndarray, point_x: float, point_y: float):
         min_dist = float("inf")
