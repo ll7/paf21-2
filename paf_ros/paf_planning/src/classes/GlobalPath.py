@@ -285,11 +285,8 @@ class GlobalPath:
                 paf_sign.value = float(sign.traffic_sign_elements[0].additional_values[0])
                 if is_speed_limit:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
-
-                    rospy.logwarn(paf_sign.value)
             except IndexError:
                 paf_sign.value = self.UNKNOWN_SPEED_LIMIT_SPEED
-                rospy.logwarn(paf_sign.value)
             idx = self._locate_obj_on_lanelet(vertices, list(sign.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             if is_speed_limit:

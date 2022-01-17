@@ -196,7 +196,8 @@ class LocalPath:
 
         if prev_idx > 0:
             prev_idx = max(0, prev_idx - num_points_previous_plan)
-            end_index = min(prev_idx + num_points_previous_plan, len(self._sparse_local_path) - 1)
+            # end_index = min(prev_idx + num_points_previous_plan, len(self._sparse_local_path) - 1)
+            end_index = len(self._sparse_local_path) - 1
             _temp = end_index + 1
             sparse_local_path = self._sparse_local_path[prev_idx:_temp]
             sparse_local_path_speeds = self._sparse_local_path_speeds[prev_idx:_temp]
@@ -204,8 +205,11 @@ class LocalPath:
             section_from, current_lane = self.global_path.get_section_and_lane_indices(
                 self._sparse_local_path[end_index]
             )
-            if dist_pts(self.global_path.route.sections[section_from].points[0], from_position) > 15:
-                # rospy.logerr(f"[LocalPath] previous idx not possible ({prev_idx} of {len(self._sparse_local_path)})")
+            if (
+                dist_pts(self.global_path.route.sections[section_from].points[0], self._sparse_local_path[end_index])
+                > 15
+            ):
+                rospy.logerr(f"[LocalPath] previous idx not possible ({prev_idx} of {len(self._sparse_local_path)})")
                 prev_idx = -1  # sanity check
         if prev_idx <= 0:
             # rospy.logwarn("[LocalPath] calculating position on next centerline")
@@ -344,7 +348,7 @@ class LocalPath:
 
                 # if i + 1 < len(self.global_path):
                 #     lane_change_pts.append(self.global_path.route.sections[i + 1].points[current_lane])
-                lane_change_pts += pts[::2]
+                lane_change_pts += [pts[0], pts[-1]]
 
                 # print(
                 #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
@@ -409,9 +413,14 @@ class LocalPath:
     @staticmethod
     def _choose_lane(left, straight, right) -> str:
         # print(f"can go left: {can_go_left}, can_go_straight: {can_go_straight}, can_go_right: {can_go_right}, ")
+
+        if left is None and straight is None and right is None:
+            rospy.logerr("[local planner] unable to determine new target lane")
+            return "straight"
+
         left_percent = int(left is not None) * 1
         right_percent = int(right is not None) * 1
-        straight_percent = int(straight is not None) * 5
+        straight_percent = int(straight is not None) * 1
 
         # l_pts, l_speed, l_signs = left
         # s_pts, s_speed, s_signs = straight
