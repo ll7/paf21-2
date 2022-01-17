@@ -8,7 +8,7 @@ from .HelperFunctions import xy_to_pts, expand_sparse_list, dist_pts, closest_in
 import numpy as np
 
 from .SpeedCalculator import SpeedCalculator
-from .Spline import calc_spline_course_from_point_list
+from .Spline import calc_spline_course_from_point_list_grouped
 
 
 class LocalPath:
@@ -97,7 +97,7 @@ class LocalPath:
         l_speed, r_speed, s_speed = [], [], []
         l_signs, r_signs, s_signs = [], [], []
         end_idx = start_idx
-        additional_points = 5
+        # additional_points = 0
         for end_idx, s in enumerate(self.global_path.route.sections[start_idx:]):
             end_idx += start_idx
             distance_planned += s.distance_from_last_section
@@ -105,7 +105,8 @@ class LocalPath:
                 break
 
             fraction_completed = distance_planned / lane_change_distance
-            if 0 <= fraction_completed < 1 and end_idx <= len(self.global_path) - 1:
+            if end_idx <= len(self.global_path) - 1:
+                fraction_completed = float(np.clip(fraction_completed, 0, 1))
                 distance_planned += s.distance_from_last_section
                 # if fraction_completed > 0.8:
                 #     continue
@@ -127,25 +128,25 @@ class LocalPath:
                         r_signs.append(signs)
                 continue
 
-            if additional_points == 0:
-                break
-            additional_points -= 1
-            if len(r_pts) > 0:
-                try:
-                    point, speed, signs = self.global_path.get_local_path_values(s, right_lane)
-                    r_pts.append(point)
-                    r_speed.append(speed)
-                    r_signs.append(signs)
-                except IndexError:
-                    ...
-            if len(l_pts) > 0:
-                try:
-                    point, speed, signs = self.global_path.get_local_path_values(s, left_lane)
-                    l_pts.append(point)
-                    l_speed.append(speed)
-                    l_signs.append(signs)
-                except IndexError:
-                    ...
+            # if additional_points == 0:
+            #     break
+            # additional_points -= 1
+            # if len(r_pts) > 0:
+            #     try:
+            #         point, speed, signs = self.global_path.get_local_path_values(s, right_lane)
+            #         r_pts.append(point)
+            #         r_speed.append(speed)
+            #         r_signs.append(signs)
+            #     except IndexError:
+            #         ...
+            # if len(l_pts) > 0:
+            #     try:
+            #         point, speed, signs = self.global_path.get_local_path_values(s, left_lane)
+            #         l_pts.append(point)
+            #         l_speed.append(speed)
+            #         l_signs.append(signs)
+            #     except IndexError:
+            #         ...
 
         if can_go_straight and end_idx != start_idx:
             _temp = end_idx + 1
@@ -365,13 +366,16 @@ class LocalPath:
         traffic_signals = sparse_traffic_signals
         speed_limit = sparse_local_path_speeds
         if len(sparse_local_path) > 1:
-            _points = calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE)
+            _points = calc_spline_course_from_point_list_grouped(sparse_local_path, ds=self.STEP_SIZE, group_no=3)
             if not np.isnan(_points).any():
-                points = xy_to_pts(_points)
-                traffic_signals = expand_sparse_list(
-                    sparse_traffic_signals, len(points), fill_value=[]
-                )  # todo assertion error
-                speed_limit = expand_sparse_list(sparse_local_path_speeds, len(points))
+                try:
+                    points = xy_to_pts(_points)
+                    traffic_signals = expand_sparse_list(
+                        sparse_traffic_signals, len(points), fill_value=[]
+                    )  # todo assertion error
+                    speed_limit = expand_sparse_list(sparse_local_path_speeds, len(points))
+                except ValueError:
+                    points = sparse_local_path
 
         self._sparse_local_path = sparse_local_path
         self._sparse_traffic_signals = sparse_traffic_signals
@@ -386,7 +390,7 @@ class LocalPath:
         except Exception:
             pass
 
-        # self._draw_path_pts(sparse_local_path[::2])
+        # self._draw_path_pts(sparse_local_path)
         self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
@@ -397,7 +401,7 @@ class LocalPath:
         speed = self.speed_calc.get_curve_speed(local_path)
 
         if self.rules_enabled:
-            speed_limit = np.clip(speed_limit, 30 / 3.6, 150 / 3.6)
+            speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
             speed = np.clip(speed, 0, speed_limit)
             # speed = self.speed_calc.add_stop_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
             # speed = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
@@ -421,8 +425,8 @@ class LocalPath:
             rospy.logerr("[local planner] unable to determine new target lane")
             return "straight"
 
-        left_percent = int(left is not None) * 1
-        right_percent = int(right is not None) * 1
+        left_percent = int(left is not None) * 100
+        right_percent = int(right is not None) * 100
         straight_percent = int(straight is not None) * 1
 
         # l_pts, l_speed, l_signs = left

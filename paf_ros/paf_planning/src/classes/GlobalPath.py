@@ -499,7 +499,7 @@ class GlobalPath:
                     distance_to_target += paf_section.distance_from_last_section
                     for target in paf_section.target_lanes:
                         if not 0 <= target < len(paf_section.points):
-                            rospy.logerr(f"target_lanes incorrect: {anchor_l}->{anchor_r}")
+                            rospy.logerr_throttle(1, f"target_lanes incorrect: {anchor_l}->{anchor_r}")
                             paf_section.target_lanes = [0]
         msg.target = self.target
 

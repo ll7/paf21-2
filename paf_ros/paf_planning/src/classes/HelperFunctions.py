@@ -48,8 +48,8 @@ def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_p
 
 
 def expand_sparse_list(sparse_list, to_len, fill_value=None):
-    assert len(sparse_list) > 0
-    assert to_len > len(sparse_list)
+    if len(sparse_list) == 0 or to_len < len(sparse_list):
+        raise ValueError
     ratio = to_len / (len(sparse_list))
     expanded_list = []
     filler = fill_value

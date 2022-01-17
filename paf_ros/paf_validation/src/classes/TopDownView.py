@@ -87,8 +87,8 @@ class TopDownView(BirdViewProducer):
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
         self.path_width_px = 10
-        self.pt_width_px = 15
-        self.line_width_px = 10
+        self.pt_width_px = 7
+        self.line_width_px = 5
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.info_text = [0, 0, 0, (0, 0)]

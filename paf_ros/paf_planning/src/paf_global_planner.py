@@ -118,7 +118,7 @@ class GlobalPlanner:
             return
 
         targets = [position]
-        for i in range(2):
+        for i in range(1):
             target = self._any_target_anywhere(targets[-1])
             if target is not None:
                 targets.append(target)
@@ -168,11 +168,18 @@ class GlobalPlanner:
                 )
                 return
             if len(lanelet_ids) > 0:
+                prev_lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1])
+                if route.list_ids_lanelets[0] not in [
+                    prev_lanelet.lanelet_id,
+                    prev_lanelet.adj_left,
+                    prev_lanelet.adj_right,
+                ]:
+                    lanelet_ids += [route.list_ids_lanelets[0]]
                 lanelet_ids += route.list_ids_lanelets[1:]
             else:
                 lanelet_ids += route.list_ids_lanelets
 
-            previous_target = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices[0]
+            previous_target = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices[-1]
 
         route_merged = GlobalPath(self._scenario.lanelet_network, lanelet_ids, self._routing_targets[-1]).as_msg()
         self._last_route = route_merged
