@@ -116,8 +116,15 @@ class GlobalPlanner:
         except IndexError:
             rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
             return
-        msg.target = self._any_target_anywhere(position)
-        self._routing_provider_single(msg, position, yaw)
+
+        targets = [position]
+        for i in range(2):
+            target = self._any_target_anywhere(targets[-1])
+            if target is not None:
+                targets.append(target)
+        msg = PafLocalPath()
+        msg.points = [Point2D(t[0], t[1]) for t in targets[1:]]
+        self._routing_provider_waypoints(msg, position, yaw)
 
         t0 = np.round(time.perf_counter() - t0, 2)
         rospy.loginfo_throttle(10, f"[global planner] success ({t0}s)")
@@ -150,8 +157,9 @@ class GlobalPlanner:
         draw_msg.color = 153, 0, 153
 
         lanelet_ids = []
+        previous_target = position
         for i, target in enumerate(self._routing_targets):
-            route: Route = self._route_from_objective(position, yaw, [target.x, target.y])
+            route: Route = self._route_from_objective(previous_target, yaw, [target.x, target.y])
             draw_msg.points.append(target)
             if route is None:
                 rospy.loginfo_throttle(
@@ -159,10 +167,12 @@ class GlobalPlanner:
                     f"[global planner] routing from {list(position)} to {target} failed",
                 )
                 return
-            if len(lanelet_ids) > 0 and route.list_ids_lanelets[0] == lanelet_ids[-1]:
+            if len(lanelet_ids) > 0:
                 lanelet_ids += route.list_ids_lanelets[1:]
             else:
                 lanelet_ids += route.list_ids_lanelets
+
+            previous_target = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices[0]
 
         route_merged = GlobalPath(self._scenario.lanelet_network, lanelet_ids, self._routing_targets[-1]).as_msg()
         self._last_route = route_merged

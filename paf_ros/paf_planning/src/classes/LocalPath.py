@@ -397,6 +397,7 @@ class LocalPath:
         speed = self.speed_calc.get_curve_speed(local_path)
 
         if self.rules_enabled:
+            speed_limit = np.clip(speed_limit, 30 / 3.6, 150 / 3.6)
             speed = np.clip(speed, 0, speed_limit)
             # speed = self.speed_calc.add_stop_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
             # speed = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)

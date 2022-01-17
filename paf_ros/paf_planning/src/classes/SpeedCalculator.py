@@ -134,7 +134,7 @@ class SpeedCalculator:
 
         speed = y1 + y2
 
-        return speed
+        return np.clip(speed, self.MIN_SPEED, self.MAX_SPEED)
 
     def add_linear_deceleration(self, speed):
 
