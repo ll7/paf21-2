@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import time
 
-from commonroad_route_planner.route import Route, RouteType
+from commonroad_route_planner.route import Route
 
 import rospy
 import numpy as np
@@ -17,7 +17,14 @@ from commonroad_route_planner.route_planner import RoutePlanner
 
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
-from paf_messages.msg import PafLaneletRoute, PafRoutingRequest, PafTopDownViewPointSet, Point2D, PafSpeedMsg
+from paf_messages.msg import (
+    PafLaneletRoute,
+    PafRoutingRequest,
+    PafTopDownViewPointSet,
+    Point2D,
+    PafSpeedMsg,
+    PafLocalPath,
+)
 from classes.HelperFunctions import dist, find_closest_lanelet
 from classes.GlobalPath import GlobalPath
 from classes.MapManager import MapManager
@@ -36,13 +43,16 @@ class GlobalPlanner:
         self._scenario: Scenario = MapManager.get_current_scenario()
         self._position = [1e99, 1e99]
         self._yaw = 0
-        self._routing_target = None
+        self._routing_targets = []
         self._last_route = None
 
         rospy.init_node("paf_global_planner", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
-        rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider)
+        rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider_single)
+        rospy.Subscriber(
+            "/paf/paf_local_planner/routing_request_waypoints", PafLocalPath, self._routing_provider_waypoints()
+        )
         rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Empty, self._routing_provider_random)
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
@@ -66,7 +76,7 @@ class GlobalPlanner:
 
     def _reroute_provider(self, _: Empty = None):
         rospy.loginfo("[global planner] rerouting...")
-        self._routing_provider()
+        self._routing_provider_waypoints()
 
     def _any_target_anywhere(self, p_home):
         # return np.array([229., -100.])
@@ -107,17 +117,23 @@ class GlobalPlanner:
             rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
             return
         msg.target = self._any_target_anywhere(position)
-        self._routing_provider(msg, position, yaw)
+        self._routing_provider_single(msg, position, yaw)
 
         t0 = np.round(time.perf_counter() - t0, 2)
         rospy.loginfo_throttle(10, f"[global planner] success ({t0}s)")
 
-    def _routing_provider(self, msg: PafRoutingRequest = None, position=None, yaw=None):
+    def _routing_provider_single(self, msg: PafRoutingRequest = None, position=None, yaw=None):
+        msgs = PafLocalPath()
+        msgs.points = [Point2D(msg.target[0], msg.target[1])]
+        self._routing_provider_waypoints(msgs, position, yaw)
+
+    def _routing_provider_waypoints(self, msgs: PafLocalPath = None, position=None, yaw=None):
         self._last_route = None
-        if msg is None:
-            msg = self._routing_target
+        if msgs is None:
+            msgs = PafLocalPath()
+            msgs.points = self._routing_targets
         else:
-            self._routing_target = msg
+            self._routing_targets = msgs.points
 
         if position is None or yaw is None:
             try:
@@ -125,35 +141,32 @@ class GlobalPlanner:
             except IndexError:
                 rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
                 return
-
-        # resolution = msg.resolution if msg is not None else 0
-        route = None
-        if msg is None:
-            rospy.logwarn_throttle(1, "[global planner] route planning failed, trying to find any route for now...")
-            target = self._any_target_anywhere(position)
-            if target is None:
-                rospy.logerr_throttle(1, "[global planner] unable to create random target")
-                return
-        else:
-            target = msg.target
-        routes = self._routes_from_objective(position, yaw, target, return_shortest_only=True)
-        if len(routes) > 0:
-            rospy.loginfo_throttle(
-                1,
-                f"[global planner] publishing route to target {target}",
-            )
-            route = routes[0].as_msg()
-        elif len(routes) == 0:
-            rospy.logerr_throttle(1, f"[global planner] unable to route to target {target}")
+        if len(self._routing_targets) == 0:
+            rospy.logwarn_throttle(1, "[global planner] route planning waiting for route input...")
             return
-
-        self._last_route = route
-        self._routing_pub.publish(route)
 
         draw_msg = PafTopDownViewPointSet()
         draw_msg.label = "planning_target"
-        draw_msg.points = [Point2D(target[0], target[1])]
         draw_msg.color = 153, 0, 153
+
+        lanelet_ids = []
+        for i, target in enumerate(self._routing_targets):
+            route: Route = self._route_from_objective(position, yaw, [target.x, target.y])
+            draw_msg.points.append(target)
+            if route is None:
+                rospy.loginfo_throttle(
+                    1,
+                    f"[global planner] routing from {list(position)} to {target} failed",
+                )
+                return
+            if len(lanelet_ids) > 0 and route.list_ids_lanelets[0] == lanelet_ids[-1]:
+                lanelet_ids += route.list_ids_lanelets[1:]
+            else:
+                lanelet_ids += route.list_ids_lanelets
+
+        route_merged = GlobalPath(self._scenario.lanelet_network, lanelet_ids, self._routing_targets[-1]).as_msg()
+        self._last_route = route_merged
+        self._routing_pub.publish(route_merged)
         self._target_on_map_pub.publish(draw_msg)
 
     def _teleport(self, msg: Pose):
@@ -174,7 +187,7 @@ class GlobalPlanner:
             ]
         )
 
-    def _routes_from_objective(
+    def _route_from_objective(
         self,
         start_coordinates: np.ndarray,
         start_orientation_rad: float,
@@ -183,8 +196,7 @@ class GlobalPlanner:
         start_velocity: float = 0.0,
         target_circle_diameter: float = 4.0,
         target_orientation_allowed_error: float = 0.2,
-        return_shortest_only=False,
-    ) -> List[GlobalPath]:
+    ) -> Route:
         """
         Creates a commonroad planning problem with the given parameters
         and calculates possible routes to the target region.
@@ -196,7 +208,7 @@ class GlobalPlanner:
         :param target_circle_diameter: size of the target region (circle diameter)
         :param target_orientation_allowed_error: if target_orientation_rad is not None,
                                                     specify allowed margin of error here
-        :return: list of Routes
+        :return: selected route
         """
         planning_problem = self._get_planning_problem(
             start_coordinates,
@@ -209,13 +221,16 @@ class GlobalPlanner:
         )
         route_planner = RoutePlanner(self._scenario, planning_problem, backend=self.BACKEND)
         routes, _ = route_planner.plan_routes().retrieve_all_routes()
-        if return_shortest_only:
-            if len(routes) == 0:
-                return []
-            idx = np.argmin([x.path_length[-1] for x in routes])
-            route = routes[idx]
-            return [GlobalPath(route, target_coordinates)]
-        return [GlobalPath(route, target_coordinates) for route in routes]
+
+        return self._choose_route(routes)
+
+    @staticmethod
+    def _choose_route(routes: List[Route]):
+        if len(routes) == 0:
+            return None
+        idx = np.argmin([x.path_length[-1] for x in routes])
+        route = routes[idx]
+        return route
 
     @staticmethod
     def _get_planning_problem(
@@ -269,8 +284,9 @@ class GlobalPlanner:
 
     def _route_from_ids(self, lanelet_ids: List[int]):
         return GlobalPath(
-            Route(self._scenario, None, lanelet_ids, RouteType.REGULAR),
-            self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1].center_vertices[-1]),
+            self._scenario.lanelet_network,
+            lanelet_ids,
+            self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices[-1],
         )
 
     def start(self):

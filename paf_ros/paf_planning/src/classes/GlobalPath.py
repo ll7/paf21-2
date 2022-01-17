@@ -8,7 +8,6 @@ from commonroad.scenario.traffic_sign import (
     TrafficSignIDGermany,
 )
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
-from commonroad_route_planner.route import Route as CommonroadRoute
 
 import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
@@ -25,28 +24,30 @@ class GlobalPath:
 
     def __init__(
         self,
-        commonroad_route: CommonroadRoute = None,
+        lanelet_network: LaneletNetwork = None,
+        lanelet_ids: List[int] = None,
         target=None,
         traffic_sign_country: Country = Country.GERMANY,
         msg: PafLaneletRoute = PafLaneletRoute(),
     ):
 
-        if commonroad_route is None:
+        if lanelet_network is None:
             self.route = msg
             self._graph = None
             self._adjacent_lanelets = None
-            self._commonroad_route = None
+            self.lanelet_ids = None
+            self._lanelet_network = None
             self.target = msg.target
         else:
             if hasattr(target, "x"):
                 target = target.x, target.y
-            self.target = Point2D(target[0], target[1])
-            self._commonroad_route = commonroad_route
+            assert lanelet_ids is not None and lanelet_network is not None
+            self.target = target if hasattr(target, "x") else Point2D(target[0], target[1])
+            self.lanelet_ids = lanelet_ids
+            self._lanelet_network = lanelet_network
             self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
             self._graph = self._calc_lane_change_graph()
-            self._traffic_sign_interpreter = TrafficSigInterpreter(
-                traffic_sign_country, commonroad_route.scenario.lanelet_network
-            )
+            self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, lanelet_network)
             self.route = None
 
     def __len__(self):
@@ -91,7 +92,7 @@ class GlobalPath:
         """
 
         def get_right_lanelets_same_directions(_lanelet_id, lanelets=None):
-            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(_lanelet_id)
+            lanelet = self._lanelet_network.find_lanelet_by_id(_lanelet_id)
             if lanelets is None:
                 lanelets = []
             if lanelet.adj_right_same_direction:
@@ -100,7 +101,7 @@ class GlobalPath:
             return lanelets
 
         def get_left_lanelets_same_directions(_lanelet_id, lanelets=None):
-            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(_lanelet_id)
+            lanelet = self._lanelet_network.find_lanelet_by_id(_lanelet_id)
             if lanelets is None:
                 lanelets = []
             if lanelet.adj_left_same_direction:
@@ -109,7 +110,7 @@ class GlobalPath:
             return lanelets
 
         adj_route = []
-        for lanelet_id in self._commonroad_route.list_ids_lanelets:
+        for lanelet_id in self.lanelet_ids:
             adj_left = get_left_lanelets_same_directions(lanelet_id)
             adj_right = get_right_lanelets_same_directions(lanelet_id)
             adj_route.append((lanelet_id, adj_left, adj_right))
@@ -129,7 +130,7 @@ class GlobalPath:
             if check_lanelet.lanelet_id in l_id_check:
                 return check_lanelet.lanelet_id
             for l_successor in check_lanelet.successor:
-                successor_lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(l_successor)
+                successor_lanelet = self._lanelet_network.find_lanelet_by_id(l_successor)
                 if l_successor not in l_id_check or 0.5 < dist(
                     successor_lanelet.center_vertices[0], check_lanelet.center_vertices[-1]
                 ):
@@ -144,7 +145,7 @@ class GlobalPath:
             possible_0 = [planned_id_0] + l_ids_0 + r_ids_0
             possible_1 = [planned_id_1] + l_ids_1 + r_ids_1
             for l_id in possible_0:
-                lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(l_id)
+                lanelet = self._lanelet_network.find_lanelet_by_id(l_id)
                 can_turn_left = lanelet.adj_left in (possible_1 + possible_0)
                 can_turn_right = lanelet.adj_right in (possible_1 + possible_0)
 
@@ -160,17 +161,17 @@ class GlobalPath:
         Calculates the route in a human-readable format
         :return:
         """
-        route_ids = self._commonroad_route.list_ids_lanelets
+        route_ids = self.lanelet_ids
         out = f"start route from {route_ids[0]}\n"
         for lanelet_id, next_lanelet_id in zip(route_ids, route_ids[1:]):
-            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            lanelet = self._lanelet_network.find_lanelet_by_id(lanelet_id)
             l_set = frozenset([lanelet_id])
             speed_limit = self._traffic_sign_interpreter.speed_limit(l_set)
             speed_minimum = self._traffic_sign_interpreter.required_speed(l_set)
             speed_minimum = 0 if speed_minimum is None else speed_minimum
 
             for sign in lanelet.traffic_signs:
-                sign = self._commonroad_route.scenario.lanelet_network.find_traffic_sign_by_id(sign)
+                sign = self._lanelet_network.find_traffic_sign_by_id(sign)
                 sign_name = sign.traffic_sign_elements[0].traffic_sign_element_id.name
                 if sign_name == "MAX_SPEED":
                     continue
@@ -213,8 +214,8 @@ class GlobalPath:
         """
 
         def calc_extremum(is_left_extremum):
-            l_id = self._commonroad_route.list_ids_lanelets[0]
-            target_id = self._commonroad_route.list_ids_lanelets[-1]
+            l_id = self.lanelet_ids[0]
+            target_id = self.lanelet_ids[-1]
             route_ = []
 
             def test_direction(l_dir):
@@ -262,7 +263,7 @@ class GlobalPath:
         traffic_signals = []
         speed_limits = []
 
-        lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+        lanelet = self._lanelet_network.find_lanelet_by_id(lanelet_id)
         vertices = lanelet.center_vertices
 
         # lane merge events
@@ -278,7 +279,7 @@ class GlobalPath:
         # all traffic signs
         for sign_id in lanelet.traffic_signs:
             paf_sign = PafTrafficSignal()
-            sign = self._commonroad_route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
+            sign = self._lanelet_network.find_traffic_sign_by_id(sign_id)
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             is_speed_limit = paf_sign.type == TrafficSignIDGermany.MAX_SPEED.value
             try:
@@ -296,7 +297,7 @@ class GlobalPath:
 
         # all traffic lights
         for light_id in lanelet.traffic_lights:
-            light = self._commonroad_route.scenario.lanelet_network.find_traffic_light_by_id(light_id)
+            light = self._lanelet_network.find_traffic_light_by_id(light_id)
             paf_sign = PafTrafficSignal()
             paf_sign.type = "LIGHT"
             paf_sign.value = 0.0
@@ -318,9 +319,9 @@ class GlobalPath:
         for i in range(25):
             pre = lanelet.predecessor
             lanelet_id = lanelet.predecessor[int(len(pre) / 2)]
-            lanelet = self._commonroad_route.scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
+            lanelet = self._lanelet_network.find_lanelet_by_id(lanelet_id)
             for sign_id in lanelet.traffic_signs:
-                sign = self._commonroad_route.scenario.lanelet_network.find_traffic_sign_by_id(sign_id)
+                sign = self._lanelet_network.find_traffic_sign_by_id(sign_id)
                 if sign.traffic_sign_elements[0].traffic_sign_element_id.name == TrafficSignIDGermany.MAX_SPEED.value:
                     _, speed_limits = self._extract_traffic_signals(lanelet.lanelet_id, [[0, 0]])
                     break
@@ -375,10 +376,9 @@ class GlobalPath:
         return out
 
     def get_paf_lanelet_matrix(self, groups, distance_m=5):
-        n: LaneletNetwork = self._commonroad_route.scenario.lanelet_network
         out = []
         for blob, anchor in groups:
-            lanelets = [n.find_lanelet_by_id(lanelet) for lanelet in blob]
+            lanelets = [self._lanelet_network.find_lanelet_by_id(lanelet) for lanelet in blob]
             lengths = [
                 np.sum([np.abs(x - y) for x, y in zip(lanelet.center_vertices, lanelet.center_vertices[1:])])
                 for lanelet in lanelets
@@ -405,8 +405,8 @@ class GlobalPath:
             return self.route
 
         msg = PafLaneletRoute()
-        rospy.logwarn(f"plan created with lanelet ids {self._commonroad_route.list_ids_lanelets}")
-        groups = self._get_lanelet_groups(self._commonroad_route.list_ids_lanelets)
+        rospy.logwarn(f"plan created with lanelet ids {self.lanelet_ids}")
+        groups = self._get_lanelet_groups(self.lanelet_ids)
         distance_m = 5
         last_limits = None
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(

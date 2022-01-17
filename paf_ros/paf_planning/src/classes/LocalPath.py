@@ -260,9 +260,11 @@ class LocalPath:
 
             speed = s.speed_limits[current_lane]
             min_lane_change_meters = speed * lane_change_secs
-            if s.speed_limits[current_lane] < 0:
-                rospy.logerr(f"[local planner] Speed limit < 0kmh, correcting.. {s.speed_limits[current_lane]}")
-                speed = 50 / 3.6
+            if s.speed_limits[current_lane] < 30 / 3.6:
+                rospy.logerr_throttle(
+                    5, f"[local planner] Speed limit < 30, correcting.. {s.speed_limits[current_lane]}"
+                )
+                speed = 30 / 3.6
             sparse_local_path_speeds.append(speed)
             if distance_planned < ignore_signs_distance:
                 sparse_traffic_signals.append([])
