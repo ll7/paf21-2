@@ -2,6 +2,7 @@ from typing import List, Tuple
 
 import numpy as np
 from commonroad.geometry.shape import Circle
+from commonroad.scenario.lanelet import LaneletNetwork
 
 from paf_messages.msg import Point2D
 
@@ -72,7 +73,7 @@ def expand_sparse_list(sparse_list, to_len, fill_value=None):
     return expanded_list[:to_len]
 
 
-def find_closest_lanelet(lanelet_network, p):
+def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Point2D):
     if hasattr(p, "x"):
         p = [p.x, p.y]
     p = np.array(p, dtype=float)
@@ -85,6 +86,28 @@ def find_closest_lanelet(lanelet_network, p):
         if len(lanelets) > 0:
             break
     return lanelets
+
+
+def find_lanelet_yaw(lanelet_network: LaneletNetwork, target_pt: Point2D):
+    lanelet = find_closest_lanelet(lanelet_network, target_pt)
+    if len(lanelet) == 0:
+        return 0
+
+    lanelet = lanelet_network.find_lanelet_by_id(lanelet[0])
+    i, _ = closest_index_of_point_list([Point2D(p[0], p[1]) for p in lanelet.center_vertices], target_pt)
+
+    if i == -1:
+        return 0
+
+    if i < len(lanelet.center_vertices) - 1:
+        p_i = lanelet.center_vertices[i]
+        p_j = lanelet.center_vertices[i + 1]
+    else:
+        p_i = lanelet.center_vertices[i - 1]
+        p_j = lanelet.center_vertices[i]
+
+    dx, dy = p_j[0] - p_i[0], p_j[1] - p_i[1]
+    return np.arcsin(dy / dist([dx, dy], [0, 0]))
 
 
 def quadratic_deceleration_function(max_speed, factor=1, step_size=0.125):

@@ -63,7 +63,11 @@ class GlobalPath:
     def get_local_path_values(self, section, lane_idx):
         if type(section) is not PafRouteSection:
             section: PafRouteSection = self.route.sections[section]
-        return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
+        try:
+            return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
+        except IndexError:
+            lane_idx = 0
+            return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
 
     def get_section_and_lane_indices(self, position, not_found_threshold_meters=100):
         if hasattr(position, "x"):
@@ -327,7 +331,7 @@ class GlobalPath:
                     break
         return traffic_signals, speed_limits
 
-    def _get_lanelet_groups(self, l_list):
+    def get_lanelet_groups(self, l_list):
         out = {}
 
         def get_lanelet_blob(from_lanelet):
@@ -405,8 +409,8 @@ class GlobalPath:
             return self.route
 
         msg = PafLaneletRoute()
-        rospy.logwarn(f"plan created with lanelet ids {self.lanelet_ids}")
-        groups = self._get_lanelet_groups(self.lanelet_ids)
+        rospy.logwarn(f"[GlobalPath] creating plan with lanelet ids {self.lanelet_ids}")
+        groups = self.get_lanelet_groups(self.lanelet_ids)
         distance_m = 5
         last_limits = None
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(

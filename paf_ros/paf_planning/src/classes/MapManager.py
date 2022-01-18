@@ -1,3 +1,6 @@
+from typing import Tuple
+
+import numpy as np
 from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry
 from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 
@@ -11,10 +14,16 @@ from commonroad.visualization.mp_renderer import MPRenderer
 from commonroad_route_planner.route import Route
 from commonroad_route_planner.utility.visualization import obtain_plot_limits_from_reference_path, draw_state
 
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
+from paf_messages.msg import Point2D
+from tf.transformations import quaternion_from_euler
+
 
 class MapManager:
     @staticmethod
-    def get_current_scenario(rules=rospy.get_param("rules_enabled", False), map_name=None):
+    def get_current_scenario(
+        rules=rospy.get_param("rules_enabled", False), map_name=rospy.get_param("/carla/town", None)
+    ):
         """
         Loads the commonroad scenario with or without traffic rules of town with number map_number
 
@@ -25,11 +34,8 @@ class MapManager:
             Scenario: CommonRoad-Scenario of current town
         """
         if map_name is None:
-            try:
-                map_name = rospy.get_param("/carla/town")
-            except KeyError:
-                rospy.logerr("MapManager: Town parameter not set.")
-                exit(1)
+            rospy.logerr("MapManager: Town parameter not set.")
+            exit(1)
         map_file_name = "DEU_" + map_name + "-1_1_T-1.xml"
         if rules:
             map_file_path = "Maps/Rules/" + map_file_name
@@ -37,6 +43,43 @@ class MapManager:
             map_file_path = "Maps/No Rules/" + map_file_name
         scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{map_file_path}")).open()
         return scenario
+
+    @staticmethod
+    def get_map():
+        return rospy.get_param("/carla/town", None)
+
+    @staticmethod
+    def point_to_pose(pt: Tuple[float, float], yaw_deg: float) -> PoseWithCovarianceStamped:
+        initial_pose = PoseWithCovarianceStamped()
+        x, y = pt
+        initial_pose.pose.pose.position.x = x
+        initial_pose.pose.pose.position.y = y
+        initial_pose.pose.pose.position.z = 10
+        x, z, y, w = quaternion_from_euler(0, np.deg2rad(yaw_deg + 90), 0)
+        # rospy.logerr((x, y, z, w))
+        initial_pose.pose.pose.orientation = Quaternion(x, y, z, w)
+        # initial_pose.pose.pose.orientation.z = -.707
+        # initial_pose.pose.pose.orientation.w = .707
+        return initial_pose
+
+    @staticmethod
+    def get_demo_route():
+        town = MapManager.get_map()
+        if town == "Town04":
+
+            return [
+                Point2D(64, -14),
+                Point2D(-454, -18),
+                Point2D(10, -243),
+                Point2D(54, 326),
+                Point2D(388, 199),
+            ], MapManager.point_to_pose((389, 45), 180)
+        else:
+            return None
+
+    @staticmethod
+    def get_rules_enabled():
+        rospy.get_param("rules_enabled", False)
 
     @staticmethod
     def visualize_route(route: Route, draw_route_lanelets=False, draw_reference_path=False, size_x=10):

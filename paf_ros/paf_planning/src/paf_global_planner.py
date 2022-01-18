@@ -25,7 +25,7 @@ from paf_messages.msg import (
     PafSpeedMsg,
     PafLocalPath,
 )
-from classes.HelperFunctions import dist, find_closest_lanelet
+from classes.HelperFunctions import dist, find_closest_lanelet, find_lanelet_yaw
 from classes.GlobalPath import GlobalPath
 from classes.MapManager import MapManager
 from std_msgs.msg import Empty, Bool
@@ -54,6 +54,9 @@ class GlobalPlanner:
             "/paf/paf_local_planner/routing_request_waypoints", PafLocalPath, self._routing_provider_waypoints()
         )
         rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Empty, self._routing_provider_random)
+        rospy.Subscriber(
+            "/paf/paf_local_planner/routing_request_standard_loop", Empty, self._routing_provider_standard_loop
+        )
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
         rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
@@ -70,14 +73,10 @@ class GlobalPlanner:
         )
 
     def _change_rules(self, msg: Bool):
-        if msg.data == rospy.get_param("rules_enabled", False):
-            return
-
         rospy.set_param("rules_enabled", msg.data)
-        self.rules_enabled = msg.data
         self._scenario = MapManager.get_current_scenario()
         rospy.logwarn(
-            f"[global planner] Rules are now {'en' if self.rules_enabled else 'dis'}abled! "
+            f"[global planner] Rules are now {'en' if msg.data else 'dis'}abled! "
             f"Speed limits will change after starting a new route."
         )
 
@@ -108,7 +107,9 @@ class GlobalPlanner:
         return lanelet_p
 
     def _find_closest_position_on_lanelet_network(self) -> Tuple[np.ndarray, float]:
-        lanelet_id = find_closest_lanelet(self._scenario.lanelet_network, self._position)[0]
+        lanelet_id = find_closest_lanelet(
+            self._scenario.lanelet_network, Point2D(self._position[0], self._position[1])
+        )[0]
         lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         idx = np.argmin([dist(a, self._position) for a in lanelet.center_vertices])
         if idx == len(lanelet.center_vertices) - 1:
@@ -122,9 +123,27 @@ class GlobalPlanner:
         # norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
         return position, self._yaw  # , float(get_angle_between_vectors(norm))
 
-    def _routing_provider_random(self, _: Empty):
-        msg = PafRoutingRequest()
+    def _routing_provider_standard_loop(self, _: Empty):
         t0 = time.perf_counter()
+        waypoints, initial_pose = MapManager.get_demo_route()
+        self._last_route = None
+        if waypoints is None:
+            self._routing_provider_random(_)
+            return
+
+        rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped).publish(initial_pose)
+        position, yaw = (initial_pose.pose.pose.position.x, initial_pose.pose.pose.position.y), 0
+
+        msg = PafLocalPath()
+        msg.points = waypoints
+        success = self._routing_provider_waypoints(msg, position, yaw)
+        t0 = np.round(time.perf_counter() - t0, 2)
+        if success:
+            rospy.loginfo_throttle(10, f"[global planner] success planning standard loop({t0}s)")
+
+    def _routing_provider_random(self, _: Empty):
+        t0 = time.perf_counter()
+        self._last_route = None
         try:
             position, yaw = self._find_closest_position_on_lanelet_network()
         except IndexError:
@@ -161,10 +180,10 @@ class GlobalPlanner:
                 position, yaw = self._find_closest_position_on_lanelet_network()
             except IndexError:
                 rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
-                return
+                return False
         if len(self._routing_targets) == 0:
             rospy.logwarn_throttle(1, "[global planner] route planning waiting for route input...")
-            return
+            return False
 
         draw_msg = PafTopDownViewPointSet()
         draw_msg.label = "planning_target"
@@ -173,32 +192,37 @@ class GlobalPlanner:
         lanelet_ids = []
         previous_target = position
         for i, target in enumerate(self._routing_targets):
+            yaw = find_lanelet_yaw(self._scenario.lanelet_network, target)
             route: Route = self._route_from_objective(previous_target, yaw, [target.x, target.y])
             draw_msg.points.append(target)
             if route is None:
-                rospy.loginfo_throttle(
-                    1,
-                    f"[global planner] routing from {list(position)} to {target} failed",
+                rospy.logerr(
+                    f"[global planner] routing from {list(previous_target)} to {[target.x, target.y]} failed",
                 )
-                return
+                return False
+            # else:
+            #     rospy.loginfo(
+            #         f"[global planner] routing from {list(previous_target)} to {[target.x, target.y]} "
+            #         f"succeeded ({route.list_ids_lanelets})",
+            #     )
             if len(lanelet_ids) > 0:
-                prev_lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1])
-                if route.list_ids_lanelets[0] not in [
-                    prev_lanelet.lanelet_id,
-                    prev_lanelet.adj_left,
-                    prev_lanelet.adj_right,
-                ]:
-                    lanelet_ids += [route.list_ids_lanelets[0]]
+                prev_route = GlobalPath(self._scenario.lanelet_network, route.list_ids_lanelets, previous_target)
+                first_lanelet_group = prev_route.get_lanelet_groups(route.list_ids_lanelets)[0][0]
+                if route.list_ids_lanelets[0] not in first_lanelet_group:
+                    rospy.logwarn(f"skipping segment to {first_lanelet_group}")
+                    continue
                 lanelet_ids += route.list_ids_lanelets[1:]
             else:
                 lanelet_ids += route.list_ids_lanelets
 
-            previous_target = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices[-1]
+            vertices = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices
+            previous_target = vertices[int(len(vertices) / 2)]
 
         route_merged = GlobalPath(self._scenario.lanelet_network, lanelet_ids, self._routing_targets[-1]).as_msg()
         self._last_route = route_merged
         self._routing_pub.publish(route_merged)
         self._target_on_map_pub.publish(draw_msg)
+        return True
 
     def _teleport(self, msg: Pose):
         msg_out = PoseWithCovarianceStamped()

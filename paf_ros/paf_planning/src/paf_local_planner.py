@@ -29,7 +29,7 @@ class LocalPlanner:
     """class used for the local planner. Task: return a local path"""
 
     UPDATE_HZ = 10
-    REPLAN_THROTTLE_SEC = 5
+    REPLAN_THROTTLE_SEC = 10
     END_OF_ROUTE_REACHED_DIST = 5
     # END_OF_ROUTE_SPEED = 5
     # MAX_ANGULAR_ERROR = np.deg2rad(45)
@@ -71,6 +71,9 @@ class LocalPlanner:
         self._reroute_publisher = rospy.Publisher("/paf/paf_local_planner/reroute", Empty, queue_size=1)
         self._reroute_random_publisher = rospy.Publisher(
             "/paf/paf_local_planner/routing_request_random", Empty, queue_size=1
+        )
+        self._reroute_standard_loop_publisher = rospy.Publisher(
+            "/paf/paf_local_planner/routing_request_standard_loop", Empty, queue_size=1
         )
         self._sign_publisher = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
@@ -340,6 +343,14 @@ class LocalPlanner:
             rospy.loginfo_throttle(20, "[local planner] requesting new global route")
             self._reroute_publisher.publish(Empty())
 
+    def _send_standard_loop_request(self):
+        t = time.perf_counter()
+        delta_t = t - self._last_replan_request
+        if self.REPLAN_THROTTLE_SEC < delta_t:
+            self._last_replan_request = t
+            rospy.loginfo_throttle(20, "[local planner] requesting new random global route")
+            self._reroute_standard_loop_publisher.publish(Empty())
+
     def _send_random_global_path_request(self):
         t = time.perf_counter()
         delta_t = t - self._last_replan_request
@@ -349,8 +360,11 @@ class LocalPlanner:
             self._reroute_random_publisher.publish(Empty())
 
     def _end_of_route_handling(self):
+        self._global_path = GlobalPath()
+        rospy.sleep(5)
         if self._current_speed < 5:
-            self._send_random_global_path_request()  # todo remove in production
+            # self._send_random_global_path_request()  # todo remove in production
+            self._send_standard_loop_request()  # todo remove in production
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)
