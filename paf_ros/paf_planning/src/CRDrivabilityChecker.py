@@ -2,6 +2,7 @@
 
 
 import math
+from typing import List
 
 import numpy as np
 import rospy
@@ -30,11 +31,14 @@ from tf.transformations import euler_from_quaternion
 
 
 # generate path of the file to be opened
-file_path = "/home/imech158/paf21-2/maps/Rules/Town03.xml"
+file_path = "/home/imech154/paf21-2/maps/Rules/Town03.xml"
+save_path = "/home/imech154/paf21-2/maps/debug/Town03_modnew1.xml"
 EGO_VEHICLE_SHAPE = Rectangle(width=2.0, length=4.5)
 LOOK_AHEAD_STEPS = 10
 
 PERCEPTS_PER_COMPUTATION = 10
+
+POLYGON_POINT_OFFSET = [1, 1]
 
 
 class CRDriveabilityChecker(object):
@@ -45,8 +49,8 @@ class CRDriveabilityChecker(object):
         obstacle_topic = rospy.get_param("obstacles_topic")
 
         self.counter = 1
-        self.paf_obstacles_pedestrians = None
-        self.paf_obstacles_vehicles = None
+        self.paf_obstacles_pedestrians = []
+        self.paf_obstacles_vehicles = []
 
         self.ego_vehicle = None
         self.cr_obstacles_pedestrians = []
@@ -99,9 +103,10 @@ class CRDriveabilityChecker(object):
             self.counter = 0
         self.counter += 1
 
-    def _update_obstacles(self, msg):
+    def _update_obstacles(self, msg: PafObstacleList):
         # clear obstacles
         print(msg.obstacles)
+        paf_obstacle_list = msg.obstacles
         # add all obstacle from obstacle list to commonroad-scenario
         """
         Update obstacle mask
@@ -116,13 +121,27 @@ class CRDriveabilityChecker(object):
             self.paf_obstacles_pedestrians = msg.obstacles
             self._add_all_pedestrians_to_cr(self.paf_obstacles_pedestrians)
         elif msg.type == "Vehicles":
-            # clear vehicles
-            for cr_obstacle in self.cr_obstacles_vehicles:
-                self.scenario.remove_obstacle(cr_obstacle)
-            self.cr_obstacles_vehicles = []
+            for paf_obstacle in paf_obstacle_list:
+                id = (
+                    paf_obstacle.id + 1000
+                )  # add 3 zeros to identify obstacle and avoid clashes with ids from cr-scenario
+                index = self._obstacle_contained_in_cr_scenario(id, self.cr_obstacles_vehicles)
 
-            # add new obstacles
-            self._add_all_vehicles_to_cr(msg.obstacles)
+                if index != -1:
+                    # obstacle already contained
+                    points = np.array([paf_obstacle.closest, paf_obstacle.bound_1, paf_obstacle.bound_2])
+                    speed = paf_obstacle.speed
+                    self._update_cr_obstacle(self.cr_obstacles_vehicles, index, points, speed)
+                else:
+                    self._add_vehicle(id, paf_obstacle)
+
+            for cr_obstacle in self.cr_obstacles_vehicles:
+                if (
+                    self._obstacle_contained_in_old_obstacles(cr_obstacle.obstacle_id, self.paf_obstacles_vehicles)
+                    != -1
+                ):
+                    self.cr_obstacles_vehicles.remove(cr_obstacle)
+                    self.scenario.remove_obstacle(cr_obstacle)
 
         else:
             rospy.logwarn_once(f"obstacle type '{msg.type}' is unknown to node")
@@ -134,6 +153,28 @@ class CRDriveabilityChecker(object):
             rospy.loginfo(f"no incoming collision detected {potential_collisions}")
         else:
             self.on_predicted_collision(potential_collisions[0])
+
+    def _obstacle_contained_in_cr_scenario(self, obstacle_id, obstacle_list: List):
+        for obstacle in obstacle_list:
+            if obstacle_id == obstacle.obstacle_id:
+                return obstacle_list.index(obstacle)
+        return -1
+
+    def _obstacle_contained_in_old_obstacles(self, obstacle_id, obstacle_list: PafObstacleList):
+        for obstacle in obstacle_list:
+            if obstacle_id == obstacle.id:
+                return obstacle_list.index(obstacle)
+        return -1
+
+    def _update_cr_obstacle(self, list: List, index_in_list, points, speed):
+        cr_obstacle = list[index_in_list]
+        cr_obstacle.initial_state = State(position=np.array([0.0, 0.0]), velocity=speed, orientation=0, time_step=0)
+
+        # add dummy implementation, obstacles should have three different vertices + visibility
+        new_vertices = points + np.array(
+            [[0.0, 0.0], [POLYGON_POINT_OFFSET[0], 0.0], [0.0000, POLYGON_POINT_OFFSET[1]]]
+        )
+        cr_obstacle.obstacle_shape = Polygon(vertices=new_vertices)
 
     def _update_ego_vehicle_to_CRScenario(self):
         """create a new ego vehicel graphical representation"""
@@ -160,7 +201,7 @@ class CRDriveabilityChecker(object):
 
     def _add_all_vehicles_to_cr(self, vehicles: PafObstacleList):
         for obstacle in vehicles:
-            id = self.scenario.generate_object_id()
+            id = obstacle.id * 1000  # add 3 zeros to identify obstacle and avoid clashes with ids from cr-scenario
             self._add_vehicle(id, obstacle)
 
     def _create_obstacle(
@@ -227,7 +268,9 @@ class CRDriveabilityChecker(object):
     def _add_vehicle(self, id, obstacle: PafObstacle):
         vertices = np.array([obstacle.closest, obstacle.bound_1, obstacle.bound_2])
         # add dummy implementation, obstacles should have three different vertices
-        new_vertices = vertices + np.array([[0.0, 0.0], [1.00001, 0.0], [0.0000, 1.00001]])
+        new_vertices = vertices + np.array(
+            [[0.0, 0.0], [POLYGON_POINT_OFFSET[0], 0.0], [0.0000, POLYGON_POINT_OFFSET[1]]]
+        )
         shape = Polygon(vertices=new_vertices)
         # actual position should be fixed, dummy implementation
         position = np.array(obstacle.closest)
@@ -266,7 +309,7 @@ class CRDriveabilityChecker(object):
 
         # write new scenario
         fw = CommonRoadFileWriter(self.scenario, self.planning_problem_set, author, affiliation, source, tags)
-        fw.write_to_file("/home/imech158/paf21-2/maps/Rules/Town03_modnew9.xml", OverwriteExistingFile.ALWAYS)
+        fw.write_to_file(save_path, OverwriteExistingFile.ALWAYS)
 
     def start(self):
         rospy.init_node("CRDrivabilityChecker", anonymous=True)
