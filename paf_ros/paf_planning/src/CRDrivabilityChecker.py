@@ -57,6 +57,8 @@ class CRDriveabilityChecker(object):
         self.cr_obstacles_vehicles = []
 
         self._collsion_objects_vehicles = []
+        self.current_pose = None
+        self.drive_direction = None
 
         rospy.logwarn(odometry_topic)
         rospy.logwarn(obstacle_topic)
@@ -82,7 +84,21 @@ class CRDriveabilityChecker(object):
             odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
         )
 
-        self.current_pose = odo.pose.pose
+        if self.current_pose is not None:
+            last_position = self.current_pose.position
+            # pose update
+            self.current_pose = odo.pose.pose
+            self.drive_direction = np.array(
+                [self.current_pose.position.x - last_position.x, self.current_pose.position.y - last_position.y]
+            )
+            length = math.sqrt(
+                self.drive_direction[0] * self.drive_direction[0] + self.drive_direction[1] * self.drive_direction[1]
+            )
+            if length != 0:
+                self.drive_direction = self.drive_direction / length
+        else:
+            self.drive_direction = np.array([0, 0])
+            self.current_pose = odo.pose.pose
 
         # calculate current orientation in z axis (rad)
         quaternion = (
@@ -105,7 +121,6 @@ class CRDriveabilityChecker(object):
 
     def _update_obstacles(self, msg: PafObstacleList):
         # clear obstacles
-        print(msg.obstacles)
         paf_obstacle_list = msg.obstacles
         # add all obstacle from obstacle list to commonroad-scenario
         """
@@ -187,9 +202,13 @@ class CRDriveabilityChecker(object):
         position = [self.current_pose.position.x, self.current_pose.position.y]
         orientation = self.current_orientation
 
-        # dummy velocity
-        initial_state = State(position=position, velocity=20, orientation=orientation, time_step=0)
-        predicted_trajectory = self._generate_trajectory_prediction_ego_vehicle(initial_state, EGO_VEHICLE_SHAPE)
+        speed = self._current_speed
+        drive_direction = self.drive_direction
+
+        initial_state = State(position=position, velocity=speed, orientation=orientation, time_step=0)
+        predicted_trajectory = self._generate_trajectory_prediction_ego_vehicle(
+            drive_direction, speed, initial_state, EGO_VEHICLE_SHAPE
+        )
 
         self.ego_vehicle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         self.scenario.add_objects(self.ego_vehicle)
@@ -216,18 +235,20 @@ class CRDriveabilityChecker(object):
         dynamic_obstacle = DynamicObstacle(id, type, shape, initial_state, predicted_trajectory)
         return dynamic_obstacle
 
-    def _generate_trajectory_prediction_ego_vehicle(self, intialState: State, shape: Shape) -> TrajectoryPrediction:
+    def _generate_trajectory_prediction_ego_vehicle(
+        self, drive_direction, speed, intialState: State, shape: Shape
+    ) -> TrajectoryPrediction:
         state_list = []
         for i in range(1, LOOK_AHEAD_STEPS):
             # compute new position
-            velocity = 15
             new_position = np.array(
-                [intialState.position[0] + self.scenario.dt * i * velocity, self.current_pose.position.y]
+                [
+                    intialState.position[0] + self.scenario.dt * i * drive_direction[0] * speed,
+                    intialState.position[1] + self.scenario.dt * i * drive_direction[1] * speed,
+                ]
             )
             # create new state
-            new_state = State(
-                position=new_position, velocity=velocity, orientation=self.current_orientation, time_step=i
-            )
+            new_state = State(position=new_position, velocity=speed, orientation=self.current_orientation, time_step=i)
             # add new state to state_list
             state_list.append(new_state)
         dynamic_obstacle_trajectory = Trajectory(1, state_list)
@@ -248,8 +269,6 @@ class CRDriveabilityChecker(object):
                 ]
             )
 
-            # print(f"vel = {velocity_vector}")
-            # print(f"speed={speed}")
             new_state = State(position=new_position, velocity=speed, orientation=0.02, time_step=i)
             # add new state to state_list
             state_list.append(new_state)

@@ -17,5 +17,5 @@ target_waypoints = [100, 207.5, 1.5]
 
 
 # spawn position
-start = carla.Transform(carla.Location(x=12, y=207.5, z=1.5), carla.Rotation(yaw=360))
+start = carla.Transform(carla.Location(x=70, y=207.5, z=1.5), carla.Rotation(yaw=360))
 vehicle = world.spawn_actor(vehicle_bp, start)
