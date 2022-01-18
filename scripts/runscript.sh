@@ -60,7 +60,7 @@ function carla_start() {
   gnome-terminal --title="CarlaUE4" -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
   ./subscripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
   sleep 10
-#  python3 ~/carla_0.9.10.1/PythonAPI/util/config.py --delta-seconds 0.02
+  python3 ~/carla_0.9.10.1/PythonAPI/util/config.py --delta-seconds 0.02
 }
 function start_terminal() { # opt:name, cmd
   if (($# == 2)); then

@@ -15,7 +15,7 @@ from commonroad.scenario.scenario import Scenario
 from commonroad.scenario.trajectory import State
 from commonroad_route_planner.route_planner import RoutePlanner
 
-from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
+from geometry_msgs.msg import Pose, PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from paf_messages.msg import (
     PafLaneletRoute,
@@ -44,6 +44,7 @@ class GlobalPlanner:
         self._position = [1e99, 1e99]
         self._yaw = 0
         self._routing_targets = []
+        self._lanelet_ids_route = []
         self._last_route = None
 
         rospy.init_node("paf_global_planner", anonymous=True)
@@ -126,12 +127,10 @@ class GlobalPlanner:
     def _routing_provider_standard_loop(self, _: Empty):
         t0 = time.perf_counter()
         waypoints, initial_pose = MapManager.get_demo_route()
-        self._last_route = None
         if waypoints is None:
             self._routing_provider_random(_)
             return
 
-        rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped).publish(initial_pose)
         position, yaw = (initial_pose.pose.pose.position.x, initial_pose.pose.pose.position.y), 0
 
         msg = PafLocalPath()
@@ -140,6 +139,13 @@ class GlobalPlanner:
         t0 = np.round(time.perf_counter() - t0, 2)
         if success:
             rospy.loginfo_throttle(10, f"[global planner] success planning standard loop({t0}s)")
+            rospy.Publisher("/carla/ego_vehicle/twist", Twist, queue_size=1).publish(Twist())
+            rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped, queue_size=1).publish(
+                initial_pose
+            )
+            rospy.Publisher("/paf/paf_validation/score/start", Empty, queue_size=1).publish(Empty())
+        else:
+            rospy.logwarn_throttle(10, f"[global planner] failed planning standard loop({t0}s)")
 
     def _routing_provider_random(self, _: Empty):
         t0 = time.perf_counter()
@@ -168,7 +174,6 @@ class GlobalPlanner:
         self._routing_provider_waypoints(msgs, position, yaw)
 
     def _routing_provider_waypoints(self, msgs: PafLocalPath = None, position=None, yaw=None):
-        self._last_route = None
         if msgs is None:
             msgs = PafLocalPath()
             msgs.points = self._routing_targets
@@ -191,6 +196,9 @@ class GlobalPlanner:
 
         lanelet_ids = []
         previous_target = position
+
+        self._routing_pub.publish(PafLaneletRoute())
+
         for i, target in enumerate(self._routing_targets):
             yaw = find_lanelet_yaw(self._scenario.lanelet_network, target)
             route: Route = self._route_from_objective(previous_target, yaw, [target.x, target.y])
@@ -218,7 +226,19 @@ class GlobalPlanner:
             vertices = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices
             previous_target = vertices[int(len(vertices) / 2)]
 
+        if len(self._lanelet_ids_route) == len(lanelet_ids):
+            for a, b in zip(self._lanelet_ids_route, lanelet_ids):
+                if a != b:
+                    break
+            else:
+                if self._last_route is not None:
+                    self._routing_pub.publish(self._last_route)
+                    return True
+                else:
+                    rospy.logerr("[global planner] last route is empty, but lanelets are the same.")
+
         route_merged = GlobalPath(self._scenario.lanelet_network, lanelet_ids, self._routing_targets[-1]).as_msg()
+        self._lanelet_ids_route = lanelet_ids
         self._last_route = route_merged
         self._routing_pub.publish(route_merged)
         self._target_on_map_pub.publish(draw_msg)
@@ -345,11 +365,12 @@ class GlobalPlanner:
         )
 
     def start(self):
-        rate = rospy.Rate(self.UPDATE_HZ)
-        while not rospy.is_shutdown():
-            if self._last_route is not None:
-                self._routing_pub.publish(self._last_route)
-            rate.sleep()
+        rospy.spin()
+        # rate = rospy.Rate(self.UPDATE_HZ)
+        # while not rospy.is_shutdown():
+        #     if self._last_route is not None:
+        #         self._routing_pub.publish(self._last_route)
+        #     rate.sleep()
 
 
 if __name__ == "__main__":

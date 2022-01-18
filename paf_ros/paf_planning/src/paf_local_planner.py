@@ -29,7 +29,7 @@ class LocalPlanner:
     """class used for the local planner. Task: return a local path"""
 
     UPDATE_HZ = 10
-    REPLAN_THROTTLE_SEC = 10
+    REPLAN_THROTTLE_SEC = 5
     END_OF_ROUTE_REACHED_DIST = 5
     # END_OF_ROUTE_SPEED = 5
     # MAX_ANGULAR_ERROR = np.deg2rad(45)
@@ -348,7 +348,7 @@ class LocalPlanner:
         delta_t = t - self._last_replan_request
         if self.REPLAN_THROTTLE_SEC < delta_t:
             self._last_replan_request = t
-            rospy.loginfo_throttle(20, "[local planner] requesting new random global route")
+            rospy.loginfo_throttle(20, "[local planner] requesting new standard loop route")
             self._reroute_standard_loop_publisher.publish(Empty())
 
     def _send_random_global_path_request(self):
@@ -361,8 +361,9 @@ class LocalPlanner:
 
     def _end_of_route_handling(self):
         self._global_path = GlobalPath()
+        rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1).publish(Empty())
         rospy.sleep(5)
-        if self._current_speed < 5:
+        if self._current_speed < 1:
             # self._send_random_global_path_request()  # todo remove in production
             self._send_standard_loop_request()  # todo remove in production
 
