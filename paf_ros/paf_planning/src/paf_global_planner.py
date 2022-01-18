@@ -135,17 +135,16 @@ class GlobalPlanner:
 
         msg = PafLocalPath()
         msg.points = waypoints
+        rospy.Publisher("/carla/ego_vehicle/twist", Twist, queue_size=1).publish(Twist())
+        rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped, queue_size=1).publish(initial_pose)
+        rospy.sleep(1)
         success = self._routing_provider_waypoints(msg, position, yaw)
         t0 = np.round(time.perf_counter() - t0, 2)
         if success:
-            rospy.loginfo_throttle(10, f"[global planner] success planning standard loop({t0}s)")
-            rospy.Publisher("/carla/ego_vehicle/twist", Twist, queue_size=1).publish(Twist())
-            rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped, queue_size=1).publish(
-                initial_pose
-            )
+            rospy.loginfo_throttle(10, f"[global planner] success planning standard loop ({t0}s)")
             rospy.Publisher("/paf/paf_validation/score/start", Empty, queue_size=1).publish(Empty())
         else:
-            rospy.logwarn_throttle(10, f"[global planner] failed planning standard loop({t0}s)")
+            rospy.logerr_throttle(10, f"[global planner] failed planning standard loop ({t0}s)")
 
     def _routing_provider_random(self, _: Empty):
         t0 = time.perf_counter()

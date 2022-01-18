@@ -62,7 +62,10 @@ class GlobalPath:
 
     def get_local_path_values(self, section, lane_idx):
         if type(section) is not PafRouteSection:
-            section: PafRouteSection = self.route.sections[section]
+            try:
+                section: PafRouteSection = self.route.sections[section]
+            except IndexError:
+                return -1, -1
         try:
             return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
         except IndexError:
@@ -465,8 +468,9 @@ class GlobalPath:
 
             if i == len(groups) - 1:
                 self.route = msg
-                section_idx, _ = self.get_section_and_lane_indices(self.target)
+                section_idx, target_lane = self.get_section_and_lane_indices(self.target)
                 self.route.sections = self.route.sections[: section_idx + 1]
+                self.route.sections[-1].target_lanes = [target_lane]
 
             if (lanes_l != 0 or anchor_l != 0 or anchor_r != len(lanelet_id_list) - 1) or i == len(groups) - 1:
                 # shift speed limit lanes

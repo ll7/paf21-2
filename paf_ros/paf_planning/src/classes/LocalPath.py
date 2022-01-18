@@ -107,6 +107,8 @@ class LocalPath:
             fraction_completed = distance_planned / lane_change_distance
 
             if fraction_completed > 1:
+                if end_idx == start_idx and start_idx < len(self.global_path) - 1:
+                    end_idx += 1
                 break
             if end_idx <= len(self.global_path) - 1:
                 fraction_completed = float(np.clip(fraction_completed, 0, 1))
@@ -163,7 +165,7 @@ class LocalPath:
         # Point2D[]             points
         # PafTrafficSignalList[]    signals
 
-        section_target, _ = self.global_path.get_section_and_lane_indices(self.global_path.route.target)
+        section_target, target_lane = self.global_path.get_section_and_lane_indices(self.global_path.route.target)
         if section_target < 0:
             section_target = len(self.global_path)
         sparse_local_path, sparse_local_path_speeds, sparse_traffic_signals = None, None, None
@@ -200,11 +202,13 @@ class LocalPath:
         if prev_idx <= 0 or section_from < 0:
             # rospy.logwarn("[LocalPath] calculating position on next centerline")
             section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
-            point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
-            sparse_local_path = [point]
-            sparse_local_path_speeds = [current_speed]
-            sparse_traffic_signals = [signals]
+            if section_from > 0:
+                point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
+                sparse_local_path = [point]
+                sparse_local_path_speeds = [current_speed]
+                sparse_traffic_signals = [signals]
 
+        rospy.logwarn((current_lane, target_lane, section_from, section_target))
         if section_from < 0 or section_target < 0:
             rospy.logerr_throttle(
                 1,
@@ -290,9 +294,9 @@ class LocalPath:
             # target is left == number of lanes off < 0
             # on target lanes: number of lanes off == 0
             if current_lane > s.target_lanes[-1]:
-                number_of_lanes_off = s.target_lanes[-1] - current_lane
+                number_of_lanes_off = current_lane - s.target_lanes[-1]
             elif current_lane < s.target_lanes[0]:
-                number_of_lanes_off = current_lane - s.target_lanes[0]
+                number_of_lanes_off = s.target_lanes[0] - current_lane
             else:
                 number_of_lanes_off = 0
 
@@ -318,7 +322,8 @@ class LocalPath:
                 l_change_allowed = l_change = False
                 r_change_allowed = r_change = False
 
-            lane_change_distance = min([s.target_lanes_distance, distance_for_one_lane_change])
+            lane_change_distance = distance_for_one_lane_change
+            # max([s.target_lanes_distance, distance_for_one_lane_change])
 
             left_lane, right_lane = None, None
             if l_change or l_change_allowed:
@@ -334,9 +339,23 @@ class LocalPath:
             end_idx_lane_change, distance_changed, left, straight, right = self._calculate_lane_options(
                 i, lane_change_distance, current_lane, left_lane, right_lane, not (l_change or r_change)
             )
-            choice = self._choose_lane(left, straight, right)
-            # choice = np.random.choice(["left", "straight", "right"], p=probabilities)
-
+            try:
+                choice = self._choose_lane(left, straight, right)
+            except ValueError:
+                choice = "straight"
+                rospy.logerr("[local planner] unable to determine new target lane")
+                rospy.logerr(
+                    f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
+                    f"lanes {left_lane}|{current_lane}|{right_lane} ({choice}), "
+                    f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
+                    f"dist: {distance_changed}, {lane_change_distance}"
+                )
+            # print(
+            #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
+            #         f"lanes {left_lane}|{current_lane}|{right_lane} ({choice}), "
+            #         f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
+            #         f"dist: {distance_changed}, {lane_change_distance}"
+            #     )
             if choice == "left" or choice == "right":
                 # last_lane = current_lane
                 pts, speeds, signs = left if choice == "left" else right
@@ -354,12 +373,6 @@ class LocalPath:
                 #     lane_change_pts.append(self.global_path.route.sections[i + 1].points[current_lane])
                 lane_change_pts += [pts[0], pts[-1]]
 
-                # print(
-                #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
-                #     f"lane change {last_lane}->{current_lane} ({choice}), "
-                #     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
-                #     f"dist: {distance_changed}"
-                # )
             else:
                 end_idx_lane_change = 0
 
@@ -421,8 +434,7 @@ class LocalPath:
         # print(f"can go left: {can_go_left}, can_go_straight: {can_go_straight}, can_go_right: {can_go_right}, ")
 
         if left is None and straight is None and right is None:
-            rospy.logerr("[local planner] unable to determine new target lane")
-            return "straight"
+            raise ValueError
 
         left_percent = int(left is not None) * 1
         right_percent = int(right is not None) * 1
