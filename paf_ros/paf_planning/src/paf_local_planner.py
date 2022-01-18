@@ -82,6 +82,7 @@ class LocalPlanner:
         if msg.data == self.rules_enabled:
             return
         self.rules_enabled = msg.data
+        self._scenario = MapManager.get_current_scenario()
         rospy.logwarn(
             f"[local planner] Rules are now {'en' if self.rules_enabled else 'dis'}abled! "
             f"Speed limits will change after starting a new route."

@@ -14,7 +14,7 @@ from commonroad_route_planner.utility.visualization import obtain_plot_limits_fr
 
 class MapManager:
     @staticmethod
-    def get_current_scenario(rules=True, map_name=None):
+    def get_current_scenario(rules=rospy.get_param("rules_enabled", False), map_name=None):
         """
         Loads the commonroad scenario with or without traffic rules of town with number map_number
 

@@ -28,7 +28,7 @@ from paf_messages.msg import (
 from classes.HelperFunctions import dist, find_closest_lanelet
 from classes.GlobalPath import GlobalPath
 from classes.MapManager import MapManager
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Bool
 from tf.transformations import euler_from_quaternion
 
 
@@ -59,12 +59,26 @@ class GlobalPlanner:
         rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
         rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._last_known_target_update)
 
+        rospy.Subscriber("/paf/paf_local_planner/rules_enabled", Bool, self._change_rules, queue_size=1)
+
         self._last_known_target_speed = 1000
 
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
         self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)
         self._target_on_map_pub = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
+        )
+
+    def _change_rules(self, msg: Bool):
+        if msg.data == rospy.get_param("rules_enabled", False):
+            return
+
+        rospy.set_param("rules_enabled", msg.data)
+        self.rules_enabled = msg.data
+        self._scenario = MapManager.get_current_scenario()
+        rospy.logwarn(
+            f"[global planner] Rules are now {'en' if self.rules_enabled else 'dis'}abled! "
+            f"Speed limits will change after starting a new route."
         )
 
     def _last_known_target_update(self, msg: PafSpeedMsg):
