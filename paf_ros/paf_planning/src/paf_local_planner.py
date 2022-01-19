@@ -179,7 +179,7 @@ class LocalPlanner:
         elif not self._on_local_path():
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
-        elif self._is_stopped() and len(self._local_path) > 10:
+        elif self._is_stopped() and len(self._local_path) > 10 and self._local_path_idx >= 0:
             rospy.loginfo_throttle(5, "[local planner] car is waiting for event (red light / stop / yield)")
             self._handle_clear_event()  # todo change this handler
         elif self._planner_at_end_of_local_path():
@@ -188,17 +188,24 @@ class LocalPlanner:
         else:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
 
+        if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
+            rospy.logwarn_throttle(
+                1, f"current target speed: " f"{int(self._local_path.message.target_speed[self._local_path_idx] * 3.6)}"
+            )
+
     def _is_waiting_for_clear_event(self):
         pass  # todo implement this
 
     def _handle_clear_event(self):
         rospy.sleep(3)  # todo remove this
+        index = max([self._local_path_idx - 5, 0])
         self._local_path.message.target_speed = SpeedCalculator.remove_stop_event(
-            self._local_path.message.target_speed, max([self._local_path_idx - 5, 0])
+            self._local_path.message.target_speed, index
         )
         to_section, _ = self._global_path.get_section_and_lane_indices(
             self._current_pose.position, not_found_threshold_meters=50
         )
+        rospy.logwarn(f"[local planner] clearing stop / yield event (index {index})")
         if to_section < 0:
             rospy.logerr("[local planner] cannot continue from here, current section unknown")
             return
@@ -310,8 +317,8 @@ class LocalPlanner:
     def _planner_at_end_of_local_path(self):
         if len(self._local_path) == 0:
             return True
-        return (
-            len(self._local_path) - self._local_path_idx < 500
+        return 300 <= len(self._local_path) - self._local_path_idx < 1000 or (
+            len(self._local_path) - self._local_path_idx < 300
             and not dist_pts(self._local_path.message.points[-1], self._global_path.route.sections[-1].points[0])
             < self.END_OF_ROUTE_REACHED_DIST
         )

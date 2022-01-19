@@ -14,7 +14,7 @@ from .Spline import calc_spline_course_from_point_list_grouped
 class LocalPath:
     REPLANNING_THRESHOLD_DISTANCE_M = 15
     STEP_SIZE = 0.125
-    TRANSMIT_FRONT_MIN_M = 400
+    TRANSMIT_FRONT_MIN_M = 250
     TRANSMIT_FRONT_SEC = 10
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
@@ -465,9 +465,9 @@ class LocalPath:
         if left is None and straight is None and right is None:
             raise ValueError
 
-        left_percent = int(left is not None) * 100
-        right_percent = int(right is not None) * 100
-        straight_percent = int(straight is not None) * 1
+        left_percent = int(left is not None) * 1
+        right_percent = int(right is not None) * 1
+        straight_percent = int(straight is not None) * 100
 
         # l_pts, l_speed, l_signs = left
         # s_pts, s_speed, s_signs = straight
