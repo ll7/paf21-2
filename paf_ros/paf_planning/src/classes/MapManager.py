@@ -74,7 +74,7 @@ class MapManager:
                 Point2D(388, 199),
             ], MapManager.point_to_pose((389, 45), 180)
         else:
-            return None
+            return None, None
 
     @staticmethod
     def get_rules_enabled():

@@ -168,7 +168,7 @@ class LocalPath:
         section_target, target_lane = self.global_path.get_section_and_lane_indices(self.global_path.route.target)
         if section_target < 0:
             section_target = len(self.global_path)
-        sparse_local_path, sparse_local_path_speeds, sparse_traffic_signals = None, None, None
+        sparse_local_path, sparse_local_path_speeds, sparse_traffic_signals = [], [], []
         prev_idx, _ = closest_index_of_point_list(self._sparse_local_path, from_position)
 
         lane_change_secs = 5
@@ -321,8 +321,7 @@ class LocalPath:
             if lane_change_until_distance is not None:
                 l_change_allowed = l_change = False
                 r_change_allowed = r_change = False
-
-            lane_change_distance = distance_for_one_lane_change
+            lane_change_distance = min(distance_for_one_lane_change, dist_to_target)
             # max([s.target_lanes_distance, distance_for_one_lane_change])
 
             left_lane, right_lane = None, None
