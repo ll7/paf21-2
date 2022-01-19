@@ -31,7 +31,10 @@ def closest_index_of_point_list(pts_list: List[Point2D], target_pt, acc: int = 1
         return -1, -1
     if hasattr(target_pt, "x"):
         target_pt = (target_pt.x, target_pt.y)
-    distances = [dist([p.x, p.y], target_pt) for p in pts_list[::acc]]
+    if hasattr(pts_list[0], "x"):
+        distances = [dist([p.x, p.y], target_pt) for p in pts_list[::acc]]
+    else:
+        distances = [dist(p, target_pt) for p in pts_list[::acc]]
     if len(distances) == 0:
         return len(pts_list) - 1
     idx = int(np.argmin(distances))
@@ -48,7 +51,31 @@ def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_p
     return idx * acc, [distances[i] for i in idx]
 
 
-def expand_sparse_list(sparse_list, to_len, fill_value=None):
+def expand_sparse_list(sparse_list, points_current, points_target, fill_value=None, indices_new=None):
+    assert len(sparse_list) == len(points_current)
+    if indices_new is None:
+        indices_new = [closest_index_of_point_list(points_target, pt)[0] for pt in points_current]
+
+    out = [fill_value for _ in points_target]
+
+    for v, idx in zip(sparse_list, indices_new):
+        idx = idx + 5
+        if idx >= len(out):
+            break
+        elif 0 <= idx:
+            out[idx] = v
+
+    filler = sparse_list[0]
+    if fill_value is None:
+        for i, v in enumerate(out):
+            if v is None:
+                out[i] = filler
+            else:
+                filler = v
+    return out, indices_new
+
+
+def expand_sparse_list2(sparse_list, to_len, fill_value=None):
     if len(sparse_list) == 0 or to_len < len(sparse_list):
         raise ValueError
     ratio = to_len / (len(sparse_list))
@@ -63,7 +90,7 @@ def expand_sparse_list(sparse_list, to_len, fill_value=None):
             expanded_list.append(sp)
             if len(expanded_list) > to_len:
                 expanded_list[to_len - 1] = sp
-        new_i = int(i * ratio)
+        new_i = int((i + 2) * ratio)
         for _ in range(len(expanded_list), new_i):
             expanded_list.append(filler)
 

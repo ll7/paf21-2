@@ -197,10 +197,12 @@ class LocalPath:
                 dist_pts(self.global_path.route.sections[section_from].points[0], self._sparse_local_path[end_index])
                 > 15
             ):
-                rospy.logerr(f"[LocalPath] previous idx not possible ({prev_idx} of {len(self._sparse_local_path)})")
+                rospy.logerr(
+                    f"[local planner] previous idx not possible ({prev_idx} of {len(self._sparse_local_path)})"
+                )
                 prev_idx = -1  # sanity check
         if prev_idx <= 0 or section_from < 0:
-            # rospy.logwarn("[LocalPath] calculating position on next centerline")
+            # rospy.logwarn("[local planner] calculating position on next centerline")
             section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
             if section_from > 0:
                 point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
@@ -208,7 +210,7 @@ class LocalPath:
                 sparse_local_path_speeds = [current_speed]
                 sparse_traffic_signals = [signals]
 
-        rospy.logwarn((current_lane, target_lane, section_from, section_target))
+        # rospy.logwarn((current_lane, target_lane, section_from, section_target))
         if section_from < 0 or section_target < 0:
             rospy.logerr_throttle(
                 1,
@@ -216,7 +218,7 @@ class LocalPath:
                 f"{self.global_path.route.target}, {len(self.global_path)}",
             )
             self.message = local_path
-            return local_path
+            return local_path, 0, 0
 
         self._local_path_start_section = section_from
         end_idx_lane_change = 0
@@ -382,9 +384,12 @@ class LocalPath:
             _points = calc_spline_course_from_point_list_grouped(sparse_local_path[::3], ds=self.STEP_SIZE, group_no=3)
             if not np.isnan(_points).any():
                 try:
+                    old_pts = points
                     points = xy_to_pts(_points)
-                    traffic_signals = expand_sparse_list(sparse_traffic_signals, len(points), fill_value=[])
-                    speed_limit = expand_sparse_list(sparse_local_path_speeds, len(points))
+                    traffic_signals, indices = expand_sparse_list(
+                        sparse_traffic_signals, old_pts, _points, fill_value=[]
+                    )
+                    speed_limit, _ = expand_sparse_list(sparse_local_path_speeds, old_pts, _points, indices_new=indices)
                 except ValueError:
                     points = sparse_local_path
 
@@ -406,7 +411,13 @@ class LocalPath:
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
 
-        return local_path
+        rospy.loginfo_throttle(
+            5,
+            f"[local planner] planned local path with length={distance_planned} "
+            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)}",
+        )
+
+        return local_path, section_from, section_target
 
     def _update_target_speed(self, local_path, speed_limit, traffic_signals):
         speed = self.speed_calc.get_curve_speed(local_path)
@@ -414,8 +425,27 @@ class LocalPath:
         if self.rules_enabled:
             speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
             speed = np.clip(speed, 0, speed_limit)
-            # speed = self.speed_calc.add_stop_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
-            # speed = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=6, shift_m=-3)
+            # speed, indices2 = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=10,
+            #                                                   shift_m=0)
+            events = SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS
+            speed, indices1 = self.speed_calc.add_stop_events(
+                speed, traffic_signals, target_speed=0, buffer_m=20, shift_m=-4, events=events
+            )
+
+            # if not hasattr(self, "pts_stop"):
+            #     self.pts_stop = []
+            #     self.pts_roll = []
+            #
+            # self.pts_stop += [local_path[i] for i in indices1 if local_path[i] not in self.pts_stop]
+            # # self.pts_roll = [local_path[i] for i in indices2 if local_path[i] not in self.pts_roll]
+            # # if len(indices1) > 0:
+            # #     rospy.logwarn(f"stops: {[indices1]}")
+            # # rospy.logwarn(f"rolls: {indices2}")
+            # self._draw_path_pts([local_path[i] for i, sp in enumerate(speed) if sp < .1][::10] +
+            # self.pts_stop, "uartenduiaerüöäp",
+            #                     color=(117, 34, 34))  # yellow
+            # self._draw_path_pts(self.pts_stop, "uartenduiaerüöäp",
+            #                     color=(117, 34, 34))  # dark red # (209, 203, 13) yellow
 
         speed = self.speed_calc.add_linear_deceleration(speed)
         return speed
@@ -435,9 +465,9 @@ class LocalPath:
         if left is None and straight is None and right is None:
             raise ValueError
 
-        left_percent = int(left is not None) * 1
-        right_percent = int(right is not None) * 1
-        straight_percent = int(straight is not None) * 50
+        left_percent = int(left is not None) * 100
+        right_percent = int(right is not None) * 100
+        straight_percent = int(straight is not None) * 1
 
         # l_pts, l_speed, l_signs = left
         # s_pts, s_speed, s_signs = straight

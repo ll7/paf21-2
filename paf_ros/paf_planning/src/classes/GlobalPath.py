@@ -49,6 +49,7 @@ class GlobalPath:
             self._graph = self._calc_lane_change_graph()
             self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, lanelet_network)
             self.route = None
+            self.signal_positions = []
 
     def __len__(self):
         if self.route is None:
@@ -283,6 +284,8 @@ class GlobalPath:
             paf_sign.value = self.MERGE_SPEED_RESET
             speed_limits += [paf_sign]
 
+            # self.signal_positions.append(Point2D(merging_pt[0], merging_pt[1]))
+
         # all traffic signs
         for sign_id in lanelet.traffic_signs:
             paf_sign = PafTrafficSignal()
@@ -301,6 +304,8 @@ class GlobalPath:
                 speed_limits += [paf_sign]
             else:
                 traffic_signals += [paf_sign]
+
+            self.signal_positions.append(Point2D(sign.position[0], sign.position[1]))
 
         # all traffic lights
         for light_id in lanelet.traffic_lights:
@@ -321,6 +326,8 @@ class GlobalPath:
             idx = self._locate_obj_on_lanelet(vertices, list(light.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             traffic_signals += [paf_sign]
+            self.signal_positions.append(Point2D(light.position[0], light.position[1]))
+
         traffic_signals = sorted(traffic_signals, key=lambda elem: elem.index)
 
         for i in range(25):
@@ -416,6 +423,7 @@ class GlobalPath:
         groups = self.get_lanelet_groups(self.lanelet_ids)
         distance_m = 5
         last_limits = None
+        self.signal_positions = []
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
             zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
@@ -523,6 +531,14 @@ class GlobalPath:
                 rospy.logerr(f"[global planner] section {i} has no points")
 
         # rospy.logwarn(groups)
+
+        from paf_messages.msg import PafTopDownViewPointSet
+
+        pts1 = PafTopDownViewPointSet()
+        pts1.label = "signals_global"
+        pts1.points = self.signal_positions
+        pts1.color = (0, 255, 0)
+        rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
 
         return msg
 

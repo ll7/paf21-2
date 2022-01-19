@@ -16,11 +16,13 @@ from paf_messages.msg import (
     PafLaneletRoute,
     PafTopDownViewPointSet,
     PafSpeedMsg,
+    PafRouteSection,
 )
 from classes.MapManager import MapManager
 from classes.GlobalPath import GlobalPath
 from classes.LocalPath import LocalPath
 from classes.HelperFunctions import closest_index_of_point_list, dist_pts
+from classes.SpeedCalculator import SpeedCalculator
 from std_msgs.msg import Bool, Empty
 from tf.transformations import euler_from_quaternion
 
@@ -30,7 +32,7 @@ class LocalPlanner:
 
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC = 5
-    END_OF_ROUTE_REACHED_DIST = 5
+    END_OF_ROUTE_REACHED_DIST = 2
     # END_OF_ROUTE_SPEED = 5
     # MAX_ANGULAR_ERROR = np.deg2rad(45)
 
@@ -51,6 +53,7 @@ class LocalPlanner:
         self._global_path = GlobalPath()
         self._local_path = LocalPath(self._global_path)
         self._local_path_idx, self._distance_to_local_path = -1, 0
+        self._from_section, self._to_section = -1, -1
 
         self._traffic_light_color = TrafficLightState.GREEN  # or None # todo fill this
         # self._following_distance = -1  # todo set following distance
@@ -97,9 +100,10 @@ class LocalPlanner:
             self._global_path = GlobalPath(msg=msg)
             self._local_path = LocalPath(self._global_path, self.rules_enabled)
             self._set_local_path_idx()
-            self._create_paf_local_path_msg(
-                self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
+            path, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
+                self._current_pose.position, self._current_speed
             )
+            self._create_paf_local_path_msg(path)
 
     # def _get_track_angle(self, s_index, l_index):
     #     if len(self._global_path.sections) == 0:
@@ -147,11 +151,14 @@ class LocalPlanner:
     def _create_paf_local_path_msg(self, path_msg=None, send_empty=False):
         if path_msg is None:
             path_msg = self._local_path.message
+        else:
+            self._local_path.message = path_msg
 
         if send_empty:
             path_msg.header.stamp = rospy.Time.now()
             path_msg.target_speed = []
             path_msg.points = []
+
         self._local_plan_publisher.publish(path_msg)
 
     def _loop_handler(self):
@@ -172,22 +179,42 @@ class LocalPlanner:
         elif not self._on_local_path():
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
+        elif self._is_stopped() and len(self._local_path) > 10:
+            rospy.loginfo_throttle(5, "[local planner] car is waiting for event (red light / stop / yield)")
+            self._handle_clear_event()  # todo change this handler
         elif self._planner_at_end_of_local_path():
             rospy.loginfo_throttle(5, "[local planner] local planner is replanning (end of local path)")
             self._replan_local_path()
         else:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
 
-    def _replan_local_path(self):
-        msg = self._local_path.calculate_new_local_path(self._current_pose.position, self._current_speed)
-        self._create_paf_local_path_msg(msg)
+    def _is_waiting_for_clear_event(self):
+        pass  # todo implement this
 
-    def _handle_stop_event(self):
-        if self._allowed_from_stop():
-            rospy.sleep(3)  # todo remove
-            i1, i2 = self._local_path_idx, self._local_path_idx + 100
-            self._local_path.message.target_speed[i1:i2] = 50 / 3.6
-            self._create_paf_local_path_msg(self._local_path.message)
+    def _handle_clear_event(self):
+        rospy.sleep(3)  # todo remove this
+        self._local_path.message.target_speed = SpeedCalculator.remove_stop_event(
+            self._local_path.message.target_speed, max([self._local_path_idx - 5, 0])
+        )
+        to_section, _ = self._global_path.get_section_and_lane_indices(
+            self._current_pose.position, not_found_threshold_meters=50
+        )
+        if to_section < 0:
+            rospy.logerr("[local planner] cannot continue from here, current section unknown")
+            return
+        section: PafRouteSection
+        from_section = self._from_section
+        to_section += 5
+        for section in self._global_path.route.sections[from_section:to_section]:
+            section.signals = []
+
+        self._create_paf_local_path_msg()
+
+    def _replan_local_path(self):
+        msg, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
+            self._current_pose.position, self._current_speed
+        )
+        self._create_paf_local_path_msg(msg)
 
     # def _get_current_trajectory(self):
     #     m_idx, l_idx, p_idx = self._set_current_indices()
@@ -283,7 +310,11 @@ class LocalPlanner:
     def _planner_at_end_of_local_path(self):
         if len(self._local_path) == 0:
             return True
-        return len(self._local_path) - self._local_path_idx < 300
+        return (
+            len(self._local_path) - self._local_path_idx < 500
+            and not dist_pts(self._local_path.message.points[-1], self._global_path.route.sections[-1].points[0])
+            < self.END_OF_ROUTE_REACHED_DIST
+        )
 
     def _planner_at_end_of_global_path(self):
         if len(self._global_path) == 0:
@@ -362,7 +393,6 @@ class LocalPlanner:
     def _end_of_route_handling(self):
         self._global_path = GlobalPath()
         rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1).publish(Empty())
-        rospy.sleep(5)
         if self._current_speed < 1:
             # self._send_random_global_path_request()  # todo remove in production
             self._send_standard_loop_request()  # todo remove in production

@@ -11,7 +11,7 @@ class SpeedCalculator:
     MAX_SPEED = 250 / 3.6
     MIN_SPEED = 35 / 3.6
     CURVE_FACTOR = 2  # higher value = more drifting
-    MAX_DECELERATION = 40  # m/s^2, higher value = later and harder braking
+    MAX_DECELERATION = 30  # m/s^2, higher value = later and harder braking
     SPEED_LIMIT_MULTIPLIER = 1
 
     # percentage of max_deceleration (last x% meters, MAX_DECELERATION/2 is used)
@@ -186,6 +186,7 @@ class SpeedCalculator:
         buffer_idx = int(buffer_m / self._step_size)
         shift_idx = int(shift_m / self._step_size)
         speed_limit = np.ones_like(speed) * 1000
+        indices = []
 
         if events is None:
             events = self.QUICK_BRAKE_EVENTS
@@ -196,14 +197,28 @@ class SpeedCalculator:
                     i0, i1 = i + shift_idx, i + buffer_idx + shift_idx
                     i1 += 1  # i1 is excluded otherwise
                     speed_limit[i0:i1] = target_speed
-        return np.clip(speed, 0, speed_limit)
+                    indices.append(i)
 
-    def remove_stop_event(self, speed, start_idx=0, buffer_m=5, speed_limit=None):
-        buffer_idx = int(buffer_m / self._step_size)
+        return np.clip(speed, 0, speed_limit), indices
+
+    @staticmethod
+    def remove_stop_event(speed, start_idx=0, speed_limit=None):
         if speed_limit is None:
-            speed_limit = self.MAX_SPEED
-        end_idx = start_idx + buffer_idx
-        speed[start_idx:end_idx] = speed_limit
+            speed_limit = SpeedCalculator.CITY_SPEED_LIMIT
+
+        num_max = 200
+        num_min = 100
+        had_zero = False
+        for i, sp in enumerate(speed[start_idx:]):
+            num = i
+            i += start_idx
+
+            if had_zero and num > num_min and (sp > 1 or num > num_max):
+                break
+            elif sp < 0.1:
+                had_zero = True
+            num += 1
+            speed[i] = speed_limit
         return speed
 
     def add_roll_events(

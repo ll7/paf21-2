@@ -37,7 +37,7 @@ class TensorBoardNode:
         rospy.logwarn(f"tensorboard files saved in ~/.ros/{self.path}")
 
     def _cur_time(self):
-        return self._world.wait_for_tick(1).timestamp.elapsed_seconds
+        return self._world.wait_for_tick().timestamp.elapsed_seconds
 
     def _get_step_from_cur_time(self):
         t1 = self._cur_time()

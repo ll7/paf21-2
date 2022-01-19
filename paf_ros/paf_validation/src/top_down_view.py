@@ -104,7 +104,7 @@ class TopDownRosNode(object):
             self.producer.info_text[0] = int(self.velocity())
             self.producer.info_text[3] = self.location()
             if delta > 0:
-                rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / delta}")
+                rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={np.round(1 / delta, 2)}")
             self._move_spectator()
             rate.sleep()
 
