@@ -10,6 +10,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 export paf_dir="$SCRIPT_DIR/../"
 bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh" 1>/dev/null
 
+cp -fr "$paf_dir/paf_ros/rosbridge_config.yaml" ~/carla-ros-bridge/ros-bridge/carla_ros_bridge/config/settings.yaml || exit 1
+
 ln -sfn "$paf_dir/paf_ros/" ~/carla-ros-bridge/catkin_ws/src/
 ln -sfn "$paf_dir/Maps/" ~/.ros/
 
@@ -60,7 +62,7 @@ function carla_start() {
   gnome-terminal --title="CarlaUE4" -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
   ./subscripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
   sleep 10
-  python3 ~/carla_0.9.10.1/PythonAPI/util/config.py --delta-seconds 0.02
+#  python3 ~/carla_0.9.10.1/PythonAPI/util/config.py --delta-seconds 0.02
 }
 function start_terminal() { # opt:name, cmd
   if (($# == 2)); then
