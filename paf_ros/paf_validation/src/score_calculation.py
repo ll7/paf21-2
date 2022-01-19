@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import carla
 import rospy
 from carla_msgs.msg import CarlaCollisionEvent, CarlaLaneInvasionEvent
 from paf_messages.msg import PafLogScalar
@@ -12,9 +11,6 @@ class ScoreCalculationNode:
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
-        client = carla.Client("127.0.0.1", 2000)
-        self._world = client.get_world()
-        self._start()
         # self._running = False
         rospy.Subscriber(f"/carla/{role_name}/collision", CarlaCollisionEvent, self._process_collision, queue_size=1)
         rospy.Subscriber(
@@ -137,7 +133,8 @@ class ScoreCalculationNode:
         )
 
     def _cur_time(self):
-        return self._world.wait_for_tick(1).timestamp.elapsed_seconds  # todo wait for tick retrieves a carla snapshot
+        return rospy.get_time()
+        # self._world.wait_for_tick(1).timestamp.elapsed_seconds  # todo wait for tick retrieves a carla snapshot
 
     def _process_collision(self, msg: CarlaCollisionEvent):
         """

@@ -4,14 +4,16 @@ import numpy as np
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 from paf_messages.msg import PafTrafficSignal, Point2D
+from .MapManager import MapManager
 
 
 class SpeedCalculator:
     CITY_SPEED_LIMIT = 50 / 3.6
-    MAX_SPEED = 250 / 3.6
-    MIN_SPEED = 35 / 3.6
-    CURVE_FACTOR = 2  # higher value = more drifting
-    MAX_DECELERATION = 30  # m/s^2, higher value = later and harder braking
+    UNKNOWN_SPEED_LIMIT_SPEED = CITY_SPEED_LIMIT
+    MAX_SPEED = 95 / 3.6 if MapManager.get_rules_enabled() else 250 / 3.6
+    MIN_SPEED = 30 / 3.6 if MapManager.get_rules_enabled() else 45 / 3.6
+    CURVE_FACTOR = 2 if MapManager.get_rules_enabled() else 3  # higher value = more drifting
+    MAX_DECELERATION = 25 if MapManager.get_rules_enabled() else 40  # m/s^2, higher value = later and harder braking
     SPEED_LIMIT_MULTIPLIER = 1
 
     # percentage of max_deceleration (last x% meters, MAX_DECELERATION/2 is used)

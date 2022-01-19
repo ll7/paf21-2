@@ -13,13 +13,13 @@ import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
 
 from .HelperFunctions import dist_pts, closest_index_of_point_list, dist
+from .SpeedCalculator import SpeedCalculator
 from .Spline import calc_spline_course_from_point_list
 
 
 class GlobalPath:
     SPEED_KMH_TO_MS = 1 / 3.6
     MERGE_SPEED_RESET = 50 / 3.6
-    UNKNOWN_SPEED_LIMIT_SPEED = 250 / 3.6
     APPLY_MERGING_RESET = True
 
     def __init__(
@@ -297,7 +297,7 @@ class GlobalPath:
                 if is_speed_limit:
                     paf_sign.value *= self.SPEED_KMH_TO_MS
             except IndexError:
-                paf_sign.value = self.UNKNOWN_SPEED_LIMIT_SPEED
+                paf_sign.value = SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED
             idx = self._locate_obj_on_lanelet(vertices, list(sign.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             if is_speed_limit:
