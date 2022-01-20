@@ -37,7 +37,7 @@ class LocalPlanner:
     # END_OF_ROUTE_SPEED = 5
     # MAX_ANGULAR_ERROR = np.deg2rad(45)
 
-    rules_enabled = rospy.get_param("rules_enabled", False)
+    rules_enabled = MapManager.get_rules_enabled()
 
     def __init__(self):
 
@@ -91,6 +91,7 @@ class LocalPlanner:
             return
         self.rules_enabled = msg.data
         self._scenario = MapManager.get_current_scenario()
+        SpeedCalculator.set_limits(self.rules_enabled)
         rospy.logwarn(
             f"[local planner] Rules are now {'en' if self.rules_enabled else 'dis'}abled! "
             f"Speed limits will change after starting a new route."
@@ -191,11 +192,9 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
 
         if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
-            rospy.loginfo_throttle(
-                5,
-                f"[local planner] current target speed: "
-                f"{int(self._local_path.message.target_speed[self._local_path_idx] * 3.6)}",
-            )
+            a, b = self._local_path_idx, self._local_path_idx + 100
+            speed = self._local_path.message.target_speed[a:b:10]
+            rospy.loginfo_throttle(5, f"[local planner] current target speeds: " f"{[int(sp * 3.6) for sp in speed]}")
 
     def _is_waiting_for_clear_event(self):
         pass  # todo implement this
@@ -233,83 +232,6 @@ class LocalPlanner:
             self._current_pose.position, self._current_speed, ignore_previous=ignore_prev, min_section=self._to_section
         )
         self._create_paf_local_path_msg(msg)
-        # self._replanning = False
-
-    # def _get_current_trajectory(self):
-    #     m_idx, l_idx, p_idx = self._set_current_indices()
-    #     last_local_reroute = rospy.Time.now().to_time()
-    #     delta_t = last_local_reroute - self._last_local_reroute
-    #     if len(self._local_path) > 0 and self._planner_at_end_of_global_path(self._local_path):
-    #         self._end_of_route_handling()
-    #         self._local_path = []
-    #         self._target_speed = []
-    #         self._global_path = []
-    #         is_new_message = True
-    #     elif len(self._global_path.sections) > 0 and m_idx >= 0 and (
-    #             delta_t > self.REPLAN_THROTTLE_SEC / 2 or m_idx == len(self._global_path.sections) - 1
-    #     ):
-    #         self._set_current_path()
-    #         is_new_message = True
-    #         rospy.loginfo_throttle(30, "[local planner] local planner is replanning")
-    #         self._last_local_reroute = last_local_reroute
-    #     else:
-    #         is_new_message = False
-    #     return self._local_path, self._target_speed, is_new_message
-    #
-    # def _signal_debug_print(self, signals):
-    #
-    #     pts1 = PafTopDownViewPointSet()
-    #     pts1.label = "signals"
-    #     pts1.points = [
-    #         self._global_path[s.index]
-    #         for s in signals
-    #         if s.type in SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS
-    #     ]
-    #     pts1.color = [255, 0, 0]
-    #     self._sign_publisher.publish(pts1)
-    #
-    #     pts2 = PafTopDownViewPointSet()
-    #     pts2.label = "speed_signs"
-    #     pts2.points = [
-    #         self._global_path[s.index]
-    #         for s in signals
-    #         if s.type == TrafficSignIDGermany.MAX_SPEED.value or s.type == "MERGE"
-    #     ]
-    #     pts2.color = (255, 204, 0)
-    #     self._sign_publisher.publish(pts2)
-    #
-    #     out = []
-    #     for s in signals:
-    #         if self._current_point_index <= s.index < end_idx:
-    #             try:
-    #                 n = TrafficSignIDGermany(s.type).name
-    #             except Exception:
-    #                 n = s.type
-    #             m = self._distances[s.index] - self._distances[self._current_point_index]
-    #             m = np.round(m, 1)
-    #             str_signal = f"{n} ({m}m)"
-    #             if s.value >= 0:
-    #                 v = np.round(s.value, 1)
-    #                 if n == "MAX_SPEED":
-    #                     v = np.round(v * 3.6, 1)
-    #                 str_signal += f": {v}"
-    #             out.append(str_signal)
-    #     if len(out) > 0:
-    #         rospy.loginfo_throttle(2, f"[local planner] Upcoming Traffic Signs: {', '.join(out)}")
-    #
-    # def _speed_debug_print(self, speeds, number_of_values=100):
-    #     if len(self._distances) == 0:
-    #         return
-    #     step = self._distances[-1] / len(self._distances)
-    #     delta_m = 1  # meter
-    #     delta_idx = int(delta_m / step)
-    #     n = number_of_values * delta_idx
-    #     out = []
-    #     for speed in speeds[:n:delta_idx]:
-    #         msg = f"{np.round(speed * 3.6, 1)}"
-    #         out.append(msg)
-    #     if len(out) > 0:
-    #         rospy.loginfo_throttle(1, f"[local planner] Upcoming Speeds: {', '.join(out)}")
 
     def _allowed_from_stop(self):
         return True or self._can_continue_on_path(None)  # todo

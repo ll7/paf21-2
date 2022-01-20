@@ -28,6 +28,7 @@ from paf_messages.msg import (
 from classes.HelperFunctions import dist, find_closest_lanelet, find_lanelet_yaw
 from classes.GlobalPath import GlobalPath
 from classes.MapManager import MapManager
+from paf_ros.paf_planning.src.classes.SpeedCalculator import SpeedCalculator
 from std_msgs.msg import Empty, Bool
 from tf.transformations import euler_from_quaternion
 
@@ -76,6 +77,7 @@ class GlobalPlanner:
     def _change_rules(self, msg: Bool):
         rospy.set_param("rules_enabled", msg.data)
         self._scenario = MapManager.get_current_scenario()
+        SpeedCalculator.set_limits(msg.data)
         rospy.logwarn(
             f"[global planner] Rules are now {'en' if msg.data else 'dis'}abled! "
             f"Speed limits will change after starting a new route."

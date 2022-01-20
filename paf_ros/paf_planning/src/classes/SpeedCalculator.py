@@ -9,28 +9,31 @@ from .MapManager import MapManager
 
 class SpeedCalculator:
     CITY_SPEED_LIMIT = 50 / 3.6
-    UNKNOWN_SPEED_LIMIT_SPEED = CITY_SPEED_LIMIT
-    MAX_SPEED = 95 / 3.6 if MapManager.get_rules_enabled() else 250 / 3.6
-    MIN_SPEED = 30 / 3.6 if MapManager.get_rules_enabled() else 45 / 3.6
-    CURVE_FACTOR = 1.5 if MapManager.get_rules_enabled() else 3  # higher value = more drifting
-    MAX_DECELERATION = 10 if MapManager.get_rules_enabled() else 40  # m/s^2, higher value = later and harder braking
     SPEED_LIMIT_MULTIPLIER = 1
-
-    # percentage of max_deceleration (last x% meters, MAX_DECELERATION/2 is used)
     FULL_VS_HALF_DECEL_FRACTION = 0.97
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
     SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + QUICK_BRAKE_EVENTS + ROLLING_EVENTS
+
+    UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 100, 100, 10, 1, 10
+
+    @staticmethod
+    def set_limits(value=None):
+        if value is None:
+            value = MapManager.get_rules_enabled()
+        SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if value else 250 / 3.6
+        SpeedCalculator.MAX_SPEED = 95 / 3.6 if value else 250 / 3.6
+        SpeedCalculator.MIN_SPEED = 30 / 3.6 if value else 45 / 3.6
+        SpeedCalculator.CURVE_FACTOR = 1.5 if value else 3  # higher value = more drifting
+        SpeedCalculator.MAX_DECELERATION = 10 if value else 40
+        # m/s^2, higher value = later and harder braking
 
     def __init__(self, step_size: float, index_start: int = 0):
         # step size is assumed constant but has a variance of +/- 1mm
         self._step_size = step_size
         self._index_start = index_start
         self._plots = None
-
-        # self._deceleration_delta = np.sqrt(2 * self.MAX_DECELERATION * self._step_size) * self._step_size
-
-        pass
+        self.set_limits()
 
     def _get_deceleration_distance(self, v_0, v_target):
         # s = 1/2 * d_v * t
