@@ -14,8 +14,9 @@ from .Spline import calc_spline_course_from_point_list, calc_spline_course_from_
 class LocalPath:
     REPLANNING_THRESHOLD_DISTANCE_M = 15
     STEP_SIZE = 0.125
-    TRANSMIT_FRONT_MIN_M = 150
+    TRANSMIT_FRONT_MIN_M = 250
     TRANSMIT_FRONT_SEC = 10
+    LANE_CHANGE_SECS = 7
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
         self._local_path_start_section = 0
@@ -185,7 +186,7 @@ class LocalPath:
             self._sparse_local_path_speeds = []
             prev_idx = -1
 
-        lane_change_secs = 5
+        lane_change_secs = self.LANE_CHANGE_SECS
         buffer = 5
         num_points_previous_plan = 10
 
@@ -277,14 +278,13 @@ class LocalPath:
             distance_planned += s.distance_from_last_section
             sparse_local_path.append(s.points[current_lane])
 
-            speed = s.speed_limits[current_lane]
-            min_lane_change_meters = speed * lane_change_secs
+            target_speed = s.speed_limits[current_lane]
             if s.speed_limits[current_lane] < 30 / 3.6:
                 rospy.logerr_throttle(
                     5, f"[local planner] Speed limit < 30, correcting.. {s.speed_limits[current_lane]}"
                 )
-                speed = 30 / 3.6
-            sparse_local_path_speeds.append(speed)
+                target_speed = 30 / 3.6
+            sparse_local_path_speeds.append(target_speed)
             if distance_planned < ignore_signs_distance:
                 sparse_traffic_signals.append([])
             else:
@@ -314,7 +314,9 @@ class LocalPath:
             else:
                 number_of_lanes_off = 0
 
-            distance_for_one_lane_change = max([current_speed * lane_change_secs, min_lane_change_meters]) - buffer
+            distance_for_one_lane_change = (
+                max([target_speed * lane_change_secs, current_speed * lane_change_secs]) - buffer
+            )
             distance_to_next_lane_change = s.target_lanes_distance
             distance_to_off_lanes_change = np.abs(number_of_lanes_off) * distance_for_one_lane_change
             distance_to_off_plus_1_lanes_change = (np.abs(number_of_lanes_off) + 2) * distance_for_one_lane_change

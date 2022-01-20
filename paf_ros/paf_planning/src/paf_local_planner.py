@@ -181,11 +181,7 @@ class LocalPlanner:
         elif not self._on_local_path():
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
-        elif (
-            self._is_stopped()
-            and len(self._local_path) > self._local_path_idx
-            and self._local_path.message.target_speed[self._local_path_idx] == 0
-        ):
+        elif self._is_stopped() and self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
             rospy.logwarn_throttle(5, "[local planner] car is waiting for event (red light / stop / yield)")
             self._handle_clear_event()  # todo change this handler
         elif self._planner_at_end_of_local_path():
