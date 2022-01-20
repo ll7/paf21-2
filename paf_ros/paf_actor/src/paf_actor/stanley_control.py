@@ -1,6 +1,7 @@
 """
 A file that contains the Stanley Lateral Controller (inspired by PSAF WS20/21 2)
 """
+# from struct import error
 import rospy
 
 import numpy as np
@@ -58,6 +59,14 @@ class StanleyLateralController:
         if abs(speed) < self.min_speed:
             speed = self.min_speed
 
+        # if speed < -50/3.6:
+        #    speed = -50/3.6
+        # elif speed > 50/3.6:
+        #    speed = 50/3.6
+        if speed > 70 / 3.6:
+            self.k = 5
+        else:
+            self.k = 2.5
         # compute cross track error correction
         theta_d = np.arctan2(self.k * error_front_axle / max([1, 0.4 * speed]), speed)
 
