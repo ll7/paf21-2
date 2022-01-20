@@ -445,8 +445,8 @@ class LocalPath:
         speed = self.speed_calc.get_curve_speed(local_path)
 
         if self.rules_enabled:
-            # speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
-            # speed = np.clip(speed, 0, speed_limit)
+            speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
+            speed = np.clip(speed, 0, speed_limit)
             # speed, indices2 = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=10,
             #                                                   shift_m=0)
             events = SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS

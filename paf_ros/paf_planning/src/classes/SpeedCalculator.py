@@ -223,9 +223,6 @@ class SpeedCalculator:
             num += 1
             speed[i] = speed_limit
 
-        import rospy
-
-        rospy.logerr("test123 " + str(num))
         return speed
 
     def add_roll_events(
