@@ -2,12 +2,16 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-ros_launch_args="town:=Town03 spawn_point:=199.0,9.5,0,0,0,0 validation:=true"
-npc_launch_args="-n 200 -w 80" # n=vehicles, w=pedestrians
+#ros_launch_args="spawn_point:=15,70,0,0,0,90 validation:=true"
+ros_launch_args="validation:=true"
+npc_launch_args="-n 50 -w 50" # n=vehicles, w=pedestrians
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 export paf_dir="$SCRIPT_DIR/../"
-bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh"
+bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh" 1>/dev/null
+
+ln -sfn "$paf_dir/paf_ros/" ~/carla-ros-bridge/catkin_ws/src/
+ln -sfn "$paf_dir/Maps/" ~/.ros/
 
 eval "$(cat ~/.bashrc | tail -n +10)" 1>/dev/null
 function carla_available() {
@@ -20,7 +24,8 @@ function carla_available() {
 function _close_ros() {
   rosnode kill -a
   wmctrl -c "spawn_npc.py"
-  wmctrl -c ".launch"
+  wmctrl -c "rqt_console"
+  #  wmctrl -c ".launch"
   wmctrl -c " - RViz"
 }
 function exit_program() {
@@ -54,7 +59,7 @@ function carla_start() {
   echo "bash ~/carla_0.9.10.1/CarlaUE4.sh $1"
   gnome-terminal --title="CarlaUE4" -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
   ./subscripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
-  sleep 3
+  sleep 10
 }
 function start_terminal() { # opt:name, cmd
   if (($# == 2)); then
@@ -62,6 +67,15 @@ function start_terminal() { # opt:name, cmd
   else
     gnome-terminal -- $1
   fi
+}
+function reduce_ros_log_noise() {
+  # rqt_console, #rqt_logger_level
+  rosservice call /rviz/set_logger_level "logger: 'ros'
+level: 'Error'"
+  rosservice call /carla_ros_bridge/set_logger_level "logger: 'rosout'
+level: 'Error'"
+  rosservice call /carla_ego_vehicle_ego_vehicle/set_logger_level "logger: 'rosout'
+level: 'Error'"
 }
 function start_terminal_wait_until_it_stays_open() { # cmd, name
   echo $1
@@ -74,28 +88,63 @@ function start_terminal_wait_until_it_stays_open() { # cmd, name
 }
 
 cd $paf_dir/scripts/ || exit
-echo "CARLA AND ROS INSTANCE MANAGER (arguments: --skip-carla-restart --build --npcs --low-quality --manual-control)"
+echo "CARLA AND ROS INSTANCE MANAGER
+arguments:
+--skip-carla-restart/-scr
+--build/-b
+--npcs/-n
+--low-quality/-lq
+--manual-control/-mc
+TownXX
+
+Allowed towns are Town01, Town02, Town03, Town04, Town05, Town06, Town07 and Town10HD"
+
 trap exit_program SIGINT
 
 CARLA_SKIP=0
 BUILD_ROS=0
 NPCS=0
 CARLA_ARGS=""
+TOWN_ARGS="town:=Town03"
 for VAR in "$@"; do
+  if [ "$VAR" = "-h" ]; then
+    exit
+  fi
+  if [ "$VAR" = "--help" ]; then
+    exit
+  fi
   if [ "$VAR" = "--skip-carla-restart" ]; then
+    CARLA_SKIP=1
+  fi
+  if [ "$VAR" = "-scr" ]; then
     CARLA_SKIP=1
   fi
   if [ "$VAR" = "--manual-control" ]; then
     ros_launch_args="$ros_launch_args manual_control:=true"
   fi
+  if [ "$VAR" = "-mc" ]; then
+    ros_launch_args="$ros_launch_args manual_control:=true"
+  fi
   if [ "$VAR" = "--build" ]; then
+    BUILD_ROS=1
+  fi
+  if [ "$VAR" = "-b" ]; then
     BUILD_ROS=1
   fi
   if [ "$VAR" = "--npcs" ]; then
     NPCS=1
   fi
+  if [ "$VAR" = "-n" ]; then
+    NPCS=1
+  fi
   if [ "$VAR" = "--low-quality" ]; then
     CARLA_ARGS="-quality-level=Low"
+  fi
+  if [ "$VAR" = "-lq" ]; then
+    CARLA_ARGS="-quality-level=Low"
+  fi
+  if [[ "$VAR" = *"Town"* ]]; then
+    TOWN_ARGS="town:=$VAR"
   fi
 done
 if [ ! -d "$HOME/carla-ros-bridge/catkin_ws/devel" ]; then
@@ -122,8 +171,8 @@ fi
 eval "$(cat ~/.bashrc | tail -n +10)"
 close_ros 2>/dev/null
 echo "starting main launcher..."
-start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $ros_launch_args" "$main_launch_script"
-
+start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $TOWN_ARGS $ros_launch_args" "$main_launch_script"
+reduce_ros_log_noise
 if ((NPCS)); then
   echo "spawning npcs..."
   gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py $npc_launch_args
@@ -137,10 +186,8 @@ fi
 
 echo "loaded the following nodes successfully:"
 rosnode list
-rosservice call /rviz/set_logger_level "logger: 'ros'
-level: 'Error'"
-rosservice call /carla_ros_bridge/set_logger_level "logger: 'rosout'
-level: 'Warn'"
+reduce_ros_log_noise
+#gnome-terminal --title="rqt_console" -- rqt_console
 echo ""
 echo "press ctrl+c to kill all ros terminals."
 

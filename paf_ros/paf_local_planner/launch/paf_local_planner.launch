@@ -1,3 +1,0 @@
-<launch>
-  <node pkg="paf_local_planner" type="paf_local_planner.py" name="paf_local_planner" output="screen" />
-</launch>

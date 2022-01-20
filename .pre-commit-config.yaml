@@ -1,4 +1,5 @@
 exclude: '^$'
+fail_fast: true
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks  # general
     rev: "v4.0.1"

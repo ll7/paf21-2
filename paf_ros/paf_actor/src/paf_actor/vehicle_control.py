@@ -5,12 +5,14 @@ from typing import Tuple
 import numpy as np
 import rospy
 
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import Pose
 from carla_msgs.msg import CarlaEgoVehicleControl
-from nav_msgs.msg import Path, Odometry
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
+from paf_messages.msg import PafLocalPath, PafLogScalar
 
 
 class VehicleController:
@@ -31,31 +33,67 @@ class VehicleController:
 
         self._current_speed: float = 0.0  # Km/h
         self._current_pose: Pose = Pose()
-        self._route: Path = Path()
+        self._route: PafLocalPath = PafLocalPath()
         self._target_speed: float = target_speed
-        self._current_distance: float = 0
-        self._target_distance: float = 10
+        self._is_reverse: bool = False
+        self._emergency_mode: bool = False
         # TODO remove this (handled by the local planner)
-        self._first_point_reached = False
+        self._last_point_reached = False
+
+        self._start_time = None
+        self._end_time = None
 
         # speed controller parameters
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
-        # distance control parameters
-        args_dist = {"K_P": 0.2, "K_D": 0.0, "K_I": 0.01}
+        self._target_speed_offset = 1.2
         # Stanley control parameters
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2.9, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
         self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
-        self._dist_controller: PIDLongitudinalController = PIDLongitudinalController(**args_dist)
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
-            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated
+            f"/carla/{role_name}/odometry", Odometry, self.__odometry_updated, queue_size=1
         )
         self.vehicle_control_publisher: rospy.Publisher = rospy.Publisher(
             f"/carla/{role_name}/vehicle_control_cmd", CarlaEgoVehicleControl, queue_size=1
         )
+
+        self.local_path_subscriber: rospy.Subscriber = rospy.Subscriber(
+            "/paf/paf_local_planner/path", PafLocalPath, self.__local_path_received, queue_size=1
+        )
+
+        self.emergy_break_publisher: rospy.Publisher = rospy.Publisher(
+            f"/local_planner/{role_name}/emergency_break", Bool, queue_size=1
+        )
+
+        self.local_path_subscriber: rospy.Subscriber = rospy.Subscriber(
+            f"/local_planner/{role_name}/emergency_break", Bool, self.__emergency_break_received
+        )
+
+        self.speed_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        self.target_speed_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        self.target_speed_error_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        self.steering_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        self.throttle_log_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
+        )
+
+        # self.__init_test_szenario()
 
     def __run_step(self):
         """
@@ -66,13 +104,52 @@ class VehicleController:
         """
         self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
 
-        self._route = self.__init_test_szenario()
+        # self.__init_test_szenario()
+        try:
+            steering, self._target_speed, distance = self.__calculate_steering()
+            self._is_reverse = self._target_speed < 0.0
+            self._target_speed = abs(self._target_speed)
 
-        self.__calculate_target_distance()
+            throttle: float = self.__calculate_throttle(dt, distance)
+        except RuntimeError:
+            throttle = -1.0
+            steering = 0.0
+            self._is_reverse = False
+            self._target_speed = 0.0
+            rospy.loginfo_throttle(10, "[Actor] waiting for new local path")
 
-        throttle: float = self.__calculate_throttle(dt)
-        steering: float = self.__calculate_steering()
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
+
+        msg = PafLogScalar()
+        msg.section = "ACTOR speed error"
+        msg.value = (self._target_speed - self._current_speed) * 3.6
+
+        self.target_speed_error_log_publisher.publish(msg)
+
+        msg = PafLogScalar()
+        msg.section = "ACTOR speed"
+        msg.value = self._current_speed * 3.6
+
+        self.speed_log_publisher.publish(msg)
+
+        msg = PafLogScalar()
+        msg.section = "ACTOR target_speed"
+        msg.value = self._target_speed * 3.6
+        msg.step_as_distance = False
+
+        self.target_speed_log_publisher.publish(msg)
+
+        msg = PafLogScalar()
+        msg.section = "ACTOR steering"
+        msg.value = np.rad2deg(steering)
+
+        self.steering_log_publisher.publish(msg)
+
+        msg = PafLogScalar()
+        msg.section = "ACTOR throttle"
+        msg.value = np.clip(throttle, -1, 1)
+
+        self.throttle_log_publisher.publish(msg)
 
         return control
 
@@ -100,19 +177,21 @@ class VehicleController:
         control.steer = steering
         control.hand_brake = False
         control.manual_gear_shift = False
+        control.reverse = self._is_reverse
+
+        if control.brake > 0 and self._current_speed > 5:
+            control.reverse = not self._is_reverse
+            control.throttle = control.brake
+
+        if self._emergency_mode:
+            control.hand_brake = True  # True
+            control.steer = np.rad2deg(30.0)
+            control.brake = 0.0
+            control.throttle = 1.0
+            control.reverse = not self._is_reverse
         return control
 
-    def __calculate_target_distance(self):
-        """
-        compute the saftey distance
-        """
-        min_dist: float = 4
-        if self._current_speed > min_dist * 2:
-            self._target_distance = self._current_speed * 0.55
-        else:
-            self._target_distance = min_dist
-
-    def __calculate_throttle(self, dt: float) -> float:
+    def __calculate_throttle(self, dt: float, distance: float) -> float:
         """
         Calculate the throttle for the vehicle
 
@@ -123,14 +202,14 @@ class VehicleController:
             float: the throttle to use
         """
         # perform pid control step with distance and speed controllers
+        target_speed = self._target_speed * self._target_speed_offset
 
-        lon: float = self._lon_controller.run_step(self._target_speed, self._current_speed, dt)
-        # rospy.loginfo(
-        #    f"Target_speed {self._target_speed}; Lon {lon}; Current_speed {self._current_speed}")
-        dist: float = -self._dist_controller.run_step(self._target_distance, self._current_distance, dt)
+        if distance >= 0.5 and self._current_speed > 10:
+            target_speed = max(10, self._current_speed * (1 - 1e-8))
 
-        # use whichever controller yields the lowest throttle
-        return lon if lon < dist else dist
+        lon: float = self._lon_controller.run_step(target_speed, self._current_speed, dt)
+
+        return lon
 
     def __calculate_steering(self) -> float:
         """
@@ -139,44 +218,27 @@ class VehicleController:
         Returns:
             float: The steering angle to steer
         """
-        # calculate steer
-        # self._current_speed)
-        return self._lat_controller.run_step(self._route, self._current_pose, 0.0)
+        return self._lat_controller.run_step(self._route, self._current_pose, self._current_speed, self._is_reverse)
 
-    def __init_test_szenario(self) -> Path:
+    def __local_path_received(self, local_path: PafLocalPath) -> None:
         """
-        Generate a test_szenrio to debug this class
-        Also sets the target_speed and current_distance (artifact)
+        Updates the local path and target speed based on the message argument.
 
-        Returns:
-            Path: The path to folow
+        Args:
+            local_path (PafLocalPath): The new local path from the local planner.
         """
-        # TODO: Remove this. Used for validation
-        # rospy.loginfo(f"Current speed: {self._current_speed}")
-        self._current_distance = 5000
-        positions = [[-79.5, -115.5], [-79.5, -120.0]]
-        speeds = [50.0, 0.0]
+        # rospy.loginfo(
+        #    f"INHALT VON LOCAL_PATH with speed {local_path.target_speed}")
+        self._route = local_path
 
-        if not self._first_point_reached:
-            self._target_speed = speeds[0]
-            positions = [positions[0]]
-        else:
-            self._target_speed = speeds[1]
-            positions = [positions[1]]
+    def __emergency_break_received(self, do_emergency_break: bool):
+        """
+        Listens to emergency break signals
 
-        path = np.array(positions)
-        path_msg = Path()
-        path_msg.header.frame_id = "map"
-        path_msg.header.stamp = rospy.Time.now()
-        for point in path:
-            pose = PoseStamped()
-            pose.header.frame_id = "map"
-            pose.header.stamp = rospy.Time.now()
-            pose.pose.position.x = point[0]
-            pose.pose.position.y = point[1]
-            pose.pose.position.z = 0
-            path_msg.poses.append(pose)
-        return path_msg
+        Args:
+            do_emergency_break (bool): True if an emergency break is needed
+        """
+        self._emergency_mode = do_emergency_break.data
 
     def __calculate_current_time_and_delta_time(self) -> Tuple[float, float]:
         """
@@ -200,22 +262,11 @@ class VehicleController:
             odo (Odometry): The Odometry
         """
         # calculate current speed (km/h) from twist
-        self._current_speed = (
-            math.sqrt(odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2)
-            * 3.6
+        self._current_speed = math.sqrt(
+            odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
         )
+
         self._current_pose = odo.pose.pose
-
-        current_pos = [odo.pose.pose.position.x, odo.pose.pose.position.y]
-        first_target_point = [-79.5, -115.5]
-        distance = math.sqrt(
-            (current_pos[0] - first_target_point[0]) ** 2 + (current_pos[1] - first_target_point[1]) ** 2
-        )
-
-        # rospy.loginfo(f"current_pos: {current_pos}; distance {distance}")
-
-        if distance < 10.0:
-            self._first_point_reached = True
 
     def run(self):
         """

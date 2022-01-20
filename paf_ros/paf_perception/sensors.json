@@ -54,9 +54,9 @@
     {
       "type": "sensor.lidar.ray_cast_semantic",
       "id": "lidar1",
-      "x": -1.0,
+      "x": -0.3,
       "y": 0.0,
-      "z": 2.4,
+      "z": 2.5,
       "roll": 0.0,
       "pitch": 0.0,
       "yaw": 0.0,
@@ -64,9 +64,9 @@
       "channels": 32,
       "points_per_second": 80000,
       "upper_fov": 5.0,
-      "lower_fov": -26.8,
+      "lower_fov": -34.5,
       "rotation_frequency": 20,
-      "sensor_tick": 0
+      "sensor_tick": 0.1
     },
     {
       "type": "sensor.other.gnss",

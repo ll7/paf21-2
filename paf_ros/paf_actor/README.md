@@ -1,7 +1,6 @@
 ## Credits:
 
 [PSAF 2: WS 20/21 (Acting package)](https://github.com/ll7/psaf2/tree/main/Acting)
-
 ## launch command
 
 
