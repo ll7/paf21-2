@@ -7,7 +7,7 @@ import rospy
 import numpy as np
 from geometry_msgs.msg import PoseStamped
 
-from paf_actor.helper_functions import calc_egocar_yaw, normalize_angle, calc_path_yaw
+from paf_actor.helper_functions import calc_egocar_yaw, calc_path_yaw
 from paf_messages.msg import PafLocalPath
 
 
@@ -36,24 +36,26 @@ class LatVelController:
         current_target_idx, error_back_axle, target_speed, distance = self.calc_target_index(msg, pose, is_reverse)
 
         path_curvature_at_point = calc_path_yaw(path, current_target_idx)
-        theta_p = normalize_angle(
-            path_curvature_at_point + (calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
-        )
+        # theta_p = normalize_angle(
+        #    path_curvature_at_point + (calc_egocar_yaw(pose) if is_reverse else -calc_egocar_yaw(pose))
+        # )
+        theta_p = calc_egocar_yaw(pose)
 
         klat = 0.2
         # steering_angle = np.arctan(self.L * (-self.K_theta * np.sin(theta_p) - (self.K_theta * klat * distance)/(
         #    np.max([speed, self.min_speed])) + (error_back_axle * np.cos(theta_p))/(1 - error_back_axle*distance)))
 
-        self.K_theta = -0.25
+        self.K_theta = 0.25
         heading_error = -self.K_theta * np.sin(theta_p)
         distance_error = -(self.K_theta * klat * distance) / np.max([speed, self.min_speed])
-        baxle_error = (error_back_axle * np.cos(theta_p)) / (1 - error_back_axle * distance)
+        baxle_error = (path_curvature_at_point * np.cos(theta_p)) / (1 - path_curvature_at_point * distance)
 
         steering_angle = np.arctan(self.L * (distance_error + baxle_error))
 
         rospy.loginfo_throttle(5, f"heading_error: {heading_error}")
         rospy.loginfo_throttle(5, f"distance error: {distance_error}")
         rospy.loginfo_throttle(5, f"baxle error: {baxle_error}")
+        rospy.loginfo_throttle(5, f"path_curavture: {path_curvature_at_point}")
 
         rospy.loginfo_throttle(
             5, f"steering angle: {np.rad2deg(np.clip(steering_angle, -self.max_steer, self.max_steer))}\n"

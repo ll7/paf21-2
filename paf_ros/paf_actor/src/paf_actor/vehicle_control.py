@@ -11,7 +11,7 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
-from paf_actor.stanley_control import StanleyLateralController
+from paf_actor.lat_vel_control import LatVelController
 from paf_messages.msg import PafLocalPath, PafLogScalar, PafObstacleFollowInfo
 
 
@@ -65,10 +65,11 @@ class VehicleController:
         # LatVel control parameters
         # args_lateral = {"K_theta": 0.25, "L": 2.4,
         #                "max_steer": 30.0, "min_speed": 0.1}
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
+        # args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
-        self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
+        # self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
+        self._lat_controller: LatVelController = LatVelController()
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
@@ -269,7 +270,7 @@ class VehicleController:
             float: The steering angle to steer
         """
         self._steering, target_speed, distance = self._lat_controller.run_step(
-            self._route, self._current_pose, self._current_speed, self._is_reverse, self._steering
+            self._route, self._current_pose, self._current_speed, self._is_reverse
         )
 
         return self._steering, target_speed, distance
