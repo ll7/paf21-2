@@ -174,16 +174,15 @@ class Spline2D:
         return yaw
 
 
-def calc_spline_course_from_point_list_grouped(xy_list, ds=0.1, group_no=2):
+def calc_spline_course_from_point_list_grouped(xy_list, ds=0.1, group_no=10):
     assert group_no > 0
     out = []
     temp = []
     for point in xy_list:
         temp.append(point)
-        if len(temp) == group_no + 2:  # tangent to previous points
+        if len(temp) == group_no:  # tangent to previous points
             out += list(calc_spline_course_from_point_list(temp, ds))
-            temp = temp[-2:]
-            print(len(temp))
+            temp = []
     return out
 
 

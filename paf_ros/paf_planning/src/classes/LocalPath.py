@@ -8,13 +8,13 @@ from .HelperFunctions import xy_to_pts, expand_sparse_list, dist_pts, closest_in
 import numpy as np
 
 from .SpeedCalculator import SpeedCalculator
-from .Spline import calc_spline_course_from_point_list
+from .Spline import calc_spline_course_from_point_list, calc_spline_course_from_point_list_grouped
 
 
 class LocalPath:
     REPLANNING_THRESHOLD_DISTANCE_M = 15
     STEP_SIZE = 0.125
-    TRANSMIT_FRONT_MIN_M = 250
+    TRANSMIT_FRONT_MIN_M = 150
     TRANSMIT_FRONT_SEC = 10
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
@@ -197,7 +197,9 @@ class LocalPath:
         current_lane = 0
 
         if prev_idx > 0:
+            _temp = prev_idx
             prev_idx = max(0, prev_idx - num_points_previous_plan)
+            offset = _temp - prev_idx
             # end_index = min(prev_idx + num_points_previous_plan, len(self._sparse_local_path) - 1)
             end_index = len(self._sparse_local_path) - 1
             _temp = end_index + 1
@@ -207,16 +209,11 @@ class LocalPath:
             section_from, current_lane = self.global_path.get_section_and_lane_indices(
                 self._sparse_local_path[end_index]
             )
-            if (
-                dist_pts(self.global_path.route.sections[section_from].points[0], self._sparse_local_path[end_index])
-                > 15
-            ):
-                rospy.logerr(
-                    f"[local planner] previous idx not possible ({prev_idx} of {len(self._sparse_local_path)})"
-                )
-                prev_idx = -1  # sanity check
-        if prev_idx <= 0 or section_from < 0:
-            # rospy.logwarn("[local planner] calculating position on next centerline")
+            offset2 = offset + 1
+            for p1, p2 in zip(self._sparse_local_path[offset:], self._sparse_local_path[offset2:]):
+                distance_planned += dist_pts(p1, p2)
+
+        if prev_idx < 0 or section_from < 0:
             section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
             if section_from > 0:
                 point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
@@ -224,7 +221,6 @@ class LocalPath:
                 sparse_local_path_speeds = [current_speed]
                 sparse_traffic_signals = [signals]
 
-        # rospy.logwarn((current_lane, target_lane, section_from, section_target))
         if section_from < 0 or section_target < 0:
             rospy.logerr_throttle(
                 1,
@@ -397,10 +393,10 @@ class LocalPath:
         traffic_signals = sparse_traffic_signals
         speed_limit = sparse_local_path_speeds
         if len(sparse_local_path) > 1:
-            _points = calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE)
+            _points = calc_spline_course_from_point_list_grouped(sparse_local_path[::3], ds=self.STEP_SIZE, group_no=5)
             # _points = grouped_spline ??? (sparse_local_path[::3], ds=self.STEP_SIZE, group_no=3)
-            # if len(_points) < len(points):
-            #     _points = calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE)
+            if len(_points) < len(points):
+                _points = calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE)
             if not np.isnan(_points).any() or len(_points) <= len(sparse_local_path):
                 try:
                     old_pts = points
@@ -435,7 +431,7 @@ class LocalPath:
             f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)}"
         )
         try:
-            rospy.loginfo_throttle(5, msg)
+            rospy.loginfo(msg)
         except rospy.exceptions.ROSInitException:
             print(msg)
 
@@ -478,9 +474,9 @@ class LocalPath:
         if left is None and straight is None and right is None:
             raise ValueError
 
-        left_percent = int(left is not None) * 1
-        right_percent = int(right is not None) * 1
-        straight_percent = int(straight is not None) * 100
+        left_percent = int(left is not None) * 100
+        right_percent = int(right is not None) * 100
+        straight_percent = int(straight is not None) * 1
 
         # l_pts, l_speed, l_signs = left
         # s_pts, s_speed, s_signs = straight
