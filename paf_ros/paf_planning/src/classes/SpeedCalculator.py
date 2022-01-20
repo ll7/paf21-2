@@ -12,12 +12,12 @@ class SpeedCalculator:
     UNKNOWN_SPEED_LIMIT_SPEED = CITY_SPEED_LIMIT
     MAX_SPEED = 95 / 3.6 if MapManager.get_rules_enabled() else 250 / 3.6
     MIN_SPEED = 30 / 3.6 if MapManager.get_rules_enabled() else 45 / 3.6
-    CURVE_FACTOR = 2 if MapManager.get_rules_enabled() else 3  # higher value = more drifting
-    MAX_DECELERATION = 25 if MapManager.get_rules_enabled() else 40  # m/s^2, higher value = later and harder braking
+    CURVE_FACTOR = 1.5 if MapManager.get_rules_enabled() else 3  # higher value = more drifting
+    MAX_DECELERATION = 10 if MapManager.get_rules_enabled() else 40  # m/s^2, higher value = later and harder braking
     SPEED_LIMIT_MULTIPLIER = 1
 
     # percentage of max_deceleration (last x% meters, MAX_DECELERATION/2 is used)
-    FULL_VS_HALF_DECEL_FRACTION = 0.94
+    FULL_VS_HALF_DECEL_FRACTION = 0.97
     QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
     ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
     SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + QUICK_BRAKE_EVENTS + ROLLING_EVENTS
@@ -88,7 +88,7 @@ class SpeedCalculator:
     def _get_curve_radius_list(path: List[Point2D]) -> List[float]:
         # https://www.mathopenref.com/arcradius.html
         # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
-        max_radius = -1
+        max_radius = 1e99
         if len(path) < 3:
             return [max_radius for _ in path]
 
@@ -111,9 +111,9 @@ class SpeedCalculator:
 
     @staticmethod
     def get_curve_speed(path: List[Point2D]):
-        curve_radius_list = SpeedCalculator._get_curve_radius_list(path)
+        curve_radius_list = SpeedCalculator._get_curve_radius_list(path[::10])
         speed1 = []
-        for r in curve_radius_list[::10]:
+        for r in curve_radius_list:
             speed1 += [SpeedCalculator._radius_to_speed(r)] * 10
         speed1 += [speed1[-1] for _ in range(len(path) - len(speed1))]
         return speed1[: len(path)]
@@ -123,6 +123,7 @@ class SpeedCalculator:
         delta_v = self.MAX_SPEED - target_speed
 
         frac = 1 if target_speed < self.MIN_SPEED else self.FULL_VS_HALF_DECEL_FRACTION
+        # frac = self.FULL_VS_HALF_DECEL_FRACTION
 
         braking_distance = self._get_deceleration_distance(self.MAX_SPEED, target_speed)
         steps = np.ceil(braking_distance / self._step_size)
@@ -136,18 +137,18 @@ class SpeedCalculator:
 
         speed = y1 + y2
 
-        return np.clip(speed, self.MIN_SPEED, self.MAX_SPEED)
+        return np.clip(speed, self.MIN_SPEED, self.MAX_SPEED), braking_distance
 
     def add_linear_deceleration(self, speed):
 
         time_steps = [self._step_size / dv if dv > 0 else 1e-6 for dv in speed]
         accel = np.array(list(reversed([(v2 - v1) / dt for v1, v2, dt in zip(speed, speed[1:], time_steps)])))
         length = len(accel)
-        for i, a in enumerate(accel):
+        for i, (v, a) in enumerate(zip(speed, accel)):
             if a > -self.MAX_DECELERATION:
                 continue
             j = length - i
-            lin = self._linear_deceleration_function(speed[j])
+            lin, breaking_distance = self._linear_deceleration_function(speed[j])
             k = j - len(lin)
             n = 0
             for n in reversed(range(k, j)):
@@ -221,6 +222,10 @@ class SpeedCalculator:
                 had_zero = True
             num += 1
             speed[i] = speed_limit
+
+        import rospy
+
+        rospy.logerr("test123 " + str(num))
         return speed
 
     def add_roll_events(

@@ -8,7 +8,7 @@ from .HelperFunctions import xy_to_pts, expand_sparse_list, dist_pts, closest_in
 import numpy as np
 
 from .SpeedCalculator import SpeedCalculator
-from .Spline import calc_spline_course_from_point_list_grouped
+from .Spline import calc_spline_course_from_point_list
 
 
 class LocalPath:
@@ -158,18 +158,32 @@ class LocalPath:
         return end_idx, distance_planned, left, straight, right
 
     def calculate_new_local_path(
-        self, from_position: Point2D, current_speed: float = 0, ignore_signs_distance: float = 0
+        self,
+        from_position: Point2D,
+        current_speed: float = 0,
+        ignore_signs_distance: float = 0,
+        ignore_previous: bool = False,
+        min_section: int = 0,
     ):
         local_path = PafLocalPath()
         # float32[]             target_speed
         # Point2D[]             points
         # PafTrafficSignalList[]    signals
 
-        section_target, target_lane = self.global_path.get_section_and_lane_indices(self.global_path.route.target)
+        section_target, target_lane = self.global_path.get_section_and_lane_indices(
+            self.global_path.route.target, min_section=min_section
+        )
         if section_target < 0:
             section_target = len(self.global_path)
         sparse_local_path, sparse_local_path_speeds, sparse_traffic_signals = [], [], []
-        prev_idx, _ = closest_index_of_point_list(self._sparse_local_path, from_position)
+
+        if not ignore_previous:
+            prev_idx, _ = closest_index_of_point_list(self._sparse_local_path, from_position)
+        else:
+            self._sparse_local_path = []
+            self._sparse_traffic_signals = []
+            self._sparse_local_path_speeds = []
+            prev_idx = -1
 
         lane_change_secs = 5
         buffer = 5
@@ -242,6 +256,7 @@ class LocalPath:
             #       f"target={list(s.target_lanes)}, dist={s.target_lanes_distance}")
 
             # test if current lane exists on this section
+            current_lane = np.abs(current_lane)
             if not 0 <= current_lane < len(s.points):
                 rospy.logerr(f"{current_lane} does not exist in available lanes: {list(range(len(s.points)))}")
                 if current_lane < 0:
@@ -280,6 +295,7 @@ class LocalPath:
                 sparse_traffic_signals.append(self.global_path.get_signals(s, current_lane))
 
             if s.target_lanes_distance == 0:
+                current_lane = np.abs(current_lane)
                 if not 0 <= current_lane < len(s.points):
                     rospy.logerr(f"{current_lane} does not exist in available lanes: {list(range(len(s.points)))}")
                     if current_lane < 0:
@@ -381,8 +397,11 @@ class LocalPath:
         traffic_signals = sparse_traffic_signals
         speed_limit = sparse_local_path_speeds
         if len(sparse_local_path) > 1:
-            _points = calc_spline_course_from_point_list_grouped(sparse_local_path[::3], ds=self.STEP_SIZE, group_no=3)
-            if not np.isnan(_points).any():
+            _points = calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE)
+            # _points = grouped_spline ??? (sparse_local_path[::3], ds=self.STEP_SIZE, group_no=3)
+            # if len(_points) < len(points):
+            #     _points = calc_spline_course_from_point_list(sparse_local_path, ds=self.STEP_SIZE)
+            if not np.isnan(_points).any() or len(_points) <= len(sparse_local_path):
                 try:
                     old_pts = points
                     points = xy_to_pts(_points)
@@ -397,7 +416,7 @@ class LocalPath:
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
 
-        target_speed = self._update_target_speed(points, speed_limit, traffic_signals)
+        target_speed, points = self._update_target_speed(points, speed_limit, traffic_signals)
 
         local_path.points = points
         local_path.target_speed = target_speed
@@ -411,11 +430,14 @@ class LocalPath:
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
 
-        rospy.loginfo_throttle(
-            5,
+        msg = (
             f"[local planner] planned local path with length={distance_planned} "
-            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)}",
+            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)}"
         )
+        try:
+            rospy.loginfo_throttle(5, msg)
+        except rospy.exceptions.ROSInitException:
+            print(msg)
 
         return local_path, section_from, section_target
 
@@ -423,40 +445,31 @@ class LocalPath:
         speed = self.speed_calc.get_curve_speed(local_path)
 
         if self.rules_enabled:
-            speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
-            speed = np.clip(speed, 0, speed_limit)
+            # speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
+            # speed = np.clip(speed, 0, speed_limit)
             # speed, indices2 = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=10,
             #                                                   shift_m=0)
             events = SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS
             speed, indices1 = self.speed_calc.add_stop_events(
-                speed, traffic_signals, target_speed=0, buffer_m=20, shift_m=-4, events=events
+                speed, traffic_signals, target_speed=0, buffer_m=8, shift_m=-8, events=events
             )
-
-            # if not hasattr(self, "pts_stop"):
-            #     self.pts_stop = []
-            #     self.pts_roll = []
-            #
-            # self.pts_stop += [local_path[i] for i in indices1 if local_path[i] not in self.pts_stop]
-            # # self.pts_roll = [local_path[i] for i in indices2 if local_path[i] not in self.pts_roll]
-            # # if len(indices1) > 0:
-            # #     rospy.logwarn(f"stops: {[indices1]}")
-            # # rospy.logwarn(f"rolls: {indices2}")
-            # self._draw_path_pts([local_path[i] for i, sp in enumerate(speed) if sp < .1][::10] +
-            # self.pts_stop, "uartenduiaerüöäp",
-            #                     color=(117, 34, 34))  # yellow
-            # self._draw_path_pts(self.pts_stop, "uartenduiaerüöäp",
-            #                     color=(117, 34, 34))  # dark red # (209, 203, 13) yellow
+            if len(indices1) > 0 and indices1[0] > 50:
+                ind = indices1[0]
+                speed[ind:] = 0
 
         speed = self.speed_calc.add_linear_deceleration(speed)
-        return speed
+        return speed, local_path
 
     @staticmethod
     def _draw_path_pts(points: List[Point2D], lbl: str = "lp_pts", color=(0, 45, 123)):
-        pts1 = PafTopDownViewPointSet()
-        pts1.label = lbl
-        pts1.points = points
-        pts1.color = color
-        rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
+        try:
+            pts1 = PafTopDownViewPointSet()
+            pts1.label = lbl
+            pts1.points = points
+            pts1.color = color
+            rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
+        except rospy.exceptions.ROSException:
+            pass
 
     @staticmethod
     def _choose_lane(left, straight, right) -> str:

@@ -21,9 +21,7 @@ from tf.transformations import quaternion_from_euler
 
 class MapManager:
     @staticmethod
-    def get_current_scenario(
-        rules=rospy.get_param("rules_enabled", False), map_name=rospy.get_param("/carla/town", None)
-    ):
+    def get_current_scenario(rules=None, map_name=None):
         """
         Loads the commonroad scenario with or without traffic rules of town with number map_number
 
@@ -33,6 +31,14 @@ class MapManager:
         Returns:
             Scenario: CommonRoad-Scenario of current town
         """
+        if rules is None:
+            rules = MapManager.get_rules_enabled()
+        if map_name is None:
+            try:
+                map_name = rospy.get_param("/carla/town")
+            except ConnectionRefusedError:
+                map_name = "Town04"
+
         if map_name is None:
             rospy.logerr("MapManager: Town parameter not set.")
             exit(1)
@@ -78,7 +84,10 @@ class MapManager:
 
     @staticmethod
     def get_rules_enabled():
-        rospy.get_param("rules_enabled", False)
+        try:
+            return rospy.get_param("rules_enabled", False)
+        except ConnectionRefusedError:
+            return False
 
     @staticmethod
     def visualize_route(route: Route, draw_route_lanelets=False, draw_reference_path=False, size_x=10):

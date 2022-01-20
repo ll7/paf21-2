@@ -54,7 +54,13 @@ def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_p
 def expand_sparse_list(sparse_list, points_current, points_target, fill_value=None, indices_new=None):
     assert len(sparse_list) == len(points_current)
     if indices_new is None:
-        indices_new = [closest_index_of_point_list(points_target, pt)[0] for pt in points_current]
+        indices_new = []
+        factor = int(len(points_target) / len(points_current)) + 2
+        last_target_idx = 0
+        for i, pt in enumerate(points_current):
+            ind = (i + 1) * factor
+            last_target_idx = closest_index_of_point_list(points_target[last_target_idx:ind], pt)[0] + last_target_idx
+            indices_new += [last_target_idx]
 
     out = [fill_value for _ in points_target]
 

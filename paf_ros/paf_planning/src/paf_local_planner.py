@@ -179,8 +179,8 @@ class LocalPlanner:
         elif not self._on_local_path():
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
-        elif self._is_stopped() and len(self._local_path) > 10 and self._local_path_idx >= 0:
-            rospy.loginfo_throttle(5, "[local planner] car is waiting for event (red light / stop / yield)")
+        elif self._is_stopped() or 0 < len(self._local_path) - self._local_path_idx < 100:
+            rospy.logwarn_throttle(5, "[local planner] car is waiting for event (red light / stop / yield)")
             self._handle_clear_event()  # todo change this handler
         elif self._planner_at_end_of_local_path():
             rospy.loginfo_throttle(5, "[local planner] local planner is replanning (end of local path)")
@@ -189,23 +189,26 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
 
         if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
-            rospy.logwarn_throttle(
-                1, f"current target speed: " f"{int(self._local_path.message.target_speed[self._local_path_idx] * 3.6)}"
+            rospy.loginfo_throttle(
+                5,
+                f"[local planner] current target speed: "
+                f"{int(self._local_path.message.target_speed[self._local_path_idx] * 3.6)}",
             )
 
     def _is_waiting_for_clear_event(self):
         pass  # todo implement this
 
     def _handle_clear_event(self):
-        rospy.sleep(3)  # todo remove this
-        index = max([self._local_path_idx - 5, 0])
+        rospy.sleep(1)  # todo remove this
+
+        self._replan_local_path(ignore_prev=True)
         self._local_path.message.target_speed = SpeedCalculator.remove_stop_event(
-            self._local_path.message.target_speed, index
+            self._local_path.message.target_speed, 0
         )
         to_section, _ = self._global_path.get_section_and_lane_indices(
             self._current_pose.position, not_found_threshold_meters=50
         )
-        rospy.logwarn(f"[local planner] clearing stop / yield event (index {index})")
+        # rospy.logwarn(f"[local planner] clearing stop / yield event (index {index})")
         if to_section < 0:
             rospy.logerr("[local planner] cannot continue from here, current section unknown")
             return
@@ -217,9 +220,9 @@ class LocalPlanner:
 
         self._create_paf_local_path_msg()
 
-    def _replan_local_path(self):
+    def _replan_local_path(self, ignore_prev=False):
         msg, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
-            self._current_pose.position, self._current_speed
+            self._current_pose.position, self._current_speed, ignore_previous=ignore_prev, min_section=self._to_section
         )
         self._create_paf_local_path_msg(msg)
 

@@ -73,7 +73,7 @@ class GlobalPath:
             lane_idx = 0
             return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
 
-    def get_section_and_lane_indices(self, position, not_found_threshold_meters=100):
+    def get_section_and_lane_indices(self, position, not_found_threshold_meters=100, min_section=0):
         if hasattr(position, "x"):
             ref = (position.x, position.y)
         else:
@@ -82,7 +82,7 @@ class GlobalPath:
         if len(self.route.sections) == 0:
             return -1, -1
 
-        filter1 = [section.points[int(len(section.points) / 2 - 0.5)] for section in self.route.sections]
+        filter1 = [section.points[int(len(section.points) / 2 - 0.5)] for section in self.route.sections[min_section:]]
         section, d = closest_index_of_point_list(filter1, ref)
 
         if d > not_found_threshold_meters:
@@ -91,7 +91,7 @@ class GlobalPath:
         filter2 = self.route.sections[section].points
         lane, d = closest_index_of_point_list(filter2, ref)
 
-        return section, lane
+        return section + min_section, lane
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
@@ -428,11 +428,11 @@ class GlobalPath:
             zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
         ):
             if last_limits is None:
-                last_limits = [self.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]
+                last_limits = [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]
             else:
                 missing = len(lanes) - len(last_limits)
                 if missing > 0:
-                    last_limits = last_limits + [self.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(missing)]
+                    last_limits = last_limits + [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(missing)]
 
             signals_per_lane, speed_limits_per_lane = [], []
             for lanelet_id, vertices in zip(lanelet_id_list, lanes):
@@ -496,7 +496,7 @@ class GlobalPath:
                         break
                 # print(last_limits_new)
                 unknown_limits = [
-                    self.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(msg.sections[-1].target_lanes_left_shift)
+                    SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(msg.sections[-1].target_lanes_left_shift)
                 ]
                 last_limits = unknown_limits + last_limits_new
 
@@ -532,13 +532,16 @@ class GlobalPath:
 
         # rospy.logwarn(groups)
 
-        from paf_messages.msg import PafTopDownViewPointSet
+        try:
+            from paf_messages.msg import PafTopDownViewPointSet
 
-        pts1 = PafTopDownViewPointSet()
-        pts1.label = "signals_global"
-        pts1.points = self.signal_positions
-        pts1.color = (0, 255, 0)
-        rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
+            pts1 = PafTopDownViewPointSet()
+            pts1.label = "signals_global"
+            pts1.points = self.signal_positions
+            pts1.color = (0, 255, 0)
+            rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
+        except rospy.exceptions.ROSException:
+            pass
 
         return msg
 
