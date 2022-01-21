@@ -290,7 +290,7 @@ class LocalPlanner:
             )
 
     def _publish_speed_msg(self):
-        if 0 <= self._local_path_idx < len(self._local_path):
+        if 0 <= self._local_path_idx < len(self._local_path.message.target_speed):
             self._speed_msg.limit = 0
             self._speed_msg.target = self._local_path.message.target_speed[self._local_path_idx]
             self._speed_msg_publisher.publish(self._speed_msg)

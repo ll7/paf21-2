@@ -28,7 +28,7 @@ from paf_messages.msg import (
 from classes.HelperFunctions import dist, find_closest_lanelet, find_lanelet_yaw
 from classes.GlobalPath import GlobalPath
 from classes.MapManager import MapManager
-from paf_ros.paf_planning.src.classes.SpeedCalculator import SpeedCalculator
+from classes.SpeedCalculator import SpeedCalculator
 from std_msgs.msg import Empty, Bool
 from tf.transformations import euler_from_quaternion
 

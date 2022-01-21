@@ -22,9 +22,9 @@ class SpeedCalculator:
         if value is None:
             value = MapManager.get_rules_enabled()
         SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if value else 250 / 3.6
-        SpeedCalculator.MAX_SPEED = 95 / 3.6 if value else 250 / 3.6
+        SpeedCalculator.MAX_SPEED = 95 / 3.6 if value else 120 / 3.6
         SpeedCalculator.MIN_SPEED = 30 / 3.6 if value else 45 / 3.6
-        SpeedCalculator.CURVE_FACTOR = 1.5 if value else 3  # higher value = more drifting
+        SpeedCalculator.CURVE_FACTOR = 1.5 if value else 2  # higher value = more drifting
         SpeedCalculator.MAX_DECELERATION = 10 if value else 40
         # m/s^2, higher value = later and harder braking
 
@@ -211,7 +211,7 @@ class SpeedCalculator:
     @staticmethod
     def remove_stop_event(speed, start_idx=0, speed_limit=None):
         if speed_limit is None:
-            speed_limit = SpeedCalculator.CITY_SPEED_LIMIT
+            speed_limit = SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED
 
         num_max = 200
         num_min = 100
