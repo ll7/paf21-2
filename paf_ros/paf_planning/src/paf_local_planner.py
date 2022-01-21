@@ -52,6 +52,8 @@ class LocalPlanner:
         self._local_path = LocalPath(self._global_path)
         self._local_path_idx, self._distance_to_local_path = -1, 0
         self._from_section, self._to_section = -1, -1
+        self._reacting_target_speed = []
+        self._reacting_target_index = 0
 
         self._traffic_light_color = TrafficLightState.GREEN  # or None # todo fill this
         self._last_local_reroute = rospy.get_time()
@@ -68,6 +70,9 @@ class LocalPlanner:
         self._last_replan_request_glob = time.perf_counter()
         # create and start the publisher for the local path
         self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
+        self._reacting_path_publisher = rospy.Publisher(
+            "/paf/paf_local_planner/reacting_speed", PafLocalPath, queue_size=1
+        )
         self._reroute_publisher = rospy.Publisher("/paf/paf_local_planner/reroute", Empty, queue_size=1)
         self._reroute_random_publisher = rospy.Publisher(
             "/paf/paf_local_planner/routing_request_random", Empty, queue_size=1
@@ -92,6 +97,17 @@ class LocalPlanner:
             f"Speed limits will change after starting a new route."
         )
 
+    def _reset_reacting_speed(self):
+        self._reacting_target_speed = []
+        self._reacting_target_index = 0
+
+    def _set_reacting_speed(self):
+        speed, index = self._local_path.speed_calc.get_next_traffic_signal_deceleration(
+            self._local_path.traffic_signals, self._local_path_idx
+        )
+        self._reacting_target_speed, self._reacting_target_index = speed, index
+        return speed, index
+
     def _process_global_path(self, msg: PafLaneletRoute):
         if self._global_path is None or self._global_path.route.distance != msg.distance:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
@@ -108,12 +124,15 @@ class LocalPlanner:
             path_msg = self._local_path.message
         else:
             self._local_path.message = path_msg
+            # reacting_speed, index = self._set_reacting_speed()
 
         if send_empty:
+            self._reset_reacting_speed()
             path_msg.header.stamp = rospy.Time.now()
             path_msg.target_speed = []
             path_msg.points = []
 
+        # self._reacting_path_publisher.publish(reacting_msg)
         self._local_plan_publisher.publish(path_msg)
 
     def _loop_handler(self):
