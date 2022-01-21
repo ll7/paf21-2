@@ -34,8 +34,6 @@ class LocalPlanner:
     REPLAN_THROTTLE_SEC_GLOBAL = 5
     REPLAN_THROTTLE_SEC_LOCAL = 1
     END_OF_ROUTE_REACHED_DIST = 2
-    # END_OF_ROUTE_SPEED = 5
-    # MAX_ANGULAR_ERROR = np.deg2rad(45)
 
     rules_enabled = MapManager.get_rules_enabled()
 
@@ -43,7 +41,6 @@ class LocalPlanner:
 
         rospy.init_node("local_path_node", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
-
         rospy.logwarn(f"[local planner] Rules are {'en' if self.rules_enabled else 'dis'}abled!")
 
         self._current_pose = Pose()
@@ -57,9 +54,7 @@ class LocalPlanner:
         self._from_section, self._to_section = -1, -1
 
         self._traffic_light_color = TrafficLightState.GREEN  # or None # todo fill this
-        # self._following_distance = -1  # todo set following distance
-        # self._following_speed = -1  # todo set following speed
-        self._last_local_reroute = rospy.Time.now().to_time()
+        self._last_local_reroute = rospy.get_time()
         self._speed_msg = PafSpeedMsg()
 
         self._network: LaneletNetwork = MapManager.get_current_scenario().lanelet_network
@@ -107,49 +102,6 @@ class LocalPlanner:
                 self._current_pose.position, self._current_speed, ignore_previous=True
             )
             self._create_paf_local_path_msg(path)
-
-    # def _get_track_angle(self, s_index, l_index):
-    #     if len(self._global_path.sections) == 0:
-    #         return 0
-    #     if s_index == len(self._global_path.sections) - 1:
-    #         s_index -= 1
-    #     p1 = self._global_path.sections[s_index]
-    #     p2 = self._global_path[index + 1]
-    #     v2 = [p2.x - p1.x, p2.y - p1.y]
-    #     return get_angle_between_vectors(v2)
-
-    # def _get_turning_path_to(self, index, track_angle, track_err, distance):
-    #     def is_left_of_target_line():
-    #         a = p_target_1
-    #         b = p_target_2
-    #         c = self._current_pose.position
-    #         return (b.x - a.x) * (c.y - a.y) > (b.y - a.y) * (c.x - a.x)
-    #
-    #     index_forwards = int(min(len(self._global_path.sections) - 1, index + 10 / 0.125))
-    #     p_target_1 = self._global_path[index_forwards - 1]
-    #     p_target_2 = self._global_path[index_forwards]
-    #
-    #     # d1, d2, radius = 4, 10, -5
-    #     # turning_dir = 1
-    #
-    #     x_list, y_list = [], []
-    #     pts = [
-    #         xy_from_distance_and_angle(self._current_pose.position, 0, -self._current_yaw),
-    #         xy_from_distance_and_angle(self._current_pose.position, 4, -self._current_yaw),
-    #         xy_from_distance_and_angle(p_target_1, 5, track_angle + np.pi / 2),
-    #     ]
-    #
-    #     for pt in pts:
-    #         x_list.append(pt[0])
-    #         y_list.append(pt[1])
-    #     x_list = x_list[:2] + [p_target_1.x] + x_list[2:]  # , p_target_2.x]
-    #     y_list = y_list[:2] + [p_target_1.y] + y_list[2:]  # , p_target_2.y]
-    #
-    #     x_list_out, y_list_out, _, _, _ = calc_spline_course(x_list, y_list, 0.125)
-    #
-    #     self._local_path = [Point2D(x, y) for x, y in zip(x_list_out, y_list_out)]
-    #
-    #     self._target_speed = [1 for _ in self._local_path]
 
     def _create_paf_local_path_msg(self, path_msg=None, send_empty=False):
         if path_msg is None:

@@ -22,7 +22,6 @@ from paf_messages.msg import (
     PafRoutingRequest,
     PafTopDownViewPointSet,
     Point2D,
-    PafSpeedMsg,
     PafLocalPath,
 )
 from classes.HelperFunctions import dist, find_closest_lanelet, find_lanelet_yaw
@@ -62,11 +61,7 @@ class GlobalPlanner:
         rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
         rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
-        rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._last_known_target_update)
-
         rospy.Subscriber("/paf/paf_local_planner/rules_enabled", Bool, self._change_rules, queue_size=1)
-
-        self._last_known_target_speed = 1000
 
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
         self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)
@@ -82,13 +77,6 @@ class GlobalPlanner:
             f"[global planner] Rules are now {'en' if msg.data else 'dis'}abled! "
             f"Speed limits will change after starting a new route."
         )
-
-    def _last_known_target_update(self, msg: PafSpeedMsg):
-        limit = msg.limit
-        if limit <= 0 or limit == self._last_known_target_speed:
-            return
-        self._last_known_target_speed = limit
-        rospy.loginfo_throttle(1, f"[global planner] last known limit: {msg.limit * 3.6}")
 
     def _reroute_provider(self, _: Empty = None):
         rospy.loginfo("[global planner] rerouting...")
@@ -118,13 +106,7 @@ class GlobalPlanner:
         if idx == len(lanelet.center_vertices) - 1:
             idx -= 1
         position = lanelet.center_vertices[idx]
-        # draw_msg = PafTopDownViewPointSet()
-        # draw_msg.label = "planning_target"
-        # draw_msg.points = [Point2D(position[0], position[1])]
-        # draw_msg.color = 153, 0, 153
-        # self._target_on_map_pub.publish(draw_msg)
-        # norm = lanelet.center_vertices[idx + 1] - lanelet.center_vertices[idx]
-        return position, self._yaw  # , float(get_angle_between_vectors(norm))
+        return position, self._yaw
 
     def _routing_provider_standard_loop(self, _: Empty):
         t0 = time.perf_counter()
@@ -209,11 +191,6 @@ class GlobalPlanner:
                     f"[global planner] routing from {list(previous_target)} to {[target.x, target.y]} failed",
                 )
                 return False
-            # else:
-            #     rospy.loginfo(
-            #         f"[global planner] routing from {list(previous_target)} to {[target.x, target.y]} "
-            #         f"succeeded ({route.list_ids_lanelets})",
-            #     )
             if len(lanelet_ids) > 0:
                 prev_route = GlobalPath(self._scenario.lanelet_network, route.list_ids_lanelets, previous_target)
                 first_lanelet_group = prev_route.get_lanelet_groups(route.list_ids_lanelets)[0][0]
@@ -365,13 +342,9 @@ class GlobalPlanner:
             self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices[-1],
         )
 
-    def start(self):
+    @staticmethod
+    def start():
         rospy.spin()
-        # rate = rospy.Rate(self.UPDATE_HZ)
-        # while not rospy.is_shutdown():
-        #     if self._last_route is not None:
-        #         self._routing_pub.publish(self._last_route)
-        #     rate.sleep()
 
 
 if __name__ == "__main__":
