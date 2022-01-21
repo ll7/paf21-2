@@ -11,9 +11,9 @@ class SpeedCalculator:
     CITY_SPEED_LIMIT = 50 / 3.6
     SPEED_LIMIT_MULTIPLIER = 1
     FULL_VS_HALF_DECEL_FRACTION = 0.97
-    QUICK_BRAKE_EVENTS = [TrafficSignIDGermany.STOP.value]
-    ROLLING_EVENTS = ["LIGHT", TrafficSignIDGermany.YIELD.value]
-    SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + QUICK_BRAKE_EVENTS + ROLLING_EVENTS
+    MUST_STOP_EVENTS = [TrafficSignIDGermany.STOP.value]
+    CAN_STOP_EVENT = ["LIGHT", TrafficSignIDGermany.YIELD.value]
+    SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + MUST_STOP_EVENTS + CAN_STOP_EVENT
 
     UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 100, 100, 10, 1, 10
 
@@ -162,49 +162,34 @@ class SpeedCalculator:
             pass
         return speed
 
-    def add_stop_events(
-        self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, events=None, buffer_m=0, shift_m=0
+    def get_next_traffic_signal_deceleration(
+        self, traffic_signals: List[List[PafTrafficSignal]], from_index: int = 0, skip_first_hit=False
     ):
+        chosen_sign = None
+        for i, traffic_signal_list in enumerate(traffic_signals[from_index:]):
+            if len(traffic_signal_list) > 0:
+                if skip_first_hit:
+                    skip_first_hit = False
+                    continue
+                for traffic_signal in traffic_signal_list:
+                    if traffic_signal in self.MUST_STOP_EVENTS:
+                        chosen_sign = traffic_signal
+                        break
+                    elif traffic_signal in self.CAN_STOP_EVENT:
+                        chosen_sign = traffic_signal
+                    else:
+                        pass  # skip other event types
+                if chosen_sign is not None:
+                    arr, ind = self._get_event_deceleration(target_speed=0, buffer_m=5, shift_m=-3)
+                    return arr, max([0, ind + i])
+        return [], 0
 
-        assert len(speed) == len(traffic_signals)
+    def _get_event_deceleration(self, target_speed=0, buffer_m=0, shift_m=0):
         buffer_idx = int(buffer_m / self._step_size)
         shift_idx = int(shift_m / self._step_size)
-        speed_limit = np.ones_like(speed) * 1000
-        indices = []
-        if events is None:
-            events = self.QUICK_BRAKE_EVENTS
-        for i, signals in enumerate(traffic_signals):
-            for signal in signals:
-                if signal.type in events:
-                    i0, i1 = i + shift_idx, i + buffer_idx + shift_idx
-                    i1 += 1  # i1 is excluded otherwise
-                    speed_limit[i0:i1] = target_speed
-                    indices.append(i)
-
-        return np.clip(speed, 0, speed_limit), indices
-
-    @staticmethod
-    def remove_stop_event(speed, start_idx=0, speed_limit=None):
-        if speed_limit is None:
-            speed_limit = SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED
-        num_max = 200
-        num_min = 100
-        had_zero = False
-        for i, sp in enumerate(speed[start_idx:]):
-            num = i
-            i += start_idx
-            if had_zero and num > num_min and (sp > 1 or num > num_max):
-                break
-            elif sp < 0.1:
-                had_zero = True
-            num += 1
-            speed[i] = speed_limit
-        return speed
-
-    def add_roll_events(
-        self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, buffer_m=0, shift_m=0
-    ):
-        return self.add_stop_events(speed, traffic_signals, target_speed, self.ROLLING_EVENTS, buffer_m, shift_m)
+        speed_limit, _ = self._linear_deceleration_function(target_speed)
+        speed_limit += [target_speed for _ in range(buffer_idx)]
+        return np.clip(speed_limit, target_speed, self.MAX_SPEED), shift_idx
 
     def plt_init(self, add_accel=False):
         import matplotlib.pyplot as plt
