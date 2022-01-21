@@ -17,6 +17,13 @@ class SpeedCalculator:
 
     UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 100, 100, 10, 1, 10
 
+    def __init__(self, step_size: float, index_start: int = 0):
+        # step size is assumed constant but has a variance of +/- 1mm
+        self._step_size = step_size
+        self._index_start = index_start
+        self._plots = None
+        self.set_limits()
+
     @staticmethod
     def set_limits(value=None):
         if value is None:
@@ -28,25 +35,11 @@ class SpeedCalculator:
         SpeedCalculator.MAX_DECELERATION = 10 if value else 40
         # m/s^2, higher value = later and harder braking
 
-    def __init__(self, step_size: float, index_start: int = 0):
-        # step size is assumed constant but has a variance of +/- 1mm
-        self._step_size = step_size
-        self._index_start = index_start
-        self._plots = None
-        self.set_limits()
-
     def _get_deceleration_distance(self, v_0, v_target):
         # s = 1/2 * d_v * t
         # a = d_v / d_t
         # => s = d_v^2 / 2a
         return (v_0 ** 2 - v_target ** 2) / (2 * self.MAX_DECELERATION)
-
-    #
-    # def _get_deceleration_delta_v(self, braking_distance):
-    #     # s = 1/2 * d_v * t
-    #     # a = d_v / d_t
-    #     # d_v = sqrt( 2 * a * s ) / step_size
-    #     return np.sqrt(2 * self.MAX_DECELERATION * braking_distance)
 
     @staticmethod
     def _radius_to_speed_fast(curve_radius):
@@ -127,7 +120,6 @@ class SpeedCalculator:
         delta_v = self.MAX_SPEED - target_speed
 
         frac = 1 if target_speed < self.MIN_SPEED else self.FULL_VS_HALF_DECEL_FRACTION
-        # frac = self.FULL_VS_HALF_DECEL_FRACTION
 
         braking_distance = self._get_deceleration_distance(self.MAX_SPEED, target_speed)
         steps = np.ceil(braking_distance / self._step_size)
@@ -170,21 +162,6 @@ class SpeedCalculator:
             pass
         return speed
 
-    @staticmethod
-    def add_speed_limits(speed, traffic_signals: List[PafTrafficSignal], last_known_target_speed=1000):
-
-        speed_limit = np.ones_like(speed) * last_known_target_speed * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
-        traffic_signals = sorted(traffic_signals, key=lambda x: x.index)
-        for signal in traffic_signals:
-            i = signal.index
-            if i < 0 or i >= len(speed):
-                continue
-            if signal.type == TrafficSignIDGermany.MAX_SPEED.value:
-                speed_limit[i:] = signal.value * SpeedCalculator.SPEED_LIMIT_MULTIPLIER
-            if signal.type in SpeedCalculator.SPEED_LIMIT_RESTORE_EVENTS:
-                speed_limit[i:] = SpeedCalculator.CITY_SPEED_LIMIT
-        return np.clip(speed, 0, speed_limit)
-
     def add_stop_events(
         self, speed, traffic_signals: List[List[PafTrafficSignal]], target_speed=0, events=None, buffer_m=0, shift_m=0
     ):
@@ -194,10 +171,8 @@ class SpeedCalculator:
         shift_idx = int(shift_m / self._step_size)
         speed_limit = np.ones_like(speed) * 1000
         indices = []
-
         if events is None:
             events = self.QUICK_BRAKE_EVENTS
-
         for i, signals in enumerate(traffic_signals):
             for signal in signals:
                 if signal.type in events:
@@ -212,21 +187,18 @@ class SpeedCalculator:
     def remove_stop_event(speed, start_idx=0, speed_limit=None):
         if speed_limit is None:
             speed_limit = SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED
-
         num_max = 200
         num_min = 100
         had_zero = False
         for i, sp in enumerate(speed[start_idx:]):
             num = i
             i += start_idx
-
             if had_zero and num > num_min and (sp > 1 or num > num_max):
                 break
             elif sp < 0.1:
                 had_zero = True
             num += 1
             speed[i] = speed_limit
-
         return speed
 
     def add_roll_events(
@@ -245,7 +217,6 @@ class SpeedCalculator:
 
     @staticmethod
     def plt_show():
-
         import matplotlib.pyplot as plt
 
         plt.show()

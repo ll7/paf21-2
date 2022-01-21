@@ -167,10 +167,6 @@ class LocalPath:
         min_section: int = 0,
     ):
         local_path = PafLocalPath()
-        # float32[]             target_speed
-        # Point2D[]             points
-        # PafTrafficSignalList[]    signals
-
         section_target, target_lane = self.global_path.get_section_and_lane_indices(
             self.global_path.route.target, min_section=min_section
         )
@@ -233,25 +229,10 @@ class LocalPath:
 
         self._local_path_start_section = section_from
         end_idx_lane_change = 0
-
         idx1 = section_from + 1
-
         s: PafRouteSection
         for i, s in enumerate(self.global_path.route.sections[idx1:]):
-
             i += idx1
-
-            # Point2D[] points
-            # float32[] speed_limits
-            # PafTrafficSignal[] signals
-            # int32[] target_lanes
-            # int64 target_lanes_index_distance
-            # int32 target_lanes_left_shift
-            # float32 distance_from_last_section
-            # float32 target_lanes_distance
-            # print(f"section {i}, available lanes: {list(range(len(s.points)))}, "
-            #       f"target={list(s.target_lanes)}, dist={s.target_lanes_distance}")
-
             # test if current lane exists on this section
             current_lane = np.abs(current_lane)
             if not 0 <= current_lane < len(s.points):
@@ -325,7 +306,6 @@ class LocalPath:
             l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
             l_change, r_change = False, False
 
-            # print(l_limit, r_limit, current_lane)
             if 0 < distance_to_next_lane_change <= distance_to_off_lanes_change:
                 # need to lane change here (the latest possibility)
                 l_change = l_change_allowed and number_of_lanes_off > 0  # must go left is isR
@@ -338,7 +318,6 @@ class LocalPath:
                 l_change_allowed = l_change = False
                 r_change_allowed = r_change = False
             lane_change_distance = min(distance_for_one_lane_change, dist_to_target)
-            # max([s.target_lanes_distance, distance_for_one_lane_change])
 
             left_lane, right_lane = None, None
             if l_change or l_change_allowed:
@@ -365,27 +344,14 @@ class LocalPath:
                     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
                     f"dist: {distance_changed}, {lane_change_distance}"
                 )
-            # print(
-            #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
-            #         f"lanes {left_lane}|{current_lane}|{right_lane} ({choice}), "
-            #         f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
-            #         f"dist: {distance_changed}, {lane_change_distance}"
-            #     )
             if choice == "left" or choice == "right":
-                # last_lane = current_lane
                 pts, speeds, signs = left if choice == "left" else right
                 current_lane = left_lane if choice == "left" else right_lane
                 for pt, sp, sgn in zip(pts, speeds, signs):
                     sparse_local_path.append(pt)
                     sparse_local_path_speeds.append(sp)
                     sparse_traffic_signals.append(sgn)
-                # sparse_local_path += pts
-                # sparse_local_path_speeds += speeds
-                # sparse_traffic_signals += signs
                 distance_planned += distance_changed
-
-                # if i + 1 < len(self.global_path):
-                #     lane_change_pts.append(self.global_path.route.sections[i + 1].points[current_lane])
                 lane_change_pts += [pts[0], pts[-1]]
 
             else:
@@ -414,7 +380,7 @@ class LocalPath:
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
 
-        target_speed, points = self._update_target_speed(points, speed_limit, traffic_signals)
+        target_speed, points = self._update_target_speed(points, speed_limit)
 
         local_path.points = points
         local_path.target_speed = target_speed
@@ -432,6 +398,7 @@ class LocalPath:
             f"[local planner] planned local path with length={distance_planned} "
             f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)}"
         )
+
         try:
             rospy.loginfo(msg)
         except rospy.exceptions.ROSInitException:
@@ -439,22 +406,12 @@ class LocalPath:
 
         return local_path, section_from, section_target
 
-    def _update_target_speed(self, local_path, speed_limit, traffic_signals):
+    def _update_target_speed(self, local_path, speed_limit):
         speed = self.speed_calc.get_curve_speed(local_path)
 
-        if self.rules_enabled:
+        if self.rules_enabled:  # todo speed limit logic for no rules
             speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
             speed = np.clip(speed, 0, speed_limit)
-            # speed, indices2 = self.speed_calc.add_roll_events(speed, traffic_signals, target_speed=0, buffer_m=10,
-            #                                                   shift_m=0)
-            events = SpeedCalculator.ROLLING_EVENTS + SpeedCalculator.QUICK_BRAKE_EVENTS
-            speed, indices1 = self.speed_calc.add_stop_events(
-                speed, traffic_signals, target_speed=0, buffer_m=8, shift_m=-8, events=events
-            )
-            if len(indices1) > 0 and indices1[0] > 50:
-                ind = indices1[0]
-                speed[ind:] = 0
-
         speed = self.speed_calc.add_linear_deceleration(speed)
         return speed, local_path
 
