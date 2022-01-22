@@ -15,6 +15,7 @@ add_message_files(
   FloatArray.msg
   PafLocalPath.msg
   PafObstacle.msg
+  PafObstacleFollowInfo.msg
   PafObstacleList.msg
   Point2D.msg
   PafLaneletRoute.msg
