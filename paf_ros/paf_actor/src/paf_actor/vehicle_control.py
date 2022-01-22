@@ -12,7 +12,7 @@ from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
-from paf_messages.msg import PafLocalPath, PafLogScalar, PafObstacleFollowInfo
+from paf_messages.msg import PafLocalPath, PafLogScalar, PafObstacleFollowInfo, FloatArray
 
 
 class VehicleController:
@@ -278,12 +278,20 @@ class VehicleController:
         Args:
             local_path (PafLocalPath): The new local path from the local planner.
         """
+        local_path.react_index_points = [0]
+        x = FloatArray()
+        x.data = [30 / 3.6] * len(local_path.target_speed)
+        local_path.react_target_speed = [x]
+
         react_target_speed = local_path.react_target_speed
         react_index_points = local_path.react_index_points
 
+        new_target_speeds = list(local_path.target_speed)
         for index_point in react_index_points:
             for i, speed in enumerate(react_target_speed[index_point].data):
-                local_path.target_speed[index_point + i] = speed
+                new_target_speeds[index_point + i] = speed
+
+        local_path.target_speed = new_target_speeds
 
         self._route = local_path
 

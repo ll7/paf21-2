@@ -67,6 +67,7 @@ class StanleyLateralController:
             self.k = 5
         else:
             self.k = 2.5
+
         # compute cross track error correction
         theta_d = np.arctan2(self.k * error_front_axle / max([1, 0.4 * speed]), speed)
 
