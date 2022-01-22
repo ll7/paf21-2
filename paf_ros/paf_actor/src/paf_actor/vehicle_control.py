@@ -38,12 +38,16 @@ class VehicleController:
         self._is_reverse: bool = False
         self._emergency_mode: bool = False
 
-        self._stuck_check_time: float = 4.0  # timespan until the actor recognizes a stuck situation
-        self._stuck_value_threshold: float = 1.0  # speed threshold which is considered stuck
+        # timespan until the actor recognizes a stuck situation
+        self._stuck_check_time: float = 4.0
+        # speed threshold which is considered stuck
+        self._stuck_value_threshold: float = 1.0
         self._stuck_start_time: float = 0.0  # time when the car got stuck
-        self._unstuck_start_time: float = 0.0  # time when the unstuck operation started (a.k.a. rear gear)
+        # time when the unstuck operation started (a.k.a. rear gear)
+        self._unstuck_start_time: float = 0.0
         self._unstuck_check_time: float = 0.5  # max duration for the rear gear
-        self._is_unstucking: bool = False  # true while the car is driving backwards to unstuck
+        # true while the car is driving backwards to unstuck
+        self._is_unstucking: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
         self._obstacle_follow_min_distance: float = 4.0
@@ -107,21 +111,6 @@ class VehicleController:
         self.obstacle_subscriber: rospy.Subscriber = rospy.Subscriber(
             "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
         )
-
-        self.obstacle_publisher: rospy.Publisher = rospy.Publisher(
-            "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, queue_size=1
-        )
-
-        rospy.Timer(rospy.Duration(10), self.lost_obst, oneshot=True)
-        # self.__init_test_szenario()
-
-    def found_obst(self, event):
-        self.obstacle_publisher.publish(PafObstacleFollowInfo(20 / 3.6, 4.0, True))
-        rospy.Timer(rospy.Duration(10), self.lost_obst, oneshot=True)
-
-    def lost_obst(self, event):
-        self.obstacle_publisher.publish(PafObstacleFollowInfo(20 / 3.6, 4.0, False))
-        rospy.Timer(rospy.Duration(10), self.found_obst, oneshot=True)
 
     def __run_step(self):
         """
