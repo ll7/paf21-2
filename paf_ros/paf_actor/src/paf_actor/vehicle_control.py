@@ -217,6 +217,7 @@ class VehicleController:
         """
         # piece together the control message
         control: CarlaEgoVehicleControl = CarlaEgoVehicleControl()
+        # throttle = 0.0
 
         # positive throttle outputs are directed to the throttle, negative ones to the brakes
         if throttle >= 0.0:

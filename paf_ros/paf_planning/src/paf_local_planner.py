@@ -370,12 +370,12 @@ class LocalPlanner:
         self._current_pose = odometry.pose.pose
 
     def _set_current_point_index(self):
-        if len(self._global_path) == 0:
+        if len(self._global_path) == 0 or True:
             self._current_point_index = 0
             distance = 0
         else:
             current_pos = self._current_pose.position
-            start_idx = max(0, self._current_point_index - 300)
+            start_idx = max(0, self._current_point_index - 700)
             end_idx = min(len(self._global_path), self._current_point_index + 300)
             pts = self._global_path[start_idx:end_idx]
             ref = (current_pos.x, current_pos.y)
