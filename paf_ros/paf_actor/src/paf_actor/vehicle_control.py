@@ -11,7 +11,7 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
-from paf_actor.stanley_control import StanleyLateralController
+from paf_actor.sliding_window_control import SlidingWindowController
 from paf_messages.msg import PafLocalPath, PafLogScalar, PafObstacleFollowInfo
 
 
@@ -66,7 +66,7 @@ class VehicleController:
         args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
-        self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
+        self._lat_controller: SlidingWindowController = SlidingWindowController(**args_lateral)
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
