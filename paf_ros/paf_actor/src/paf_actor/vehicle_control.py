@@ -227,8 +227,13 @@ class VehicleController:
         Args:
             local_path (PafLocalPath): The new local path from the local planner.
         """
-        # rospy.loginfo(
-        #    f"INHALT VON LOCAL_PATH with speed {local_path.target_speed}")
+        react_target_speed = local_path.react_target_speed
+        react_index_points = local_path.react_index_points
+
+        for index_point in react_index_points:
+            for i, speed in enumerate(react_target_speed[index_point].data):
+                local_path.target_speed[index_point + i] = speed
+
         self._route = local_path
 
     def __emergency_break_received(self, do_emergency_break: bool):
