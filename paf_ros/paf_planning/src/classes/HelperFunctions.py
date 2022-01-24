@@ -106,6 +106,18 @@ def expand_sparse_list2(sparse_list, to_len, fill_value=None):
     return expanded_list[:to_len]
 
 
+def sparse_list_from_dense_pts(pts: np.ndarray, min_dist: float):
+    path = []
+    dist_measure = 0
+    for prev, p in zip(pts, pts[1:]):
+        dist_measure += dist(prev, p)
+        if dist_measure >= min_dist:
+            dist_measure = 0
+            path += [p]
+
+    return path
+
+
 def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Point2D):
     if hasattr(p, "x"):
         p = [p.x, p.y]

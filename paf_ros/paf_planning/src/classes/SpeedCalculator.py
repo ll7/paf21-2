@@ -132,7 +132,7 @@ class SpeedCalculator:
             speed2 += [r for _ in range(f)]
         for _ in range(len(path) - len(speed2)):
             speed2.append(speed1[-1])
-        return speed1
+        return speed2
 
     def _linear_deceleration_function(self, target_speed):
         b = self.MAX_SPEED

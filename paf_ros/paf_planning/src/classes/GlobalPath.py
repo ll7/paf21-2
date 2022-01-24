@@ -12,15 +12,15 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
 
-from .HelperFunctions import dist_pts, closest_index_of_point_list, dist
+from .HelperFunctions import dist_pts, closest_index_of_point_list, dist, sparse_list_from_dense_pts
 from .SpeedCalculator import SpeedCalculator
-from .Spline import calc_spline_course_from_point_list
 
 
 class GlobalPath:
     SPEED_KMH_TO_MS = 1 / 3.6
     MERGE_SPEED_RESET = 50 / 3.6
     APPLY_MERGING_RESET = True
+    POINT_DISTANCE = 2.5
 
     def __init__(
         self,
@@ -398,18 +398,10 @@ class GlobalPath:
                 for lanelet in lanelets
             ]
             avg_len = np.average(lengths)
-            num_pts = max(5, avg_len / distance_m)
             vertices = []
             for i, (lanelet, length) in enumerate(zip(lanelets, lengths)):
-                pts = list(lanelet.center_vertices[::10])
-                rem_idx = len(lanelet.center_vertices) - len(pts) * 10
-                pts.append(list(lanelet.center_vertices[int(len(lanelet.center_vertices) - 1 + rem_idx / 2)]))
-                new_pts = lanelet.center_vertices[:-1:5]
-                if len(new_pts) > 3:
-                    _new_pts = calc_spline_course_from_point_list(new_pts, length / num_pts / 5)[::5]
-                    if not np.isnan(_new_pts).any():
-                        new_pts = new_pts
-                vertices.append(np.array(new_pts))
+                pts = sparse_list_from_dense_pts(lanelet.center_vertices, self.POINT_DISTANCE)
+                vertices.append(np.array(pts))
             out.append((np.array(vertices), anchor, avg_len))
         return out
 

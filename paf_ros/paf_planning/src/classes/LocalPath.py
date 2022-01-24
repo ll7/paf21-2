@@ -3,11 +3,12 @@ from typing import List
 import rospy
 from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
 from .GlobalPath import GlobalPath
-from .HelperFunctions import dist_pts, closest_index_of_point_list
+from .HelperFunctions import dist_pts, closest_index_of_point_list, expand_sparse_list
 
 import numpy as np
 
 from .SpeedCalculator import SpeedCalculator
+from .Spline import calc_bezier_curve_from_pts
 
 
 class LocalPath:
@@ -121,8 +122,8 @@ class LocalPath:
             if end_idx <= len(self.global_path) - 1:
                 fraction_completed = float(np.clip(fraction_completed, 0, 1))
                 distance_planned += s.distance_from_last_section
-                # if fraction_completed > 0.8:
-                #     continue
+                if 0.2 > fraction_completed > 0.8:
+                    continue
                 if left_lane is not None:
                     point, speed, signs = self._calculate_intermediate_pts(
                         s, current_lane, left_lane, fraction_completed
@@ -215,8 +216,6 @@ class LocalPath:
             for p1, p2 in zip(self._sparse_local_path[current_idx:], self._sparse_local_path[offset2:]):
                 distance_planned += dist_pts(p1, p2)
 
-            rospy.logerr([prev_idx, current_idx, end_index, self._lane_change_indices])
-
         self._lane_change_indices = []
 
         if prev_idx < 0 or section_from < 0:
@@ -262,7 +261,7 @@ class LocalPath:
             dist_to_target = dist_pts(s.points[current_lane], self.global_path.target)
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
                 sparse_local_path.append(self.global_path.target)
-                sparse_local_path_speeds.append(sparse_local_path_speeds[-1])
+                sparse_local_path_speeds.append(SpeedCalculator.MIN_SPEED)
                 sparse_traffic_signals.append([])
                 distance_planned += dist_to_target
                 break
@@ -368,16 +367,12 @@ class LocalPath:
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
 
-        target_speed, points = self._update_target_speed(sparse_local_path, sparse_local_path_speeds)
+        points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)
+        target_speed = self._update_target_speed(points, target_speed)
 
         local_path.points = points
         local_path.target_speed = target_speed
-        try:
-            local_path.header.stamp = rospy.Time()
-        except Exception:
-            pass
 
-        # self._draw_path_pts(sparse_local_path)
         self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
@@ -394,14 +389,20 @@ class LocalPath:
 
         return local_path, section_from, section_target
 
+    @staticmethod
+    def _smooth_out_path(sparse_pts, sparse_speeds):
+        pts = calc_bezier_curve_from_pts(sparse_pts)
+        speeds, _ = expand_sparse_list(sparse_speeds, sparse_pts, pts)
+        return pts, speeds
+
     def _update_target_speed(self, local_path, speed_limit):
         speed = self.speed_calc.get_curve_speed(local_path)
 
-        # if self.rules_enabled:  # todo speed limit logic for no rules
-        #     speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
-        #     speed = np.clip(speed, 0, speed_limit)
+        if self.rules_enabled:  # todo speed limit logic for no rules
+            speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
+            speed = np.clip(speed, 0, speed_limit)
         speed = self.speed_calc.add_linear_deceleration(speed)
-        return speed, local_path
+        return speed
 
     @staticmethod
     def _draw_path_pts(points: List[Point2D], lbl: str = "lp_pts", color=(0, 45, 123)):
@@ -411,6 +412,17 @@ class LocalPath:
             pts1.points = points
             pts1.color = color
             rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
+        except rospy.exceptions.ROSException:
+            pass
+
+    @staticmethod
+    def _draw_path_line(points: List[Point2D], lbl: str = "lp_line", color=(0, 45, 123)):
+        try:
+            pts1 = PafTopDownViewPointSet()
+            pts1.label = lbl
+            pts1.points = points
+            pts1.color = color
+            rospy.Publisher("/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, queue_size=1).publish(pts1)
         except rospy.exceptions.ROSException:
             pass
 
