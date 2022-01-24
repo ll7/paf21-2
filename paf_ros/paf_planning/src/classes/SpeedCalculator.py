@@ -4,12 +4,14 @@ import numpy as np
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 from paf_messages.msg import PafTrafficSignal, Point2D
+from .HelperFunctions import dist_pts
 from .MapManager import MapManager
 
 
 class SpeedCalculator:
     CITY_SPEED_LIMIT = 50 / 3.6
     SPEED_LIMIT_MULTIPLIER = 1
+    CURVE_RAD_MEASURE_STEP = 5
     FULL_VS_HALF_DECEL_FRACTION = 0.97
     MUST_STOP_EVENTS = [TrafficSignIDGermany.STOP.value]
     CAN_STOP_EVENT = ["LIGHT", TrafficSignIDGermany.YIELD.value]
@@ -81,10 +83,25 @@ class SpeedCalculator:
         return speed
 
     @staticmethod
-    def _get_curve_radius_list(path: List[Point2D]) -> List[float]:
+    def _get_curve_radius_list(path_in: List[Point2D]):
         # https://www.mathopenref.com/arcradius.html
         # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
-        max_radius = 1e99
+        max_radius = 99999999
+        min_dist = SpeedCalculator.CURVE_RAD_MEASURE_STEP
+
+        path = []
+        fill = [1]
+
+        dist_measure = 0
+        for prev, p in zip(path_in, path_in[1:]):
+            dist_measure += dist_pts(prev, p)
+            if dist_measure < min_dist:
+                fill[-1] += 1
+            else:
+                dist_measure = 0
+                path += [p]
+                fill += [1]
+
         if len(path) < 3:
             return [max_radius for _ in path]
 
@@ -103,17 +120,19 @@ class SpeedCalculator:
                 radius_list.append(arc_h / 2 + arc_w ** 2 / (8 * arc_h))
 
         radius_list += [max_radius]
-        return radius_list
 
-    @staticmethod
-    def get_curve_speed(path: List[Point2D]):
-        nth_entry = 50
-        curve_radius_list = SpeedCalculator._get_curve_radius_list(path[::nth_entry])
-        speed1 = []
-        for r in curve_radius_list:
-            speed1 += [SpeedCalculator._radius_to_speed(r)] * nth_entry
-        speed1 += [speed1[-1] for _ in range(len(path) - len(speed1))]
-        return speed1[: len(path)]
+        return radius_list, fill
+
+    def get_curve_speed(self, path: List[Point2D]):
+        curve_radius_list, fill = self._get_curve_radius_list(path)
+        speed1 = [SpeedCalculator._radius_to_speed(r) for r in curve_radius_list]
+        speed2 = []
+
+        for r, f in zip(speed1, fill):
+            speed2 += [r for _ in range(f)]
+        for _ in range(len(path) - len(speed2)):
+            speed2.append(speed1[-1])
+        return speed1
 
     def _linear_deceleration_function(self, target_speed):
         b = self.MAX_SPEED
