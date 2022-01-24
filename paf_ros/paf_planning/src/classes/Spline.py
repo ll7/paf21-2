@@ -9,6 +9,9 @@ import math
 import bisect
 
 import numpy as np
+from bezier import Curve
+
+from .HelperFunctions import xy_to_pts, dist
 
 
 class Spline:
@@ -224,3 +227,37 @@ def calc_spline_course(x, y, ds=0.1):
         rk.append(sp.calc_curvature(i_s))
 
     return rx, ry, ryaw, rk, s
+
+
+def _calc_bezier_curve(x, y, degree=2):
+    nodes = np.asfortranarray([x, y])
+    return Curve(nodes, degree=degree)
+
+
+def calc_bezier_curve(pts, ds=0.1):
+    degree = len(pts) - 1
+
+    def _calc(pts2):
+        _x, _y = [], []
+        for pt in pts2:
+            _x.append(pt[0])
+            _y.append(pt[1])
+        curve = _calc_bezier_curve(_x, _y, degree=degree)
+        s_vals = np.linspace(0.0, 1.0, num_pts)
+        return curve.evaluate_multi(s_vals)
+
+    out_pts = []
+    distances = 0
+    for p1, p2 in zip(pts, pts[1:]):
+        distances += dist(p1, p2)
+    num_pts = int(np.ceil(distances / ds))
+    x_arr, y_arr = _calc(pts)
+    for x, y in zip(x_arr, y_arr):
+        out_pts.append(np.array([x, y]))
+
+    return out_pts
+
+
+def calc_bezier_curve_from_pts(pts, ds=0.1):
+    out_pts = calc_bezier_curve([[p.x, p.y] for p in pts], ds)
+    return xy_to_pts(out_pts)
