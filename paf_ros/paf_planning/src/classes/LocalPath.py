@@ -18,6 +18,7 @@ class LocalPath:
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
     STRAIGHT_TO_TARGET_DIST = 10
+    THRES_RESTART_BEZIER_EVERY_M = 50
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
         self._local_path_start_section = 0
@@ -391,7 +392,7 @@ class LocalPath:
 
     @staticmethod
     def _smooth_out_path(sparse_pts, sparse_speeds):
-        pts = calc_bezier_curve_from_pts(sparse_pts)
+        pts = calc_bezier_curve_from_pts(sparse_pts, threshold_new_curve_m=LocalPath.THRES_RESTART_BEZIER_EVERY_M)
         speeds, _ = expand_sparse_list(sparse_speeds, sparse_pts, pts)
         return pts, speeds
 
