@@ -83,7 +83,7 @@ class SpeedCalculator:
         return speed
 
     @staticmethod
-    def _get_curve_radius_list(path_in: List[Point2D]):
+    def get_curve_radius_list(path_in: List[Point2D]):
         # https://www.mathopenref.com/arcradius.html
         # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
         max_radius = 99999999
@@ -91,10 +91,12 @@ class SpeedCalculator:
 
         path = []
         fill = [1]
+        distances = []
 
         dist_measure = 0
         for prev, p in zip(path_in, path_in[1:]):
-            dist_measure += dist_pts(prev, p)
+            distances.append(dist_pts(prev, p))
+            dist_measure += distances[-1]
             if dist_measure < min_dist:
                 fill[-1] += 1
             else:
@@ -103,7 +105,7 @@ class SpeedCalculator:
                 fill += [1]
 
         if len(path) < 3:
-            return [max_radius for _ in path]
+            return path, fill, distances
 
         radius_list = [max_radius]
         for p1, p0, p2 in zip(path, path[1:], path[2:]):
@@ -121,10 +123,10 @@ class SpeedCalculator:
 
         radius_list += [max_radius]
 
-        return radius_list, fill
+        return radius_list, fill, distances
 
     def get_curve_speed(self, path: List[Point2D]):
-        curve_radius_list, fill = self._get_curve_radius_list(path)
+        curve_radius_list, fill, distances = self.get_curve_radius_list(path)
         speed1 = [SpeedCalculator._radius_to_speed(r) for r in curve_radius_list]
         speed2 = []
 

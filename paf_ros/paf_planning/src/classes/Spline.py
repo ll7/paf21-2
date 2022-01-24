@@ -12,6 +12,7 @@ import numpy as np
 from bezier import Curve
 
 from .HelperFunctions import xy_to_pts, dist
+from .SpeedCalculator import SpeedCalculator
 
 
 class Spline:
@@ -258,6 +259,25 @@ def calc_bezier_curve(pts, ds=0.1):
     return out_pts
 
 
-def calc_bezier_curve_from_pts(pts, ds=0.1):
-    out_pts = calc_bezier_curve([[p.x, p.y] for p in pts], ds)
+def calc_bezier_curve_from_pts(pts, ds=0.1, threshold_new_curve_m=None):
+    if threshold_new_curve_m is not None:
+        out_pts = []
+        _curve_radius_list, fill, distances = SpeedCalculator.get_curve_radius_list(pts)
+        curve_radius_list = []
+        for r, f in zip(_curve_radius_list, fill):
+            curve_radius_list += [r for _ in range(f)]
+
+        distance = 0
+        i0 = 0
+        for i1, (r, d) in enumerate(zip(curve_radius_list, distances)):
+            distance += d
+            if distance > threshold_new_curve_m and r > 50:
+                out_pts += calc_bezier_curve([[p.x, p.y] for p in pts[i0:i1]], ds)
+                distance, i0 = 0, i1
+
+        if len(out_pts) == 0:
+            return calc_bezier_curve_from_pts(pts, ds, None)
+
+    else:
+        out_pts = calc_bezier_curve([[p.x, p.y] for p in pts], ds)
     return xy_to_pts(out_pts)
