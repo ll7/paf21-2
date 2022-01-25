@@ -274,7 +274,20 @@ def calc_bezier_from_indices(from_index, to_index, full_list, ds):
     return bezier
 
 
-def calc_bezier_curve_from_pts(pts, ds=0.5, max_offset_to_orig=2):
+def calc_bezier_curve_from_pts(pts, ds=0.5, max_offset_to_orig=3):
+    def draw_path_pts(points, lbl, color):
+        from paf_messages.msg import PafTopDownViewPointSet
+        import rospy
+
+        try:
+            pts1 = PafTopDownViewPointSet()
+            pts1.label = lbl
+            pts1.points = points
+            pts1.color = color
+            rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
+        except rospy.exceptions.ROSException:
+            pass
+
     pts_xy = [[p.x, p.y] for p in pts]
     _new_bezier_pts = calc_bezier_curve(pts_xy, ds)
     try:
@@ -283,7 +296,7 @@ def calc_bezier_curve_from_pts(pts, ds=0.5, max_offset_to_orig=2):
         return pts
 
     corrected_pts = []
-
+    draw_pts = []
     bezier_indices_prev = []
     bezier_indices_wrong = []
     for k, pt in enumerate(_new_bezier_pts):
@@ -300,15 +313,26 @@ def calc_bezier_curve_from_pts(pts, ds=0.5, max_offset_to_orig=2):
             bezier_indices_wrong += [i]
         elif len(bezier_indices_wrong) > 0:
             # need to calculate new spline (bezier_wrong)
-            spline = calc_spline_from_indices(
-                np.min(bezier_indices_wrong), np.max(bezier_indices_wrong), _new_spline_pts, ds
-            )
-            corrected_pts += xy_to_pts(spline)
+
+            i1, _ = closest_index_of_point_list(pts_xy, _new_spline_pts[np.min(bezier_indices_wrong)])
+            i3, _ = closest_index_of_point_list(pts_xy, _new_spline_pts[np.max(bezier_indices_wrong)])
+            i3 += 1
+            pts_orig = [pts_xy[_i] for _i in range(i1, i3 + 1)]
+            if len(bezier_indices_wrong) > 3:
+                adding_pts = calc_spline_course_from_point_list(pts_orig, ds)
+                i4, _ = closest_index_of_point_list(adding_pts, corrected_pts[-1])
+                i4 += 2
+                corrected_pts += xy_to_pts(adding_pts[i4:-2])
+            elif len(pts_orig) > 2:
+                i4, _ = closest_index_of_point_list(pts_orig, corrected_pts[-1])
+                i4 += 2
+                corrected_pts += xy_to_pts(pts_orig[i4:-2])
             bezier_indices_wrong = []
             bezier_indices_prev = []
         else:
             bezier_indices_prev += [i]
 
+    draw_path_pts(draw_pts, "turendiaernua", (255, 255, 0))
     bezier = calc_bezier_from_indices(np.min(bezier_indices_prev), np.max(bezier_indices_prev), _new_spline_pts, ds)
     corrected_pts += xy_to_pts(bezier)
 

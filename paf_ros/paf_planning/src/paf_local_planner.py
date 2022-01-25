@@ -206,7 +206,7 @@ class LocalPlanner:
     def _planner_at_end_of_local_path(self):
         if len(self._local_path) == 0:
             return True
-        if len(self._local_path) - self._local_path_idx < 300:
+        if dist_pts(self._local_path.message.points[-1], self._current_pose.position) < 100:
             return (
                 dist_pts(self._local_path.message.points[-1], self._global_path.target) > self.END_OF_ROUTE_REACHED_DIST
             )

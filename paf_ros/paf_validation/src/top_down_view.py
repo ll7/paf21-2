@@ -123,7 +123,7 @@ class TopDownRosNode(object):
         spec_tf = self._spectator.get_transform()
         if (vehicle_tf.location.x - spec_tf.location.x) ** 2 + (
             vehicle_tf.location.y - spec_tf.location.y
-        ) ** 2 > 30 ** 2:
+        ) ** 2 > 20 ** 2:
             self._spectator.set_transform(vehicle_tf)
 
 

@@ -325,7 +325,11 @@ class TopDownView(BirdViewProducer):
         mask = self.masks_generator.make_empty_mask()
         if path is None:
             return mask
-        points = [self.masks_generator.location_to_pixel(Namespace(**{"x": x, "y": y})) for x, y in path]
+        try:
+            points = [self.masks_generator.location_to_pixel(Namespace(**{"x": x, "y": y})) for x, y in path]
+        except ValueError:
+            points = []
+            rospy.logerr("[top down view] NaN / Invalid path!")
         points = np.array([[p.x, p.y] for p in points])
         mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
         return mask

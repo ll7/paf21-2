@@ -406,8 +406,16 @@ class LocalPath:
 
     @staticmethod
     def _smooth_out_path(sparse_pts, sparse_speeds):
-        pts = calc_bezier_curve_from_pts(sparse_pts)
-        speeds, _ = expand_sparse_list(sparse_speeds, sparse_pts, pts)
+        try:
+            pts = calc_bezier_curve_from_pts(sparse_pts)
+        except ValueError:
+            rospy.logerr("[local planner] Bezier / Spline curve could not be calculated")
+            return sparse_pts, sparse_speeds
+        try:
+            speeds, _ = expand_sparse_list(sparse_speeds, sparse_pts, pts)
+        except ValueError:
+            rospy.logerr("[local planner] speed could not be calculated")
+            speeds = [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in pts]
         return pts, speeds
 
     def _update_target_speed(self, local_path, speed_limit):
