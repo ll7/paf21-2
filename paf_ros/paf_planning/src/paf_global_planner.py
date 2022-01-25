@@ -82,7 +82,7 @@ class GlobalPlanner:
 
     def _reroute_provider(self, _: Empty = None):
         rospy.loginfo("[global planner] rerouting...")
-        self._routing_provider_waypoints()
+        self._routing_provider_waypoints(reroute=True)
 
     def _any_target_anywhere(self, p_home) -> np.ndarray:
         # return np.array([229., -100.])
@@ -121,8 +121,9 @@ class GlobalPlanner:
 
         msg = None
         if len(self._waypoints) == 0:
-            for p in waypoints:
-                self._waypoints.append(p)
+            msg = PafLocalPath()
+            msg.points = list(waypoints)
+            rospy.logwarn("[global planner] restarting standard loop")
             rospy.Publisher("/carla/ego_vehicle/twist", Twist, queue_size=1).publish(Twist())
             rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped, queue_size=1).publish(
                 initial_pose
@@ -131,9 +132,7 @@ class GlobalPlanner:
         success = self._routing_provider_waypoints(msg, position, yaw)
         t0 = np.round(time.perf_counter() - t0, 2)
         if success:
-            rospy.loginfo_throttle(
-                10, f"[global planner] success planning standard loop - " f"target={waypoints[0]} ({t0}s)"
-            )
+            rospy.loginfo_throttle(10, f"[global planner] success planning standard loop ({t0}s)")
             rospy.Publisher("/paf/paf_validation/score/start", Empty, queue_size=1).publish(Empty())
         else:
             rospy.logerr_throttle(10, f"[global planner] failed planning standard loop ({t0}s)")
@@ -164,7 +163,7 @@ class GlobalPlanner:
         msgs.points = [Point2D(msg.target[0], msg.target[1])]
         self._routing_provider_waypoints(msgs, position, yaw)
 
-    def _routing_provider_waypoints(self, msgs: PafLocalPath = None, position=None, yaw=None):
+    def _routing_provider_waypoints(self, msgs: PafLocalPath = None, position=None, yaw=None, reroute=False):
         if msgs is None:
             msgs = PafLocalPath()
             msgs.points = list(self._waypoints)
@@ -191,7 +190,10 @@ class GlobalPlanner:
 
         self._routing_pub.publish(PafLaneletRoute())
 
-        target = self._waypoints.popleft()
+        if reroute:
+            target = self._waypoints[0]
+        else:
+            target = self._waypoints.popleft()
         yaw = find_lanelet_yaw(self._scenario.lanelet_network, target)
         route: Route = self._route_from_objective(position, yaw, [target.x, target.y])
         draw_msg.points.append(target)

@@ -32,7 +32,7 @@ class LocalPlanner:
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC_GLOBAL = 5
     REPLAN_THROTTLE_SEC_LOCAL = 1
-    END_OF_ROUTE_REACHED_DIST = 2
+    END_OF_ROUTE_REACHED_DIST = 5
 
     rules_enabled = MapManager.get_rules_enabled()
 
@@ -65,10 +65,11 @@ class LocalPlanner:
             "/paf/paf_global_planner/routing_response", PafLaneletRoute, self._process_global_path, queue_size=1
         )
         rospy.Subscriber("/paf/paf_local_planner/rules_enabled", Bool, self._change_rules, queue_size=1)
+        self._emergency_break_pub = rospy.Publisher(f"/local_planner/{role_name}/emergency_break", Bool, queue_size=1)
         self._last_replan_request_loc = time.perf_counter()
         self._last_replan_request_glob = time.perf_counter()
         # create and start the publisher for the local path
-        self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
+        # self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         self._reacting_path_publisher = rospy.Publisher(
             "/paf/paf_local_planner/reacting_speed", PafLocalPath, queue_size=1
         )
@@ -110,6 +111,7 @@ class LocalPlanner:
     def _process_global_path(self, msg: PafLaneletRoute):
         if self._global_path is None or self._global_path.route.distance != msg.distance:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
+            self._emergency_break_pub.publish(Bool(False))
             self._global_path = GlobalPath(msg=msg)
             self._local_path = LocalPath(self._global_path, self.rules_enabled)
             self._set_local_path_idx()
@@ -132,7 +134,7 @@ class LocalPlanner:
             path_msg.points = []
 
         # self._reacting_path_publisher.publish(reacting_msg)
-        self._local_plan_publisher.publish(path_msg)
+        self._local_path.publish(path_msg)
 
     def _loop_handler(self):
         self._publish_speed_msg()
@@ -148,6 +150,7 @@ class LocalPlanner:
             rospy.logwarn_throttle(5, "[local planner] end of route reached, end of route handling activated")
             self._global_path = GlobalPath()
             self._local_path = LocalPath(self._global_path)
+            self._emergency_break_pub.publish(Bool(True))
             self._end_of_route_handling()
         elif not self._on_global_path():
             rospy.logwarn_throttle(5, "[local planner] not on global path, requesting new route")

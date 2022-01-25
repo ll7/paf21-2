@@ -169,6 +169,12 @@ class LocalPath:
 
         return end_idx, distance_planned, left, straight, right
 
+    def publish(self, msg=None):
+        if msg is None:
+            msg = self.message
+        publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
+        publisher.publish(msg)
+
     def calculate_new_local_path(
         self,
         from_position: Point2D,
@@ -269,6 +275,7 @@ class LocalPath:
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
                 sparse_local_path.append(self.global_path.target)
                 sparse_local_path_speeds += [self.END_OF_ROUTE_SPEED]
+                sparse_local_path_speeds[-2] = self.END_OF_ROUTE_SPEED + 3
                 sparse_traffic_signals += [[]]
                 distance_planned += dist_to_target
                 # rospy.logerr("break2")
@@ -378,6 +385,10 @@ class LocalPath:
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
 
+        local_path.points = sparse_local_path
+        local_path.target_speed = sparse_local_path_speeds
+        self.publish(local_path)
+
         t0 = perf_counter()
         points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)
         t2 = f"{(perf_counter() - t0):.2f}s"
@@ -409,6 +420,8 @@ class LocalPath:
     def _smooth_out_path(sparse_pts, sparse_speeds):
         try:
             pts = calc_bezier_curve_from_pts(sparse_pts)
+            if len(pts) == 0:
+                raise ValueError
         except ValueError:
             rospy.logerr("[local planner] Bezier / Spline curve could not be calculated")
             return sparse_pts, sparse_speeds
