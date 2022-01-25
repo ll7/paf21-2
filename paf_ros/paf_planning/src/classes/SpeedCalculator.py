@@ -27,7 +27,7 @@ class SpeedCalculator:
         self.set_limits()
 
     @staticmethod
-    def set_limits(value=None):
+    def set_limits(value: bool = None):
         if value is None:
             value = MapManager.get_rules_enabled()
         SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if value else 250 / 3.6
@@ -91,7 +91,7 @@ class SpeedCalculator:
 
         path = []
         fill = [1]
-        distances = []
+        distances = [0]
 
         dist_measure = 0
         for prev, p in zip(path_in, path_in[1:]):
@@ -129,6 +129,9 @@ class SpeedCalculator:
         curve_radius_list, fill, distances = self.get_curve_radius_list(path)
         speed1 = [SpeedCalculator._radius_to_speed(r) for r in curve_radius_list]
         speed2 = []
+
+        if len(speed1) == 0:
+            return [self.UNKNOWN_SPEED_LIMIT_SPEED for _ in path]
 
         for r, f in zip(speed1, fill):
             speed2 += [r for _ in range(f)]

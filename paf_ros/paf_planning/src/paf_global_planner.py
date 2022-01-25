@@ -82,7 +82,7 @@ class GlobalPlanner:
         rospy.loginfo("[global planner] rerouting...")
         self._routing_provider_waypoints()
 
-    def _any_target_anywhere(self, p_home):
+    def _any_target_anywhere(self, p_home) -> np.ndarray:
         # return np.array([229., -100.])
         lanelets = self._scenario.lanelet_network.lanelets
         lanelet_p = None

@@ -11,8 +11,7 @@ import bisect
 import numpy as np
 from bezier import Curve
 
-from .HelperFunctions import xy_to_pts, dist
-from .SpeedCalculator import SpeedCalculator
+from .HelperFunctions import xy_to_pts, dist, closest_index_of_point_list
 
 
 class Spline:
@@ -230,6 +229,14 @@ def calc_spline_course(x, y, ds=0.1):
     return rx, ry, ryaw, rk, s
 
 
+def calc_spline_from_indices(from_index, to_index, full_list, ds):
+    indices = list(range(from_index, to_index + 1))
+    spline = [full_list[_i] for _i in indices]
+    if len(spline) > 3:
+        spline = calc_spline_course_from_point_list(spline, ds)
+    return spline
+
+
 def _calc_bezier_curve(x, y, degree=2):
     nodes = np.asfortranarray([x, y])
     return Curve(nodes, degree=degree)
@@ -259,25 +266,50 @@ def calc_bezier_curve(pts, ds=0.1):
     return out_pts
 
 
-def calc_bezier_curve_from_pts(pts, ds=0.1, threshold_new_curve_m=None):
-    if threshold_new_curve_m is not None:
-        out_pts = []
-        _curve_radius_list, fill, distances = SpeedCalculator.get_curve_radius_list(pts)
-        curve_radius_list = []
-        for r, f in zip(_curve_radius_list, fill):
-            curve_radius_list += [r for _ in range(f)]
+def calc_bezier_from_indices(from_index, to_index, full_list, ds):
+    indices = list(range(from_index, to_index + 1))
+    bezier = [full_list[_i] for _i in indices]
+    if len(bezier) > 3:
+        bezier = calc_bezier_curve(bezier, ds)
+    return bezier
 
-        distance = 0
-        i0 = 0
-        for i1, (r, d) in enumerate(zip(curve_radius_list, distances)):
-            distance += d
-            if distance > threshold_new_curve_m and r > 50:
-                out_pts += calc_bezier_curve([[p.x, p.y] for p in pts[i0:i1]], ds)
-                distance, i0 = 0, i1
 
-        if len(out_pts) == 0:
-            return calc_bezier_curve_from_pts(pts, ds, None)
+def calc_bezier_curve_from_pts(pts, ds=0.5, max_offset_to_orig=3):
+    pts_xy = [[p.x, p.y] for p in pts]
+    _new_bezier_pts = calc_bezier_curve(pts_xy, ds)
+    try:
+        _new_spline_pts = calc_spline_course_from_point_list(pts_xy, 1)
+    except AssertionError:
+        return pts
 
-    else:
-        out_pts = calc_bezier_curve([[p.x, p.y] for p in pts], ds)
-    return xy_to_pts(out_pts)
+    corrected_pts = []
+
+    bezier_indices_prev = []
+    bezier_indices_wrong = []
+    for k, pt in enumerate(_new_bezier_pts):
+        i, _dist = closest_index_of_point_list(_new_spline_pts, pt)
+        if _dist > max_offset_to_orig:
+
+            if len(bezier_indices_wrong) == 0 and len(bezier_indices_prev) > 0:
+                # need to calc prev bezier again until i
+                bezier = calc_bezier_from_indices(
+                    np.min(bezier_indices_prev), np.max(bezier_indices_prev), _new_spline_pts, ds
+                )
+                corrected_pts += xy_to_pts(bezier)
+
+            bezier_indices_wrong += [i]
+        elif len(bezier_indices_wrong) > 0:
+            # need to calculate new spline (bezier_wrong)
+            spline = calc_spline_from_indices(
+                np.min(bezier_indices_wrong), np.max(bezier_indices_wrong), _new_spline_pts, ds
+            )
+            corrected_pts += xy_to_pts(spline)
+            bezier_indices_wrong = []
+            bezier_indices_prev = []
+        else:
+            bezier_indices_prev += [i]
+
+    bezier = calc_bezier_from_indices(np.min(bezier_indices_prev), np.max(bezier_indices_prev), _new_spline_pts, ds)
+    corrected_pts += xy_to_pts(bezier)
+
+    return corrected_pts

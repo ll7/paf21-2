@@ -1,3 +1,4 @@
+from time import perf_counter
 from typing import List
 
 import rospy
@@ -175,6 +176,8 @@ class LocalPath:
         ignore_previous: bool = False,
         min_section: int = 0,
     ):
+
+        t0 = perf_counter()
         local_path = PafLocalPath()
         section_target, target_lane = self.global_path.get_section_and_lane_indices(
             self.global_path.route.target, min_section=min_section
@@ -252,8 +255,10 @@ class LocalPath:
                     current_lane = len(s.points) - 1
 
             if distance_planned > target_distance:
+                # rospy.logerr("break1")
                 break
             if i <= end_idx_lane_change:
+                # rospy.logerr("continue1")
                 continue
 
             lane_change_until_distance = None
@@ -262,9 +267,10 @@ class LocalPath:
             dist_to_target = dist_pts(s.points[current_lane], self.global_path.target)
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
                 sparse_local_path.append(self.global_path.target)
-                sparse_local_path_speeds.append(SpeedCalculator.MIN_SPEED)
-                sparse_traffic_signals.append([])
+                sparse_local_path_speeds += [SpeedCalculator.MIN_SPEED, SpeedCalculator.MIN_SPEED]
+                sparse_traffic_signals += [[], []]
                 distance_planned += dist_to_target
+                # rospy.logerr("break2")
                 break
 
             distance_planned += s.distance_from_last_section
@@ -291,6 +297,7 @@ class LocalPath:
                     else:
                         current_lane = len(s.points) - 1
                 current_lane += -s.target_lanes[0] + s.target_lanes_left_shift
+                # rospy.logerr("continue2")
                 continue
 
             # target is right == number of lanes off > 0
@@ -364,12 +371,24 @@ class LocalPath:
                 self._lane_change_indices.append(end_idx_lane_change)
             else:
                 end_idx_lane_change = 0
+
+        t1 = f"{(perf_counter() - t0):.2f}s"
         self._sparse_local_path = sparse_local_path
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
 
+        t0 = perf_counter()
         points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)
+        t2 = f"{(perf_counter() - t0):.2f}s"
+        t0 = perf_counter()
         target_speed = self._update_target_speed(points, target_speed)
+        t3 = f"{(perf_counter() - t0):.2f}s"
+
+        msg = (
+            f"[local planner] planned local path with length={distance_planned} "
+            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)} "
+            f"(sparse={t1}, smooth={t2}, speeds={t3})"
+        )
 
         local_path.points = points
         local_path.target_speed = target_speed
@@ -378,27 +397,21 @@ class LocalPath:
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
 
-        msg = (
-            f"[local planner] planned local path with length={distance_planned} "
-            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)}"
-        )
-
-        try:
+        if distance_planned < 50:
+            rospy.logwarn(msg)
+        else:
             rospy.loginfo(msg)
-        except rospy.exceptions.ROSInitException:
-            print(msg)
 
         return local_path, section_from, section_target
 
     @staticmethod
     def _smooth_out_path(sparse_pts, sparse_speeds):
-        pts = calc_bezier_curve_from_pts(sparse_pts, threshold_new_curve_m=LocalPath.THRES_RESTART_BEZIER_EVERY_M)
+        pts = calc_bezier_curve_from_pts(sparse_pts)
         speeds, _ = expand_sparse_list(sparse_speeds, sparse_pts, pts)
         return pts, speeds
 
     def _update_target_speed(self, local_path, speed_limit):
         speed = self.speed_calc.get_curve_speed(local_path)
-
         if self.rules_enabled:  # todo speed limit logic for no rules
             speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
             speed = np.clip(speed, 0, speed_limit)

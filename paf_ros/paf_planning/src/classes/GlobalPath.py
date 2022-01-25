@@ -30,7 +30,7 @@ class GlobalPath:
         traffic_sign_country: Country = Country.GERMANY,
         msg: PafLaneletRoute = PafLaneletRoute(),
     ):
-
+        SpeedCalculator.set_limits()
         if lanelet_network is None:
             self.route = msg
             self._graph = None
@@ -402,7 +402,7 @@ class GlobalPath:
             for i, (lanelet, length) in enumerate(zip(lanelets, lengths)):
                 pts = sparse_list_from_dense_pts(lanelet.center_vertices, self.POINT_DISTANCE)
                 vertices.append(np.array(pts))
-            out.append((np.array(vertices), anchor, avg_len))
+            out.append((vertices, anchor, avg_len))
         return out
 
     def as_msg(self) -> PafLaneletRoute:

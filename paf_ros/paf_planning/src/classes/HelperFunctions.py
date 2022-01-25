@@ -26,7 +26,7 @@ def xy_to_pts(xy_list):
     return out
 
 
-def closest_index_of_point_list(pts_list: List[Point2D], target_pt, acc: int = 1):
+def closest_index_of_point_list(pts_list, target_pt, acc: int = 1):
     if len(pts_list) == 0:
         return -1, -1
     if hasattr(target_pt, "x"):
@@ -52,7 +52,13 @@ def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_p
 
 
 def expand_sparse_list(sparse_list, points_current, points_target, fill_value=None, indices_new=None):
-    assert len(sparse_list) == len(points_current)
+    if len(sparse_list) < len(points_current):
+        import rospy
+
+        rospy.logerr(
+            f"[expand sparse list] sparse list len1={len(sparse_list)} is not "
+            f"len2={len(points_current)} points current"
+        )
     if indices_new is None:
         indices_new = []
         factor = int(len(points_target) / len(points_current)) + 2
