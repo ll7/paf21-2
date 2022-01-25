@@ -274,7 +274,7 @@ def calc_bezier_from_indices(from_index, to_index, full_list, ds):
     return bezier
 
 
-def calc_bezier_curve_from_pts(pts, ds=0.5, max_offset_to_orig=3):
+def calc_bezier_curve_from_pts(pts, ds=0.5, max_offset_to_orig=2):
     pts_xy = [[p.x, p.y] for p in pts]
     _new_bezier_pts = calc_bezier_curve(pts_xy, ds)
     try:
