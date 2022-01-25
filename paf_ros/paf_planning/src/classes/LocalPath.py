@@ -385,7 +385,7 @@ class LocalPath:
         t3 = f"{(perf_counter() - t0):.2f}s"
 
         msg = (
-            f"[local planner] planned local path with length={distance_planned} "
+            f"[local planner] planned local path with length={distance_planned:.1f}m "
             f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)} "
             f"(sparse={t1}, smooth={t2}, speeds={t3})"
         )
