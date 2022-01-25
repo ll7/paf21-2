@@ -15,7 +15,7 @@ from .Spline import calc_bezier_curve_from_pts
 class LocalPath:
     REPLANNING_THRESHOLD_DISTANCE_M = 15
     STEP_SIZE = 5
-    TRANSMIT_FRONT_MIN_M = 150
+    TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
     STRAIGHT_TO_TARGET_DIST = 10
@@ -169,9 +169,18 @@ class LocalPath:
 
         return end_idx, distance_planned, left, straight, right
 
-    def publish(self, msg=None):
-        if msg is None:
+    def publish(self, msg=None, send_empty=False):
+        if send_empty:
+            msg = PafLocalPath()
+            msg.target_speed = []
+            msg.points = []
+        elif msg is None:
             msg = self.message
+        elif len(msg.points) == 0:
+            rospy.logwarn("[local planner] skip publishing, cause len=0")
+            return
+        if not send_empty:
+            rospy.logwarn(f"[local planner] publishing {len(msg.points)} points to acting...")
         publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         publisher.publish(msg)
 
@@ -391,7 +400,8 @@ class LocalPath:
 
         local_path.points = sparse_local_path
         local_path.target_speed = sparse_local_path_speeds
-        self.publish(local_path)
+        if len(sparse_local_path) > 3:
+            self.publish(local_path)
 
         t0 = perf_counter()
         points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)

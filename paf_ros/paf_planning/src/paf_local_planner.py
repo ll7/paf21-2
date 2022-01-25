@@ -129,12 +129,9 @@ class LocalPlanner:
 
         if send_empty:
             self._reset_reacting_speed()
-            path_msg.header.stamp = rospy.Time.now()
-            path_msg.target_speed = []
-            path_msg.points = []
 
         # self._reacting_path_publisher.publish(reacting_msg)
-        self._local_path.publish(path_msg)
+        self._local_path.publish(path_msg, send_empty)
 
     def _loop_handler(self):
         self._publish_speed_msg()
@@ -151,7 +148,7 @@ class LocalPlanner:
             self._global_path = GlobalPath()
             self._local_path = LocalPath(self._global_path)
             self._emergency_break_pub.publish(Bool(True))
-            self._end_of_route_handling()
+            self._end_of_route_handling(sleep=5)
         elif not self._on_global_path():
             rospy.logwarn_throttle(5, "[local planner] not on global path, requesting new route")
             self._create_paf_local_path_msg(send_empty=True)
@@ -288,12 +285,14 @@ class LocalPlanner:
             rospy.loginfo_throttle(20, "[local planner] requesting new random global route")
             self._reroute_random_publisher.publish(Empty())
 
-    def _end_of_route_handling(self):
+    def _end_of_route_handling(self, sleep=0):
         self._global_path = GlobalPath()
         rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1).publish(Empty())
         if self._current_speed < 0.5:
             self._emergency_break_pub.publish(Bool(False))
         if self._current_speed < 0.01:
+            if sleep > 0:
+                rospy.sleep(sleep)
             # self._send_random_global_path_request()  # todo remove in production
             self._send_standard_loop_request()  # todo remove in production
 
