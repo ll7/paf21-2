@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import time
+from collections import deque
 
 from commonroad_route_planner.route import Route
 
@@ -43,9 +44,10 @@ class GlobalPlanner:
         self._scenario: Scenario = MapManager.get_current_scenario()
         self._position = [1e99, 1e99]
         self._yaw = 0
-        self._routing_targets = []
+        self._waypoints = deque()
         self._lanelet_ids_route = []
         self._last_route = None
+        self._standard_loop = MapManager.get_demo_route()
 
         rospy.init_node("paf_global_planner", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
@@ -110,22 +112,28 @@ class GlobalPlanner:
 
     def _routing_provider_standard_loop(self, _: Empty):
         t0 = time.perf_counter()
-        waypoints, initial_pose = MapManager.get_demo_route()
+        waypoints, initial_pose = self._standard_loop
         if waypoints is None:
             self._routing_provider_random(_)
             return
 
         position, yaw = (initial_pose.pose.pose.position.x, initial_pose.pose.pose.position.y), 0
 
-        msg = PafLocalPath()
-        msg.points = waypoints
-        rospy.Publisher("/carla/ego_vehicle/twist", Twist, queue_size=1).publish(Twist())
-        rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped, queue_size=1).publish(initial_pose)
-        rospy.sleep(1)
+        msg = None
+        if len(self._waypoints) == 0:
+            for p in waypoints:
+                self._waypoints.append(p)
+            rospy.Publisher("/carla/ego_vehicle/twist", Twist, queue_size=1).publish(Twist())
+            rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped, queue_size=1).publish(
+                initial_pose
+            )
+            rospy.sleep(1)
         success = self._routing_provider_waypoints(msg, position, yaw)
         t0 = np.round(time.perf_counter() - t0, 2)
         if success:
-            rospy.loginfo_throttle(10, f"[global planner] success planning standard loop ({t0}s)")
+            rospy.loginfo_throttle(
+                10, f"[global planner] success planning standard loop - " f"target={waypoints[0]} ({t0}s)"
+            )
             rospy.Publisher("/paf/paf_validation/score/start", Empty, queue_size=1).publish(Empty())
         else:
             rospy.logerr_throttle(10, f"[global planner] failed planning standard loop ({t0}s)")
@@ -159,9 +167,11 @@ class GlobalPlanner:
     def _routing_provider_waypoints(self, msgs: PafLocalPath = None, position=None, yaw=None):
         if msgs is None:
             msgs = PafLocalPath()
-            msgs.points = self._routing_targets
+            msgs.points = list(self._waypoints)
         else:
-            self._routing_targets = msgs.points
+            self._waypoints.clear()
+            for p in msgs.points:
+                self._waypoints.append(p)
 
         if position is None or yaw is None:
             try:
@@ -169,56 +179,34 @@ class GlobalPlanner:
             except IndexError:
                 rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
                 return False
-        if len(self._routing_targets) == 0:
+        if len(self._waypoints) == 0:
             rospy.logwarn_throttle(1, "[global planner] route planning waiting for route input...")
             return False
-
+        rospy.logwarn_throttle(
+            1, f"[global planner] waypoints in queue: " f"{[(int(p.x), int(p.y)) for p in self._waypoints]}"
+        )
         draw_msg = PafTopDownViewPointSet()
         draw_msg.label = "planning_target"
         draw_msg.color = 153, 0, 153
 
-        lanelet_ids = []
-        previous_target = position
-
         self._routing_pub.publish(PafLaneletRoute())
 
-        for i, target in enumerate(self._routing_targets):
-            yaw = find_lanelet_yaw(self._scenario.lanelet_network, target)
-            route: Route = self._route_from_objective(previous_target, yaw, [target.x, target.y])
-            draw_msg.points.append(target)
-            if route is None:
-                rospy.logerr(
-                    f"[global planner] routing from {list(previous_target)} to {[target.x, target.y]} failed",
-                )
-                return False
-            if len(lanelet_ids) > 0:
-                prev_route = GlobalPath(self._scenario.lanelet_network, route.list_ids_lanelets, previous_target)
-                first_lanelet_group = prev_route.get_lanelet_groups(route.list_ids_lanelets)[0][0]
-                if route.list_ids_lanelets[0] not in first_lanelet_group:
-                    rospy.logwarn(f"skipping segment to {first_lanelet_group}")
-                    continue
-                lanelet_ids += route.list_ids_lanelets[1:]
-            else:
-                lanelet_ids += route.list_ids_lanelets
+        target = self._waypoints.popleft()
+        yaw = find_lanelet_yaw(self._scenario.lanelet_network, target)
+        route: Route = self._route_from_objective(position, yaw, [target.x, target.y])
+        draw_msg.points.append(target)
+        if route is None:
+            rospy.logerr(
+                f"[global planner] routing from {list(position)} to {[target.x, target.y]} failed",
+            )
+            self._waypoints.appendleft(target)
+            return False
 
-            vertices = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices
-            previous_target = vertices[int(len(vertices) / 2)]
-
-        if len(self._lanelet_ids_route) == len(lanelet_ids):
-            for a, b in zip(self._lanelet_ids_route, lanelet_ids):
-                if a != b:
-                    break
-            else:
-                if self._last_route is not None:
-                    self._routing_pub.publish(self._last_route)
-                    return True
-                else:
-                    rospy.logerr("[global planner] last route is empty, but lanelets are the same.")
-
-        route_merged = GlobalPath(self._scenario.lanelet_network, lanelet_ids, self._routing_targets[-1]).as_msg()
+        lanelet_ids = route.list_ids_lanelets
+        route_paf = GlobalPath(self._scenario.lanelet_network, lanelet_ids, target).as_msg()
         self._lanelet_ids_route = lanelet_ids
-        self._last_route = route_merged
-        self._routing_pub.publish(route_merged)
+        self._last_route = route_paf
+        self._routing_pub.publish(route_paf)
         self._target_on_map_pub.publish(draw_msg)
         return True
 

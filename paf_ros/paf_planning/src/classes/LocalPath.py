@@ -20,6 +20,7 @@ class LocalPath:
     LANE_CHANGE_SECS = 7
     STRAIGHT_TO_TARGET_DIST = 10
     THRES_RESTART_BEZIER_EVERY_M = 50
+    END_OF_ROUTE_SPEED = 0
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
         self._local_path_start_section = 0
@@ -267,8 +268,8 @@ class LocalPath:
             dist_to_target = dist_pts(s.points[current_lane], self.global_path.target)
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
                 sparse_local_path.append(self.global_path.target)
-                sparse_local_path_speeds += [SpeedCalculator.MIN_SPEED, SpeedCalculator.MIN_SPEED]
-                sparse_traffic_signals += [[], []]
+                sparse_local_path_speeds += [self.END_OF_ROUTE_SPEED]
+                sparse_traffic_signals += [[]]
                 distance_planned += dist_to_target
                 # rospy.logerr("break2")
                 break
