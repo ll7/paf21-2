@@ -32,7 +32,7 @@ class LocalPlanner:
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC_GLOBAL = 5
     REPLAN_THROTTLE_SEC_LOCAL = 1
-    END_OF_ROUTE_REACHED_DIST = 5
+    END_OF_ROUTE_REACHED_DIST = 3
 
     rules_enabled = MapManager.get_rules_enabled()
 
@@ -291,7 +291,9 @@ class LocalPlanner:
     def _end_of_route_handling(self):
         self._global_path = GlobalPath()
         rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1).publish(Empty())
-        if self._current_speed < 1:
+        if self._current_speed < 0.5:
+            self._emergency_break_pub.publish(Bool(False))
+        if self._current_speed < 0.01:
             # self._send_random_global_path_request()  # todo remove in production
             self._send_standard_loop_request()  # todo remove in production
 

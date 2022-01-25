@@ -15,7 +15,7 @@ from .Spline import calc_bezier_curve_from_pts
 class LocalPath:
     REPLANNING_THRESHOLD_DISTANCE_M = 15
     STEP_SIZE = 5
-    TRANSMIT_FRONT_MIN_M = 250
+    TRANSMIT_FRONT_MIN_M = 150
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
     STRAIGHT_TO_TARGET_DIST = 10
@@ -275,7 +275,11 @@ class LocalPath:
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
                 sparse_local_path.append(self.global_path.target)
                 sparse_local_path_speeds += [self.END_OF_ROUTE_SPEED]
-                sparse_local_path_speeds[-2] = self.END_OF_ROUTE_SPEED + 3
+                for _i in range(1, 10):
+                    try:
+                        sparse_local_path_speeds[-i] = self.END_OF_ROUTE_SPEED + 5
+                    except IndexError:
+                        break
                 sparse_traffic_signals += [[]]
                 distance_planned += dist_to_target
                 # rospy.logerr("break2")
