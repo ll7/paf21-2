@@ -48,6 +48,7 @@ class GlobalPlanner:
         self._lanelet_ids_route = []
         self._last_route = None
         self._standard_loop = MapManager.get_demo_route()
+        self._rerouting_target = None
 
         rospy.init_node("paf_global_planner", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
@@ -70,6 +71,7 @@ class GlobalPlanner:
         self._target_on_map_pub = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
+        self._start_score_pub = rospy.Publisher("/paf/paf_validation/score/start", Empty, queue_size=1)
 
     def _change_rules(self, msg: Bool):
         rospy.set_param("rules_enabled", msg.data)
@@ -114,7 +116,7 @@ class GlobalPlanner:
         t0 = time.perf_counter()
         waypoints, initial_pose = self._standard_loop
         if waypoints is None:
-            self._routing_provider_random(_)
+            self._routing_provider_random()
             return
 
         position, yaw = (initial_pose.pose.pose.position.x, initial_pose.pose.pose.position.y), 0
@@ -133,11 +135,10 @@ class GlobalPlanner:
         t0 = np.round(time.perf_counter() - t0, 2)
         if success:
             rospy.loginfo_throttle(10, f"[global planner] success planning standard loop ({t0}s)")
-            rospy.Publisher("/paf/paf_validation/score/start", Empty, queue_size=1).publish(Empty())
         else:
             rospy.logerr_throttle(10, f"[global planner] failed planning standard loop ({t0}s)")
 
-    def _routing_provider_random(self, _: Empty):
+    def _routing_provider_random(self, _: Empty = None):
         t0 = time.perf_counter()
         self._last_route = None
         try:
@@ -179,8 +180,12 @@ class GlobalPlanner:
                 rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
                 return False
         if len(self._waypoints) == 0:
-            rospy.logwarn_throttle(1, "[global planner] route planning waiting for route input...")
-            return False
+            if reroute:
+                rospy.logwarn_throttle(1, "[global planner] waypoints are empty, rerouting to random location...")
+                return self._routing_provider_random()
+            else:
+                rospy.logwarn_throttle(1, "[global planner] route planning waiting for route input...")
+                return False
         rospy.logwarn_throttle(
             1, f"[global planner] waypoints in queue: " f"{[(int(p.x), int(p.y)) for p in self._waypoints]}"
         )
@@ -191,9 +196,10 @@ class GlobalPlanner:
         self._routing_pub.publish(PafLaneletRoute())
 
         if reroute:
-            target = self._waypoints[0]
+            target = self._rerouting_target
         else:
             target = self._waypoints.popleft()
+            self._rerouting_target = target
         yaw = find_lanelet_yaw(self._scenario.lanelet_network, target)
         route: Route = self._route_from_objective(position, yaw, [target.x, target.y])
         draw_msg.points.append(target)
@@ -210,6 +216,8 @@ class GlobalPlanner:
         self._last_route = route_paf
         self._routing_pub.publish(route_paf)
         self._target_on_map_pub.publish(draw_msg)
+
+        self._start_score_pub.publish(Empty())
         return True
 
     def _teleport(self, msg: Pose):

@@ -274,7 +274,7 @@ def calc_bezier_from_indices(from_index, to_index, full_list, ds):
     return bezier
 
 
-def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3):
+def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3, simple=False):
     def draw_path_pts(points, lbl, color):
         from paf_messages.msg import PafTopDownViewPointSet
         import rospy
@@ -289,7 +289,10 @@ def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3):
             pass
 
     pts_xy = [[p.x, p.y] for p in pts]
-    _new_bezier_pts = calc_bezier_curve(pts_xy, ds)
+    _new_bezier_pts = xy_to_pts(calc_bezier_curve(pts_xy, ds))
+
+    if simple:
+        return _new_bezier_pts
     try:
         _new_spline_pts = calc_spline_course_from_point_list(pts_xy, 1)
     except AssertionError:

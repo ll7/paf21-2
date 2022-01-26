@@ -152,12 +152,12 @@ class VehicleController:
                 steering = 0.0
                 self._is_reverse = True
 
-        except RuntimeError:
+        except RuntimeError as e:
             throttle = -1.0
             steering = 0.0
             self._is_reverse = False
             self._target_speed = 0.0
-            rospy.loginfo_throttle(10, "[Actor] waiting for new local path")
+            rospy.logwarn_throttle(10, f"[Actor] error ({e})")
 
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
 
@@ -195,7 +195,7 @@ class VehicleController:
         return control
 
     def __check_stuck(self):
-        if self._current_speed < self._stuck_value_threshold and self._target_speed > self._stuck_value_threshold:
+        if not self._emergency_mode and self._current_speed < self._stuck_value_threshold < self._target_speed:
             if self._stuck_start_time == 0.0:
                 self._stuck_start_time = rospy.get_rostime().secs
                 return False
@@ -230,7 +230,7 @@ class VehicleController:
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
 
-        if control.brake > 0 and self._current_speed > 5:
+        if control.brake > 0 and self._current_speed > 1:
             control.reverse = not self._is_reverse
             control.throttle = control.brake
 
@@ -280,6 +280,7 @@ class VehicleController:
         """
         # rospy.loginfo(
         #    f"INHALT VON LOCAL_PATH with speed {local_path.target_speed}")
+        rospy.loginfo_throttle(10, f"[Actor] received new local path (len={local_path.points.__len__()})")
         self._route = local_path
 
     def __emergency_break_received(self, do_emergency_break: bool):

@@ -180,7 +180,7 @@ class LocalPath:
             rospy.logwarn("[local planner] skip publishing, cause len=0")
             return
         if not send_empty:
-            rospy.logwarn(f"[local planner] publishing {len(msg.points)} points to acting...")
+            rospy.logwarn_throttle(1, f"[local planner] publishing {len(msg.points)} points to acting...")
         publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         publisher.publish(msg)
 

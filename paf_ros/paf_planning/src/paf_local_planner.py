@@ -118,7 +118,6 @@ class LocalPlanner:
             path, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
                 self._current_pose.position, self._current_speed, ignore_previous=True
             )
-            self._create_paf_local_path_msg(path)
 
     def _create_paf_local_path_msg(self, path_msg=None, send_empty=False):
         if path_msg is None:
@@ -156,14 +155,17 @@ class LocalPlanner:
         elif not self._on_local_path():
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
+            self._create_paf_local_path_msg()
         # elif self._is_stopped() and self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
         #     rospy.logwarn_throttle(5, "[local planner] car is waiting for event (red light / stop / yield)")
         #     self._handle_clear_event()  # todo change this handler
         elif self._planner_at_end_of_local_path():
             rospy.loginfo_throttle(5, "[local planner] local planner is replanning (end of local path)")
             self._replan_local_path()
+            self._create_paf_local_path_msg()
         else:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
+            self._create_paf_local_path_msg()
 
         if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
             a, b = self._local_path_idx, self._local_path_idx + 100
@@ -186,7 +188,6 @@ class LocalPlanner:
         msg, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
             self._current_pose.position, self._current_speed, ignore_previous=ignore_prev, min_section=self._to_section
         )
-        self._create_paf_local_path_msg(msg)
 
     def _allowed_from_stop(self):
         return True or self._can_continue_on_path(None)  # todo

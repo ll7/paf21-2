@@ -32,9 +32,9 @@ class SpeedCalculator:
             value = MapManager.get_rules_enabled()
         SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if value else 250 / 3.6
         SpeedCalculator.MAX_SPEED = 95 / 3.6 if value else 120 / 3.6
-        SpeedCalculator.MIN_SPEED = 30 / 3.6 if value else 45 / 3.6
+        SpeedCalculator.MIN_SPEED = 30 / 3.6 if value else 35 / 3.6
         SpeedCalculator.CURVE_FACTOR = 1.5 if value else 2  # higher value = more drifting
-        SpeedCalculator.MAX_DECELERATION = 10 if value else 40
+        SpeedCalculator.MAX_DECELERATION = 10 if value else 15
         # m/s^2, higher value = later and harder braking
 
     def _get_deceleration_distance(self, v_0, v_target):
@@ -105,7 +105,7 @@ class SpeedCalculator:
                 fill += [1]
 
         if len(path) < 3:
-            return path, fill, distances
+            return [max_radius for _ in path], fill, distances
 
         radius_list = [max_radius]
         for p1, p0, p2 in zip(path, path[1:], path[2:]):
