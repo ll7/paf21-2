@@ -83,6 +83,7 @@ class LocalPath:
         if start_idx == 0:
             start_idx = 1
             rospy.logerr("[local planner] lane change at index 0 not possible (no tangent)")
+
         distance_planned = 0
         l_pts, r_pts = [], []
         l_speed, r_speed = [], []
@@ -106,11 +107,10 @@ class LocalPath:
             s_speed += [s.speed_limits[current_lane]]
             s_signs += [s.signals]
 
+        relevant = [x for x in self.global_path.route.sections[start_idx:end_idx]]
+
         def get_pts(target_lane):
             _pts = []
-            relevant = [
-                x for x in self.global_path.route.sections[start_idx:end_idx] if len(x.points) == len(start.points)
-            ]
             j = -1
             for _i, section in enumerate(relevant):
                 if _i + 1 < len(relevant) / 2:
@@ -123,7 +123,7 @@ class LocalPath:
             return pts_to_xy(_pts)
 
         def get_speed(target_lane):
-            sp2 = [section.speed_limits[target_lane] for section in self.global_path.route.sections[start_idx:end_idx]]
+            sp2 = [section.speed_limits[target_lane] for section in relevant]
             out = []
             for sp in zip(s_speed, sp2):
                 selection = [x for x in sp if x > 0]
@@ -133,6 +133,10 @@ class LocalPath:
                     out.append(np.min(selection))
             return out
 
+        delta_i = end_idx - start_idx
+        if delta_i < 5:
+            return end_idx - 1, 0, None, None, None
+
         indices_map = None
         if left_lane is not None:
             pts = get_pts(left_lane)
@@ -140,7 +144,8 @@ class LocalPath:
                 l_pts = calc_bezier_curve(pts, ds=ds, convert_to_pts=True)[1:]
             except ValueError:
                 l_pts = pts
-            l_speed, indices_map = expand_sparse_list(get_speed(left_lane), s_pts, l_pts, indices_new=indices_map)
+            sp = get_speed(left_lane)
+            l_speed, indices_map = expand_sparse_list(sp, s_pts[: len(sp)], l_pts, indices_new=indices_map)
             # l_signs = expand_sparse_list(get_signs(left_lane), s_pts, l_pts, indices_new=indices_map)
         if right_lane is not None:
             pts = get_pts(right_lane)
@@ -148,7 +153,8 @@ class LocalPath:
                 r_pts = calc_bezier_curve(pts, ds=ds, convert_to_pts=True)[1:]
             except ValueError:
                 l_pts = pts
-            r_speed, indices_map = expand_sparse_list(get_speed(right_lane), s_pts, r_pts, indices_new=indices_map)
+            sp = get_speed(right_lane)
+            r_speed, indices_map = expand_sparse_list(sp, s_pts[: len(sp)], r_pts, indices_new=indices_map)
             # r_signs = expand_sparse_list(get_signs(right_lane), s_pts, r_pts, indices_new=indices_map)
         if not can_go_straight:
             s_pts = []
@@ -365,6 +371,8 @@ class LocalPath:
             #               f"{r_change_allowed} and {number_of_lanes_off} > 0 "
             #               f"== {r_change_allowed and number_of_lanes_off > 0}) "
             #               f"AND {distance_to_next_lane_change <= distance_to_off_lanes_change}")
+
+            # rospy.loginfo(f"{distance_to_next_lane_change}, {distance_to_off_plus_1_lanes_change}")
             if 0 < distance_to_next_lane_change <= distance_to_off_lanes_change:
                 # need to lane change here (the latest possibility)
                 l_change = l_change_allowed and number_of_lanes_off < 0  # must go left is isR
@@ -392,14 +400,14 @@ class LocalPath:
             end_idx_lane_change, distance_changed, left, straight, right = self._calculate_lane_options(
                 i, lane_change_distance, current_lane, left_lane, right_lane, not (l_change or r_change)
             )
-            # rospy.logerr(f"{s.target_lanes_index_distance}: "
-            #             f"LANES |{'|'.join([str(x) for x in [left_lane, current_lane, right_lane] if x is not None])}"
-            #             f"|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}")
+            # rospy.logerr(f"{s.target_lanes_index_distance}: lane={current_lane}->{list(s.target_lanes)}, avail:|"
+            #              f"{'|'.join([str(x) for x in [left_lane, current_lane, right_lane] if x is not None])}"
+            #              f"|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
+            #              f"result={left is not None}/{straight is not None}/{right is not None}")
             try:
                 choice = self._choose_lane(left, straight, right)
             except ValueError:
                 choice = "straight"
-                rospy.logerr("[local planner] unable to determine new target lane")
 
             if choice == "left" or choice == "right":
                 # rospy.logwarn(

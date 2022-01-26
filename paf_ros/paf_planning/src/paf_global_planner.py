@@ -83,7 +83,7 @@ class GlobalPlanner:
         )
 
     def _reroute_provider(self, _: Empty = None):
-        rospy.loginfo("[global planner] rerouting...")
+        rospy.logwarn("[global planner] rerouting...")
         self._routing_provider_waypoints(reroute=True)
 
     def _any_target_anywhere(self, p_home) -> np.ndarray:
@@ -119,8 +119,6 @@ class GlobalPlanner:
             self._routing_provider_random()
             return
 
-        position, yaw = (initial_pose.pose.pose.position.x, initial_pose.pose.pose.position.y), 0
-
         msg = None
         if len(self._waypoints) == 0:
             msg = PafLocalPath()
@@ -130,8 +128,8 @@ class GlobalPlanner:
             rospy.Publisher("/carla/ego_vehicle/initialpose", PoseWithCovarianceStamped, queue_size=1).publish(
                 initial_pose
             )
-            rospy.sleep(1)
-        success = self._routing_provider_waypoints(msg, position, yaw)
+            rospy.sleep(3)
+        success = self._routing_provider_waypoints(msg)
         t0 = np.round(time.perf_counter() - t0, 2)
         if success:
             rospy.loginfo_throttle(10, f"[global planner] success planning standard loop ({t0}s)")
@@ -184,9 +182,9 @@ class GlobalPlanner:
                 rospy.logwarn_throttle(1, "[global planner] waypoints are empty, rerouting to random location...")
                 return self._routing_provider_random()
             else:
-                rospy.logwarn_throttle(1, "[global planner] route planning waiting for route input...")
+                rospy.loginfo_throttle(1, "[global planner] route planning waiting for route input...")
                 return False
-        rospy.logwarn_throttle(
+        rospy.loginfo_throttle(
             1, f"[global planner] waypoints in queue: " f"{[(int(p.x), int(p.y)) for p in self._waypoints]}"
         )
         draw_msg = PafTopDownViewPointSet()

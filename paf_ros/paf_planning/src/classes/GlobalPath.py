@@ -411,7 +411,10 @@ class GlobalPath:
             return self.route
 
         msg = PafLaneletRoute()
-        rospy.logwarn(f"[GlobalPath] creating plan with lanelet ids {self.lanelet_ids}")
+        rospy.loginfo(
+            f"[global planner] creating plan to {[self.target.x, self.target.y]} "
+            f"with lanelet ids {self.lanelet_ids}"
+        )
         groups = self.get_lanelet_groups(self.lanelet_ids)
         distance_m = 5
         last_limits = None

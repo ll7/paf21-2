@@ -44,7 +44,7 @@ class ScoreCalculationNode:
         self._score_total_pub = rospy.Publisher("/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1)
 
     def _start(self, _: Empty = None, init=False):
-        rospy.loginfo("[score calculation] start recording")
+        rospy.logerr("[score calculation] start recording")
         self._driven_distance = 0
         self._running = not init
         self.t0 = self._cur_time()
@@ -70,7 +70,7 @@ class ScoreCalculationNode:
     def _stop(self, _: Empty = None):
         if not self._running:
             return
-        rospy.loginfo("[score calculation] stop recording")
+        rospy.logerr("[score calculation] stop recording")
         value = self._update_score(True)
         self._running = False
         msg = PafLogScalar()
@@ -117,7 +117,7 @@ class ScoreCalculationNode:
             )
         try:
             msg = PafLogScalar()
-            msg.section = "PENALTY total (time/km)"
+            msg.section = "PENALTY total (time per km)"
             msg.value = penalty_total / self._driven_distance * 1000
             self._score_total_pub.publish(msg)
         except ZeroDivisionError:
@@ -190,6 +190,10 @@ class ScoreCalculationNode:
         Processes a CarlaCollisionEvent. Repeated events are ignored if within the threshold time.
         :param msg:
         """
+
+        if not self._running:
+            return
+
         try:
             if msg.other_actor_id == 0:
                 last_event, last_time = self.other_collisions[-1]
@@ -212,19 +216,19 @@ class ScoreCalculationNode:
 
             if msg.other_actor_id == 0:
                 self.other_collisions.append((msg, msg.header.stamp.to_time()))
-                rospy.loginfo(f"[score calc] Collision with environment detected ({self._driven_distance:.1f}m)")
+                rospy.logerr(f"[score calculation] Collision with environment detected ({self._driven_distance:.1f}m)")
                 try:
                     msgout.value = len(self.other_collisions) / self._driven_distance * 1000
-                    msgout.section += "environment collision (count/km)"
+                    msgout.section += "environment collision (count per km)"
                     self._score_other_collisions_pub.publish(msgout)
                 except ZeroDivisionError:
                     pass
             else:
                 self.actor_collisions.append((msg, msg.header.stamp.to_time()))
-                rospy.loginfo(f"[score calc] Collision with actor detected ({self._driven_distance:.1f}m)")
+                rospy.logerr(f"[score calculation] Collision with actor detected ({self._driven_distance:.1f}m)")
                 try:
                     msgout.value = len(self.actor_collisions) / self._driven_distance * 1000
-                    msgout.section += "actor collision (count/km)"
+                    msgout.section += "actor collision (count per km)"
                     self._score_actor_collisions_pub.publish(msgout)
                 except ZeroDivisionError:
                     pass
@@ -236,6 +240,10 @@ class ScoreCalculationNode:
         Other line types than solid lines will be discarded
         :param msg:
         """
+
+        if not self._running:
+            return
+
         if CarlaLaneInvasionEvent.LANE_MARKING_SOLID not in msg.crossed_lane_markings:
             return
         try:
@@ -250,13 +258,13 @@ class ScoreCalculationNode:
         self._update_score()
 
         msg = PafLogScalar()
-        msg.section = "PENALTY line crossed (count/km)"
+        msg.section = "PENALTY line crossed (count per km)"
         try:
             msg.value = len(self.crossed_solid_line) / self._driven_distance * 1000
             self._score_crossed_solid_line_pub.publish(msg)
         except ZeroDivisionError:
             pass
-        rospy.loginfo(f"[score calc] Crossed solid line ({self._driven_distance:.1f}m)")
+        rospy.logerr(f"[score calculation] Crossed solid line ({self._driven_distance:.1f}m)")
 
     @staticmethod
     def start():

@@ -60,12 +60,7 @@ def k_closest_indices_of_point_in_list(k: int, pts_list: List[Point2D], target_p
 
 def expand_sparse_list(sparse_list, points_current, points_target, fill_value=None, indices_new=None):
     if len(sparse_list) < len(points_current):
-        import rospy
-
-        rospy.logerr(
-            f"[expand sparse list] sparse list len1={len(sparse_list)} is not "
-            f"len2={len(points_current)} points current"
-        )
+        raise ValueError(f"length of sparse list {len(sparse_list)} < " f"current points {len(points_current)}")
     if indices_new is None:
         indices_new = []
         factor = int(len(points_target) / len(points_current)) + 2
