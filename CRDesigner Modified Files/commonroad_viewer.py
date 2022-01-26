@@ -16,7 +16,6 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad.scenario.traffic_sign_interpreter import SupportedTrafficSignCountry
 
 from crdesigner.input_output.gui.toolboxes.gui_sumo_simulation import SUMO_AVAILABLE
-from zmq import NULL
 if SUMO_AVAILABLE:
     from crdesigner.map_conversion.sumo_map.config import SumoConfig
 from crdesigner.input_output.gui.misc.util import Observable
