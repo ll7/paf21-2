@@ -11,7 +11,7 @@ import bisect
 import numpy as np
 from bezier import Curve
 
-from .HelperFunctions import xy_to_pts, dist, closest_index_of_point_list
+from .HelperFunctions import xy_to_pts, dist, closest_index_of_point_list, pts_to_xy
 
 
 class Spline:
@@ -340,3 +340,55 @@ def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3, simple=False):
     corrected_pts += xy_to_pts(bezier)
 
     return corrected_pts
+
+
+def bezier_refit_all_with_tangents(pts_list, ds=0.1):
+    if len(pts_list) < 2:
+        return pts_list
+    out_pts = xy_to_pts(calc_bezier_curve(pts_to_xy(pts_list[:2])))
+    for i, pts in enumerate(zip(pts_list, pts_list[1:], pts_list[2:], pts_list[3:])):
+        if i % 2 == 1:
+            bezier = calc_bezier_curve(pts_to_xy(pts[1:3]))
+        else:
+            bezier = bezier_refit_with_tangents(*pts, ds=ds)
+        out_pts += xy_to_pts(bezier)
+
+    out_pts += xy_to_pts(calc_bezier_curve(pts_to_xy(pts_list[-2:])))
+
+    return out_pts
+
+
+def bezier_refit_with_tangents(
+    lane1_p1, lane1_p2, lane2_p1, lane2_p2, ds=0.1, alpha=1.0, fraction=0.99
+):  # alpha: 0=line, 1=max_curved
+    lane1_p1 = np.array([lane1_p1.x, lane1_p1.y])
+    lane1_p2 = np.array([lane1_p2.x, lane1_p2.y])
+    lane2_p1 = np.array([lane2_p1.x, lane2_p1.y])
+    lane2_p2 = np.array([lane2_p2.x, lane2_p2.y])
+
+    # calculate intermediate point
+
+    lane1_p1 = np.sum([lane1_p2 * fraction, lane1_p1 * (1 - fraction)], axis=0)
+    lane2_p2 = np.sum([lane2_p1 * fraction, lane2_p2 * (1 - fraction)], axis=0)
+
+    d1 = dist(lane1_p2, lane1_p1) ** alpha
+    d2 = dist(lane2_p1, lane1_p2) ** alpha
+    d3 = dist(lane2_p2, lane2_p1) ** alpha
+    # Modify tangent 1
+    a = d1 * d1
+    b = d2 * d2
+    c = (2 * d1 * d1) + (3 * d1 * d2) + (d2 * d2)
+    d = 3 * d1 * (d1 + d2)
+    out_tangent_1_x = (a * lane2_p1[0] - b * lane1_p1[0] + c * lane1_p2[0]) / d
+    out_tangent_1_y = (a * lane2_p1[1] - b * lane1_p1[1] + c * lane1_p2[1]) / d
+    t1 = [out_tangent_1_x, out_tangent_1_y]
+    # Modify tangent 2
+    a = d3 * d3
+    b = d2 * d2
+    c = (2 * d3 * d3) + (3 * d3 * d2) + (d2 * d2)
+    d = 3 * d3 * (d3 + d2)
+    out_tangent_2_x = (a * lane1_p2[0] - b * lane2_p2[0] + c * lane2_p1[0]) / d
+    out_tangent_2_y = (a * lane1_p2[1] - b * lane2_p2[1] + c * lane2_p1[1]) / d
+    t2 = [out_tangent_2_x, out_tangent_2_y]
+
+    return calc_bezier_curve([lane1_p2, t1, t2, lane2_p1], ds=ds)
