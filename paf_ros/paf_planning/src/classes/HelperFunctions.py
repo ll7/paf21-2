@@ -127,7 +127,6 @@ def sparse_list_from_dense_pts(pts: np.ndarray, min_dist: float):
         if dist_measure >= min_dist:
             dist_measure = 0
             path += [p]
-
     return path
 
 

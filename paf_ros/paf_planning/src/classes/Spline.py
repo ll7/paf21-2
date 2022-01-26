@@ -189,12 +189,15 @@ def calc_spline_course_from_point_list_grouped(xy_list, ds=0.1, group_no=10):
     return out
 
 
-def calc_spline_course_from_point_list(xy_list, ds=0.1):
+def calc_spline_course_from_point_list(xy_list, ds=0.1, to_pts=False):
     if len(xy_list) > 0 and hasattr(xy_list[0], "x"):
         xy_list = [(p.x, p.y) for p in xy_list]
     x, y = list(zip(*xy_list))
     x_target, y_target = calc_spline_course_xy_only(x, y, ds)
-    return np.array([np.array([x, y]) for x, y in zip(x_target, y_target)])
+    out = np.array([np.array([x, y]) for x, y in zip(x_target, y_target)])
+    if to_pts:
+        return xy_to_pts(out)
+    return out
 
 
 def calc_spline_course_xy_only(x, y, ds=0.1):
