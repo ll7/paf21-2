@@ -170,7 +170,9 @@ class LocalPlanner:
         if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
             a, b = self._local_path_idx, self._local_path_idx + 100
             speed = self._local_path.message.target_speed[a:b:10]
-            rospy.loginfo_throttle(5, f"[local planner] current target speeds: " f"{[int(sp * 3.6) for sp in speed]}")
+            rospy.loginfo_throttle(
+                5, f"[local planner] current target speeds: " f"{[float(f'{(sp * 3.6):.2f}') for sp in speed]}"
+            )
 
     def _is_waiting_for_clear_event(self):
         pass  # todo implement this

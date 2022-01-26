@@ -14,9 +14,12 @@ def dist_pts(a, b):
 
 
 def dist(a, b):  # todo change to np.hypot()
-    x1, y1 = a
-    x2, y2 = b
-    return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+    try:
+        x1, y1 = a
+        x2, y2 = b
+        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+    except TypeError:
+        return dist_pts(a, b)
 
 
 def xy_to_pts(xy_list):
@@ -24,6 +27,10 @@ def xy_to_pts(xy_list):
     for x, y in xy_list:
         out.append(Point2D(x, y))
     return out
+
+
+def pts_to_xy(pts_list):
+    return [[p.x, p.y] for p in pts_list]
 
 
 def closest_index_of_point_list(pts_list, target_pt, acc: int = 1):

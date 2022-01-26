@@ -80,6 +80,8 @@ class SpeedCalculator:
         if speed < 0:
             speed = -100
         speed = np.clip(speed, SpeedCalculator.MIN_SPEED, SpeedCalculator.MAX_SPEED)
+        if speed < 0:
+            raise RuntimeError("IMPORSSIBLEuiaretni")
         return speed
 
     @staticmethod

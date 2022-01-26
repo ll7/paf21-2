@@ -206,6 +206,8 @@ def calc_spline_course_xy_only(x, y, ds=0.1):
     rx, ry = [], []
     for i_s in s:
         ix, iy = sp.calc_position(i_s)
+        if np.any(np.isnan([ix, iy])):
+            continue
         rx.append(ix)
         ry.append(iy)
 
@@ -242,17 +244,30 @@ def _calc_bezier_curve(x, y, degree=2):
     return Curve(nodes, degree=degree)
 
 
-def calc_bezier_curve(pts, ds=0.1):
-    degree = len(pts) - 1
-
-    def _calc(pts2):
+def calc_bezier_curve(pts, ds=0.1, convert_to_pts=False):
+    def _calc(pts2, _ds=ds):
         _x, _y = [], []
         for pt in pts2:
-            _x.append(pt[0])
-            _y.append(pt[1])
-        curve = _calc_bezier_curve(_x, _y, degree=degree)
+            try:
+                _x.append(pt[0])
+                _y.append(pt[1])
+            except TypeError:
+                _x.append(pt.x)
+                _y.append(pt.y)
+        valid = None
+        k = 1
+        for k in range(k, len(_x)):
+            valid = not np.any(np.isnan(_calc_bezier_curve(_x[::k], _y[::k], degree=len(_x[::k]) - 1).evaluate(0.0)))
+            if valid:
+                break
+        if not valid:
+            raise ValueError(f"ERROR, unable to calc bezier\n{pts2}")
+        _x = _x[::k]
+        _y = _y[::k]
+        curve = _calc_bezier_curve(_x, _y, degree=len(_x) - 1)
         s_vals = np.linspace(0.0, 1.0, num_pts)
-        return curve.evaluate_multi(s_vals)
+        r_vals = curve.evaluate_multi(s_vals)
+        return r_vals
 
     out_pts = []
     distances = 0
@@ -262,7 +277,8 @@ def calc_bezier_curve(pts, ds=0.1):
     x_arr, y_arr = _calc(pts)
     for x, y in zip(x_arr, y_arr):
         out_pts.append(np.array([x, y]))
-
+    if convert_to_pts:
+        return xy_to_pts(out_pts)
     return out_pts
 
 
@@ -342,20 +358,28 @@ def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3, simple=False):
     return corrected_pts
 
 
-def bezier_refit_all_with_tangents(pts_list, ds=0.1):
+def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None):
+    ds0 = ds if ds2 is None else ds2
     if len(pts_list) < 2:
         return pts_list
-    out_pts = xy_to_pts(calc_bezier_curve(pts_to_xy(pts_list[:2])))
+    out_pts = calc_bezier_curve(pts_to_xy(pts_list[:2]))
+    if len(out_pts) < 2:
+        return out_pts
     for i, pts in enumerate(zip(pts_list, pts_list[1:], pts_list[2:], pts_list[3:])):
-        if i % 2 == 1:
-            bezier = calc_bezier_curve(pts_to_xy(pts[1:3]))
-        else:
-            bezier = bezier_refit_with_tangents(*pts, ds=ds)
-        out_pts += xy_to_pts(bezier)
+        pts = list(pts)
+        pts[0] = xy_to_pts([out_pts[-2]])[0]
+        try:
+            bezier = bezier_refit_with_tangents(*pts, ds=ds0)[:-1]
+        except ValueError:
+            bezier = pts_to_xy(pts[1:-1])
+        out_pts += bezier
 
-    out_pts += xy_to_pts(calc_bezier_curve(pts_to_xy(pts_list[-2:])))
+    out_pts += calc_bezier_curve(pts_to_xy(pts_list[-2:]), ds=ds0)
 
-    return out_pts
+    if ds2 is not None:
+        out_pts = calc_bezier_curve(out_pts, ds=ds)
+
+    return xy_to_pts(out_pts)
 
 
 def bezier_refit_with_tangents(

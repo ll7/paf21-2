@@ -2,14 +2,17 @@ from time import perf_counter
 from typing import List
 
 import rospy
-from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
+from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet
 from .GlobalPath import GlobalPath
-from .HelperFunctions import dist_pts, closest_index_of_point_list, expand_sparse_list
+from .HelperFunctions import dist_pts, closest_index_of_point_list, expand_sparse_list, pts_to_xy
 
 import numpy as np
 
 from .SpeedCalculator import SpeedCalculator
-from .Spline import calc_bezier_curve_from_pts
+from .Spline import (
+    calc_bezier_curve,
+    bezier_refit_all_with_tangents,
+)
 
 
 class LocalPath:
@@ -23,6 +26,7 @@ class LocalPath:
     END_OF_ROUTE_SPEED = 0
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
+        self.lane_change_pts = []
         self._local_path_start_section = 0
         self._sparse_local_path_speeds = []
         self._sparse_traffic_signals = []
@@ -72,102 +76,124 @@ class LocalPath:
 
         return found, distance if distance > 0 else distance_buffer
 
-    def _calculate_intermediate_pts(self, s: PafRouteSection, from_lane: int, to_lane: int, fraction: float):
-
-        try:
-            p1 = np.array([s.points[to_lane].x, s.points[to_lane].y])
-            p0 = np.array([s.points[from_lane].x, s.points[from_lane].y])
-        except IndexError:
-            return None, None, None
-
-        # calculate intermediate point
-
-        intermediate_p = np.sum([p1 * fraction, p0 * (1 - fraction)], axis=0)
-        intermediate_p = Point2D(intermediate_p[0], intermediate_p[1])
-
-        # choose higher speed of the two lanes
-        speed = max([s.speed_limits[to_lane], s.speed_limits[from_lane]])
-
-        # merge traffic signals of the two lanes, remove duplicates
-        sig1 = self.global_path.get_signals(s, to_lane)
-        sig2 = self.global_path.get_signals(s, from_lane)
-        signals = []
-        sig: PafTrafficSignal
-        added_sig: PafTrafficSignal
-        for sig in sig1 + sig2:
-            for added_sig in signals:
-                if added_sig.value == sig.value and added_sig.type == sig.type:
-                    break
-            else:
-                signals.append(sig)
-        if speed < 0:
-            speed = 50 / 3.6
-        return intermediate_p, speed, signals
+    # def _calculate_intermediate_pts(self, s: PafRouteSection, from_lane: int, to_lane: int, fraction: float):
+    #
+    #     try:
+    #         p1 = np.array([s.points[to_lane].x, s.points[to_lane].y])
+    #         p0 = np.array([s.points[from_lane].x, s.points[from_lane].y])
+    #     except IndexError:
+    #         return None, None, None
+    #
+    #     # calculate intermediate point
+    #
+    #     intermediate_p = np.sum([p1 * fraction, p0 * (1 - fraction)], axis=0)
+    #     intermediate_p = Point2D(intermediate_p[0], intermediate_p[1])
+    #
+    #     # choose higher speed of the two lanes
+    #     speed = max([s.speed_limits[to_lane], s.speed_limits[from_lane]])
+    #
+    #     # merge traffic signals of the two lanes, remove duplicates
+    #     sig1 = self.global_path.get_signals(s, to_lane)
+    #     sig2 = self.global_path.get_signals(s, from_lane)
+    #     signals = []
+    #     sig: PafTrafficSignal
+    #     added_sig: PafTrafficSignal
+    #     for sig in sig1 + sig2:
+    #         for added_sig in signals:
+    #             if added_sig.value == sig.value and added_sig.type == sig.type:
+    #                 break
+    #         else:
+    #             signals.append(sig)
+    #     if speed < 0:
+    #         speed = 50 / 3.6
+    #     return intermediate_p, speed, signals
 
     def _calculate_lane_options(
         self, start_idx, lane_change_distance: float, current_lane, left_lane, right_lane, can_go_straight: bool
     ):
+        if start_idx == 0:
+            start_idx = 1
+            rospy.logerr("[local planner] lane change at index 0 not possible (no tangent)")
         distance_planned = 0
-        l_pts, r_pts, s_pts = [], [], []
-        l_speed, r_speed, s_speed = [], [], []
-        l_signs, r_signs, s_signs = [], [], []
+        l_pts, r_pts = [], []
+        l_speed, r_speed = [], []
         end_idx = start_idx
-        additional_points = 10
-        break_idx = None
-        for end_idx, s in enumerate(self.global_path.route.sections[start_idx:]):
-            end_idx += start_idx
-            distance_planned += s.distance_from_last_section
-            fraction_completed = distance_planned / lane_change_distance
-            if break_idx is None and distance_planned > lane_change_distance:
-                break_idx = end_idx + additional_points
-            if break_idx == end_idx:
-                break
-            if end_idx <= len(self.global_path) - 1:
-                fraction_completed = float(np.clip(fraction_completed, 0, 1))
-                distance_planned += s.distance_from_last_section
-                if 0.2 > fraction_completed > 0.8:
-                    continue
-                if left_lane is not None:
-                    point, speed, signs = self._calculate_intermediate_pts(
-                        s, current_lane, left_lane, fraction_completed
-                    )
-                    if point is not None:
-                        l_pts.append(point)
-                        l_speed.append(speed)
-                        l_signs.append(signs)
-                if right_lane is not None:
-                    point, speed, signs = self._calculate_intermediate_pts(
-                        s, current_lane, right_lane, fraction_completed
-                    )
-                    if point is not None:
-                        r_pts.append(point)
-                        r_speed.append(speed)
-                        r_signs.append(signs)
-                continue
+        # additional_points = 10
 
-        if can_go_straight and end_idx != start_idx:
-            _temp = end_idx + 1
-            s_pts = [
-                s.points[current_lane]
-                for s in self.global_path.route.sections[start_idx:_temp]
-                if 0 <= current_lane < len(s.points)
+        ds = 0.5
+
+        s_pts = []
+        s_speed = []
+        s_signs = []
+
+        start = self.global_path.route.sections[start_idx]
+        for end_idx, s in enumerate(self.global_path.route.sections[start_idx:-1]):
+            end_idx += start_idx
+            d2 = distance_planned + s.distance_from_last_section
+            if d2 > lane_change_distance or len(start.points) != len(s.points):
+                break
+            distance_planned = d2
+            s_pts += [s.points[current_lane]]
+            s_speed += [s.speed_limits[current_lane]]
+            s_signs += [s.signals]
+
+        def get_pts(target_lane):
+            _pts = []
+            relevant = [
+                x for x in self.global_path.route.sections[start_idx:end_idx] if len(x.points) == len(start.points)
             ]
-            s_speed = [
-                s.speed_limits[current_lane]
-                for s in self.global_path.route.sections[start_idx:_temp]
-                if 0 <= current_lane < len(s.points)
-            ]
-            s_signs = [
-                self.global_path.get_signals(s, current_lane)
-                for s in self.global_path.route.sections
-                if 0 <= current_lane < len(s.points)
-            ]
+            j = -1
+            for _i, section in enumerate(relevant):
+                if _i + 1 < len(relevant) / 2:
+                    _pts.append(section.points[current_lane])
+                    j = _i + 1
+                elif j == _i:
+                    continue
+                else:
+                    _pts.append(section.points[target_lane])
+            return pts_to_xy(_pts)
+
+        def get_speed(target_lane):
+            sp2 = [section.speed_limits[target_lane] for section in self.global_path.route.sections[start_idx:end_idx]]
+            out = []
+            for sp in zip(s_speed, sp2):
+                selection = [x for x in sp if x > 0]
+                if len(selection) == 0:
+                    out.append(SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED)
+                else:
+                    out.append(np.min(selection))
+            return out
+
+        indices_map = None
+        if left_lane is not None:
+            l_pts = calc_bezier_curve(get_pts(left_lane), ds=ds, convert_to_pts=True)
+            l_speed, indices_map = expand_sparse_list(get_speed(left_lane), s_pts, l_pts, indices_new=indices_map)
+            # l_signs = expand_sparse_list(get_signs(left_lane), s_pts, l_pts, indices_new=indices_map)
+        if right_lane is not None:
+            r_pts = calc_bezier_curve(get_pts(right_lane), ds=ds, convert_to_pts=True)
+            r_speed, indices_map = expand_sparse_list(get_speed(right_lane), s_pts, r_pts, indices_new=indices_map)
+            # r_signs = expand_sparse_list(get_signs(right_lane), s_pts, r_pts, indices_new=indices_map)
+        if not can_go_straight:
+            s_pts = []
+            s_speed = []
+            # s_signs = []
+
+        l_signs = [[] for _ in l_pts]
+        s_signs = [[] for _ in s_pts]
+        r_signs = [[] for _ in r_pts]
 
         left = (l_pts, l_speed, l_signs) if len(l_pts) > 0 else None
         straight = (s_pts, s_speed, s_signs) if len(s_pts) > 0 else None
         right = (r_pts, r_speed, r_signs) if len(r_pts) > 0 else None
 
-        return end_idx, distance_planned, left, straight, right
+        for i, d in enumerate([left, straight, right]):
+            if d is None:
+                continue
+            pts, speeds, signs = d
+            if not (len(pts) == len(speeds) == len(signs)):
+                raise RuntimeError(f"wrong sizes {i}: {len(pts)} {len(speeds)} {len(signs)}")
+
+        return end_idx - 1, distance_planned, left, straight, right
 
     def publish(self, msg=None, send_empty=False):
         if send_empty:
@@ -179,7 +205,7 @@ class LocalPath:
         elif len(msg.points) == 0:
             rospy.logwarn("[local planner] skip publishing, cause len=0")
             return
-        if not send_empty:
+        if not send_empty and msg is not self.message:
             rospy.logwarn_throttle(1, f"[local planner] publishing {len(msg.points)} points to acting...")
         publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         publisher.publish(msg)
@@ -236,6 +262,8 @@ class LocalPath:
             for p1, p2 in zip(self._sparse_local_path[current_idx:], self._sparse_local_path[offset2:]):
                 distance_planned += dist_pts(p1, p2)
 
+            prev_idx = end_index  # set for reference later
+
         self._lane_change_indices = []
 
         if prev_idx < 0 or section_from < 0:
@@ -245,6 +273,7 @@ class LocalPath:
                 sparse_local_path = [point]
                 sparse_local_path_speeds = [current_speed]
                 sparse_traffic_signals = [signals]
+            prev_idx = 0
 
         if section_from < 0 or section_target < 0:
             rospy.logerr_throttle(
@@ -274,7 +303,7 @@ class LocalPath:
                 # rospy.logerr("break1")
                 break
             if i <= end_idx_lane_change:
-                # rospy.logerr("continue1")
+                rospy.logerr("continue1")
                 continue
 
             lane_change_until_distance = None
@@ -374,7 +403,7 @@ class LocalPath:
             except ValueError:
                 choice = "straight"
                 rospy.logerr("[local planner] unable to determine new target lane")
-                rospy.logerr(
+                rospy.logwarn(
                     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
                     f"lanes {left_lane}|{current_lane}|{right_lane} ({choice}), "
                     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
@@ -388,38 +417,52 @@ class LocalPath:
                     sparse_local_path_speeds.append(sp)
                     sparse_traffic_signals.append(sgn)
                 distance_planned += distance_changed
-                lane_change_pts += [pts[0], pts[-1]]
+                lane_change_pts += pts[::8]
                 self._lane_change_indices.append(end_idx_lane_change)
             else:
                 end_idx_lane_change = 0
+
+        if np.any(np.array(sparse_local_path_speeds) < 0):
+            rospy.logerr(sparse_local_path_speeds)
+            points = [p for p, _s in zip(sparse_local_path, sparse_local_path_speeds) if _s < 0]
+            # points2 = [p for p, _s in zip(sparse_local_path, sparse_local_path_speeds) if _s > 0]
+            self._draw_path_pts(points, "lanechnge", (255, 0, 0))
+            # self._draw_path_pts(points2, "lanechnge2", (0, 255, 0))
+            raise RuntimeError("uirtadenit")
 
         t1 = f"{(perf_counter() - t0):.2f}s"
         self._sparse_local_path = sparse_local_path
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
 
-        local_path.points = sparse_local_path
-        local_path.target_speed = sparse_local_path_speeds
-        if len(sparse_local_path) > 3:
-            self.publish(local_path)
+        # t0 = perf_counter()
+        # t1b = f"{(perf_counter() - t0):.2f}s"
+        # if len(sparse_local_path) > 3:
+        #     self.publish(local_path)
 
+        # t0 = perf_counter()
+        # points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)
+        # t2 = f"{(perf_counter() - t0):.2f}s"
+        # t0 = perf_counter()
+
+        # points, target_speed = sparse_local_path, sparse_local_path_speeds
         t0 = perf_counter()
         points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)
-        t2 = f"{(perf_counter() - t0):.2f}s"
-        t0 = perf_counter()
         target_speed = self._update_target_speed(points, target_speed)
-        t3 = f"{(perf_counter() - t0):.2f}s"
 
-        msg = (
-            f"[local planner] planned local path with length={distance_planned:.1f}m "
-            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)} "
-            f"(sparse={t1}, smooth={t2}, speeds={t3})"
-        )
+        t3 = f"{(perf_counter() - t0):.2f}s"
 
         local_path.points = points
         local_path.target_speed = target_speed
 
+        msg = (
+            f"[local planner] planned local path with length={distance_planned:.1f}m "
+            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)} "
+            f"(sparse={t1}, smooth={t3})"
+        )
+
         self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
+        self._draw_path_pts(points, "lanechnge2", (200, 24, 200))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
 
@@ -433,7 +476,7 @@ class LocalPath:
     @staticmethod
     def _smooth_out_path(sparse_pts, sparse_speeds):
         try:
-            pts = calc_bezier_curve_from_pts(sparse_pts)
+            pts = bezier_refit_all_with_tangents(sparse_pts, ds=0.25)
             if len(pts) == 0:
                 raise ValueError
         except ValueError:
@@ -449,7 +492,6 @@ class LocalPath:
     def _update_target_speed(self, local_path, speed_limit):
         speed = self.speed_calc.get_curve_speed(local_path)
         if self.rules_enabled:  # todo speed limit logic for no rules
-            speed_limit = np.clip(speed_limit, 33 / 3.6, 666 / 3.6)
             speed = np.clip(speed, 0, speed_limit)
         speed = self.speed_calc.add_linear_deceleration(speed)
         return speed
@@ -483,9 +525,9 @@ class LocalPath:
         if left is None and straight is None and right is None:
             raise ValueError
 
-        left_percent = int(left is not None) * 100
-        right_percent = int(right is not None) * 100
-        straight_percent = int(straight is not None) * 1
+        left_percent = int(left is not None) * 1
+        right_percent = int(right is not None) * 1
+        straight_percent = int(straight is not None) * 1000
 
         # l_pts, l_speed, l_signs = left
         # s_pts, s_speed, s_signs = straight
