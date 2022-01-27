@@ -14,12 +14,9 @@ def dist_pts(a: Point2D, b: Point2D) -> float:
 
 
 def dist(a, b) -> float:  # todo change to np.hypot()
-    try:
-        x1, y1 = a
-        x2, y2 = b
-        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-    except TypeError:
-        return dist_pts(a, b)
+    x1, y1 = a
+    x2, y2 = b
+    return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
 
 def xy_to_pts(xy_list):

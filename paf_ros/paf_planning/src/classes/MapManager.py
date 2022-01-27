@@ -175,6 +175,48 @@ class MapManager:
         plt.show()
 
     @staticmethod
+    def visualize_pts_list(pts):
+        import matplotlib.pyplot as plt
+        from .HelperFunctions import xy_to_pts
+        from .Spline import calc_spline_course_from_point_list, bezier_refit_all_with_tangents, calc_bezier_curve
+
+        try:
+            pts = xy_to_pts(pts)
+        except ValueError:
+            pass
+
+        x = [p.x for p in pts]
+        y = [p.y for p in pts]
+
+        plt.xlim([np.min(x) - 1, np.max(x) + 1])
+        plt.ylim([np.min(y) - 1, np.max(y) + 1])
+
+        plt.plot(x, y, marker="o", color="green", label="Eingangswert")
+
+        pts3 = xy_to_pts(calc_spline_course_from_point_list(pts, ds=0.25))
+        x = [p.x for p in pts3]
+        y = [p.y for p in pts3]
+        plt.plot(x, y, color="blue", label="Spline(Eingangswert)")
+
+        pts2 = bezier_refit_all_with_tangents(pts, ds=0.25)
+        x = [p.x for p in pts2]
+        y = [p.y for p in pts2]
+        plt.plot(x, y, color="red", label="Bezier with Tangents")
+
+        pts4 = bezier_refit_all_with_tangents(pts, ds=0.25, ds2=0.25)
+        x = [p.x for p in pts4]
+        y = [p.y for p in pts4]
+        plt.plot(x, y, color="orange", label="Bezier(Bezier with Tangents)")
+
+        pts5 = calc_bezier_curve(pts, convert_to_pts=True)
+        x = [p.x for p in pts5]
+        y = [p.y for p in pts5]
+        plt.plot(x, y, color="magenta", label="Bezier(Eingangswert)")
+
+        plt.legend()
+        plt.show()
+
+    @staticmethod
     def speed_sign_checker():
         for i in range(1, 9):
             town = f"Town0{i}"

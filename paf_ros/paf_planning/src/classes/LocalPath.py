@@ -281,10 +281,10 @@ class LocalPath:
 
         s: PafRouteSection
         for i, s in enumerate(self.global_path.route.sections[idx1:]):
-            rospy.logwarn(
-                f"{s.target_lanes_index_distance}: {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
-                f"{list(range(len(s.points)))}"
-            )
+            # rospy.logwarn(
+            #     f"{s.target_lanes_index_distance}: {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
+            #     f"{list(range(len(s.points)))}"
+            # )
             i += idx1
 
             s_prev = None if i == 0 else self.global_path.route.sections[i - 1]
@@ -432,7 +432,7 @@ class LocalPath:
                 # )
                 pts, speeds, signs = left if choice == "left" else right
                 future_lane = left_lane if choice == "left" else right_lane
-                rospy.logwarn(f"changing lanes: {current_lane}->{future_lane}")
+                # rospy.logwarn(f"changing lanes: {current_lane}->{future_lane}")
                 current_lane = future_lane
                 # rospy.logerr((choice, current_lane, s.target_lanes, s.target_lanes_distance))
                 for pt, sp, sgn in zip(pts, speeds, signs):

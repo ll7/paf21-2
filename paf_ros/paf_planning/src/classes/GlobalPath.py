@@ -14,7 +14,6 @@ from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRout
 
 from .HelperFunctions import dist_pts, closest_index_of_point_list, dist, sparse_list_from_dense_pts
 from .SpeedCalculator import SpeedCalculator
-from .Spline import bezier_refit_all_with_tangents
 
 
 class GlobalPath:
@@ -346,8 +345,7 @@ class GlobalPath:
         return traffic_signals, speed_limits
 
     def get_lanelet_groups(self):
-        def match_lane(id_needle, successors):
-            lanelet_needle = self._lanelet_network.find_lanelet_by_id(id_needle)
+        def match_lane(lanelet_needle, successors):
             successor = None
             for _i, successor in enumerate(successors):
                 if successor in lanelet_needle.successor:
@@ -367,7 +365,8 @@ class GlobalPath:
             anchor_r = -1  # rightmost lane to continue on
             shift_l = 99  # merging lanes from next segment on the left
             for i, l_id in enumerate(blob0):
-                successor_idx, successor_id = match_lane(l_id, blob1)
+                lanelet = self._lanelet_network.find_lanelet_by_id(l_id)
+                successor_idx, successor_id = match_lane(lanelet, blob1)
                 if successor_idx is None:
                     continue
                 anchor_l = min(i, anchor_l)
@@ -397,26 +396,32 @@ class GlobalPath:
 
             def get_ref_indices(_vertices):
                 _indices = []
-                for ref_pt in ref_pts:
-                    _i, _ = closest_index_of_point_list(_vertices, ref_pt)
+                _remove = []
+                _i_prev = 0
+                _search_space = 25
+                for _j, ref_pt in enumerate(ref_pts):
+                    _i_max = _i_prev + _search_space
+                    _i, _ = closest_index_of_point_list(_vertices[_i_prev:_i_max], ref_pt)
+                    _i += _i_prev
+                    _i_prev = _i
                     if _i in _indices:
-                        return None
+                        _remove.append(_j)
+                        continue
                     _indices.append(_i)
-                return _indices
+                return _indices, _remove
 
             for i, lanelet in enumerate(lanelets):
                 if i == ref_i:
                     pts = ref_pts
                 else:
                     _vertices = lanelet.center_vertices
-                    indices = get_ref_indices(_vertices)
-                    if indices is None:
-                        _vertices = bezier_refit_all_with_tangents(_vertices, ds=0.1, convert_to_pts=False)
-                        indices = get_ref_indices(_vertices)
+                    # _vertices = bezier_refit_all_with_tangents(_vertices, ds=.1, convert_to_pts=False)
+                    indices, remove = get_ref_indices(_vertices)
                     if indices is None:
                         raise RuntimeError("[global planner] Unable to calculate pts of lanelet")
 
-                    pts = [_vertices[j] for j in indices]
+                    pts = np.array(_vertices)[indices]
+                    ref_pts = np.delete(ref_pts, remove, axis=0)
 
                 vertices.append(np.array(pts))
             out.append((vertices, anchor, avg_len))
@@ -439,11 +444,10 @@ class GlobalPath:
             f"with lanelet ids {self.lanelet_ids}"
         )
         groups = self.get_lanelet_groups()
+        matrix = self.get_paf_lanelet_matrix(groups)
         last_limits = None
         self.signal_positions = []
-        for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
-            zip(groups, self.get_paf_lanelet_matrix(groups))
-        ):
+        for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(zip(groups, matrix)):
             if last_limits is None:
                 last_limits = [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]
             else:

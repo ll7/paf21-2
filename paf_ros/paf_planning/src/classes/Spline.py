@@ -365,19 +365,33 @@ def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None, convert_to_pts=Tr
     ds0 = ds if ds2 is None else ds2
     if len(pts_list) < 2:
         return pts_list
-    out_pts = calc_bezier_curve(pts_to_xy(pts_list[:2]))
+    try:
+        out_pts = calc_bezier_curve(pts_to_xy(pts_list[:2]))
+        is_pts = True
+    except AttributeError:
+        out_pts = calc_bezier_curve(pts_list[:2])
+        is_pts = False
     if len(out_pts) < 2:
         return out_pts
     for i, pts in enumerate(zip(pts_list, pts_list[1:], pts_list[2:], pts_list[3:])):
         pts = list(pts)
-        pts[0] = xy_to_pts([out_pts[-2]])[0]
+        if is_pts:
+            pts[0] = xy_to_pts([out_pts[-2]])[0]
+        else:
+            pts[0] = out_pts[-2]
         try:
             bezier = bezier_refit_with_tangents(*pts, ds=ds0)[:-1]
         except ValueError:
-            bezier = pts_to_xy(pts[1:-1])
+            if is_pts:
+                bezier = pts_to_xy(pts[1:-1])
+            else:
+                bezier = pts[1:-1]
         out_pts += bezier
 
-    out_pts += calc_bezier_curve(pts_to_xy(pts_list[-2:]), ds=ds0)
+    if is_pts:
+        out_pts += calc_bezier_curve(pts_to_xy(pts_list[-2:]), ds=ds0)
+    else:
+        out_pts += calc_bezier_curve(pts_list[-2:], ds=ds0)
 
     if ds2 is not None:
         out_pts = calc_bezier_curve(out_pts, ds=ds)
@@ -390,10 +404,16 @@ def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None, convert_to_pts=Tr
 def bezier_refit_with_tangents(
     lane1_p1, lane1_p2, lane2_p1, lane2_p2, ds=0.1, alpha=1.0, fraction=0.99
 ):  # alpha: 0=line, 1=max_curved
-    lane1_p1 = np.array([lane1_p1.x, lane1_p1.y])
-    lane1_p2 = np.array([lane1_p2.x, lane1_p2.y])
-    lane2_p1 = np.array([lane2_p1.x, lane2_p1.y])
-    lane2_p2 = np.array([lane2_p2.x, lane2_p2.y])
+    try:
+        lane1_p1 = np.array([lane1_p1.x, lane1_p1.y])
+        lane1_p2 = np.array([lane1_p2.x, lane1_p2.y])
+        lane2_p1 = np.array([lane2_p1.x, lane2_p1.y])
+        lane2_p2 = np.array([lane2_p2.x, lane2_p2.y])
+    except AttributeError:
+        lane1_p1 = np.array(lane1_p1)
+        lane1_p2 = np.array(lane1_p2)
+        lane2_p1 = np.array(lane2_p1)
+        lane2_p2 = np.array(lane2_p2)
 
     # calculate intermediate point
 
