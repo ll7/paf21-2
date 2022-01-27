@@ -11,7 +11,7 @@ export paf_dir="$SCRIPT_DIR/../"
 bash "$SCRIPT_DIR/subscripts/_set_python_executable.sh" 1>/dev/null
 
 ln -sfn "$paf_dir/paf_ros/" ~/carla-ros-bridge/catkin_ws/src/
-ln -sfn "$paf_dir/Maps/No Rules" ~/.ros/
+ln -sfn "$paf_dir/Maps/" ~/.ros/
 
 eval "$(cat ~/.bashrc | tail -n +10)" 1>/dev/null
 function carla_available() {
