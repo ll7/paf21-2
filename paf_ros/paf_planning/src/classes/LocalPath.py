@@ -21,7 +21,7 @@ class LocalPath:
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
-    STRAIGHT_TO_TARGET_DIST = 15
+    STRAIGHT_TO_TARGET_DIST = 7.5
     END_OF_ROUTE_SPEED = 5
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
@@ -478,7 +478,7 @@ class LocalPath:
     @staticmethod
     def _smooth_out_path(sparse_pts, sparse_speeds):
         try:
-            pts = bezier_refit_all_with_tangents(sparse_pts, ds=0.25, ds2=0.2)
+            pts = bezier_refit_all_with_tangents(sparse_pts, ds=0.25, ds2=0.25)
             if len(pts) == 0:
                 pts = calc_spline_course_from_point_list(sparse_pts, ds=0.25)
             if len(pts) == 0:

@@ -11,6 +11,7 @@ import bisect
 import numpy as np
 from bezier import Curve
 
+import rospy
 from .HelperFunctions import xy_to_pts, dist, closest_index_of_point_list, pts_to_xy
 
 
@@ -265,6 +266,8 @@ def calc_bezier_curve(pts, ds=0.1, convert_to_pts=False):
                 break
         if not valid:
             raise ValueError(f"ERROR, unable to calc bezier\n{pts2}")
+        if k != 1:
+            rospy.logwarn_throttle(1, f"bezier is limited to every {k}th item of list (len={len(pts)})")
         _x = _x[::k]
         _y = _y[::k]
         curve = _calc_bezier_curve(_x, _y, degree=len(_x) - 1)
