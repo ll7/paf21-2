@@ -279,13 +279,12 @@ class LocalPath:
         end_idx_lane_change = 0
         idx1 = section_from + 1
 
-        rospy.logerr(f"starting at lane {current_lane}")
-
         s: PafRouteSection
         for i, s in enumerate(self.global_path.route.sections[idx1:]):
-            # rospy.logwarn(
-            #     f"{s.target_lanes_index_distance}: {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
-            #     f"{list(range(len(s.points)))}")
+            rospy.logwarn(
+                f"{s.target_lanes_index_distance}: {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
+                f"{list(range(len(s.points)))}"
+            )
             i += idx1
 
             s_prev = None if i == 0 else self.global_path.route.sections[i - 1]

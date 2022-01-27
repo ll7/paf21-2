@@ -114,7 +114,7 @@ class GlobalPlanner:
 
     def _routing_provider_standard_loop(self, _: Empty):
         t0 = time.perf_counter()
-        waypoints, initial_pose = self._standard_loop
+        initial_pose, waypoints = self._standard_loop
         if waypoints is None:
             self._routing_provider_random()
             return

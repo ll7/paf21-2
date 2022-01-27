@@ -14,6 +14,7 @@ from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRout
 
 from .HelperFunctions import dist_pts, closest_index_of_point_list, dist, sparse_list_from_dense_pts
 from .SpeedCalculator import SpeedCalculator
+from .Spline import bezier_refit_all_with_tangents
 
 
 class GlobalPath:
@@ -46,7 +47,7 @@ class GlobalPath:
             self.lanelet_ids = lanelet_ids
             self._lanelet_network = lanelet_network
             self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
-            self._graph = self._calc_lane_change_graph()
+            self._graph = None
             self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, lanelet_network)
             self.route = None
             self.signal_positions = []
@@ -129,6 +130,7 @@ class GlobalPath:
         Calculates the options to drive on for each lanelet
         :return: dict { lanelet_id1: [ allowed_other_lanelet_id, ...], ... }
         """
+        print("WARNING _calc_lane_change_graph may be wrong")
 
         def valid_successor_from_list(check_lanelet: Lanelet, l_id_check: list):
             try:
@@ -220,6 +222,8 @@ class GlobalPath:
         Calculates alternatives to the current route
         :return: tuple (leftmost_route, rightmost_route)
         """
+        if self._graph is None:
+            self._calc_lane_change_graph()
 
         def calc_extremum(is_left_extremum):
             l_id = self.lanelet_ids[0]
@@ -341,53 +345,39 @@ class GlobalPath:
                     break
         return traffic_signals, speed_limits
 
-    def get_lanelet_groups(self, l_list):
-        out = {}
+    def get_lanelet_groups(self):
+        def match_lane(id_needle, successors):
+            lanelet_needle = self._lanelet_network.find_lanelet_by_id(id_needle)
+            successor = None
+            for _i, successor in enumerate(successors):
+                if successor in lanelet_needle.successor:
+                    return _i, successor
+            return None, successor
 
-        def get_lanelet_blob(from_lanelet):
-            other = from_lanelet
-            blob = []
-            anchor_l = 0  # leftmost lane to continue on
+        blobs = []
+        anchors = []
+        for a, b, c in self._adjacent_lanelets:
+            li = b + [a] + c
+            if len(blobs) > 0 and a in blobs[-1]:
+                continue
+            blobs.append(li)
+
+        for blob0, blob1 in zip(blobs, blobs[1:]):
+            anchor_l = 99  # leftmost lane to continue on
             anchor_r = -1  # rightmost lane to continue on
-            shift_l = 0  # merging lanes from next segment on the left
-            while other in self._graph:  # go to leftmost lanelet
-                (left, straight, _) = self._graph[other]
-                if left is None:
-                    break
-                other = left
-            other2 = other
-            while other2 in self._graph:  # add from left to right
-                if other2 not in blob:
-                    blob.append(other2)
-                (_, straight, other2) = self._graph[other2]
-                if other2 is None:
-                    break
-            if len(blob) == 0:
-                blob = (other,)
-                return hash(blob), blob, (0, 0, 0)
-            other3 = blob[0]
-            while other3 in self._graph and self._graph[other3][1] is None:
-                other3 = self._graph[other3][2]
-                anchor_l += 1
-                anchor_r += 1
-            next_straight = self._graph[other3][1] if other3 in self._graph else None
-            while other3 in self._graph and self._graph[other3][1] is not None:
-                other3 = self._graph[other3][2]
-                anchor_r += 1
-            while next_straight in self._graph and self._graph[next_straight][0] is not None:
-                next_straight = self._graph[next_straight][0]
-                shift_l += 1
+            shift_l = 99  # merging lanes from next segment on the left
+            for i, l_id in enumerate(blob0):
+                successor_idx, successor_id = match_lane(l_id, blob1)
+                if successor_idx is None:
+                    continue
+                anchor_l = min(i, anchor_l)
+                anchor_r = max(i, anchor_r)
+                shift_l = min(successor_idx, shift_l)
 
-            blob = tuple(blob)
-            h = hash(blob)
-            return h, blob, (shift_l, anchor_l, anchor_r)
+            anchors.append((shift_l, anchor_l, anchor_r))
+        anchors.append((0, 0, len(blobs[-1]) - 1))
 
-        for lanelet in l_list:
-            _h, _blob, _anchor = get_lanelet_blob(lanelet)
-            if _anchor is not None and _h not in out:
-                out[_h] = (_blob, _anchor)
-        out = list(out.values())
-        return out
+        return [x for x in zip(blobs, anchors)]
 
     def get_paf_lanelet_matrix(self, groups):
         out = []
@@ -405,31 +395,38 @@ class GlobalPath:
 
             ref_pts = sparse_list_from_dense_pts(lanelets[ref_i].center_vertices, num_pts)
 
+            def get_ref_indices(_vertices):
+                _indices = []
+                for ref_pt in ref_pts:
+                    _i, _ = closest_index_of_point_list(_vertices, ref_pt)
+                    if _i in _indices:
+                        return None
+                    _indices.append(_i)
+                return _indices
+
             for i, lanelet in enumerate(lanelets):
                 if i == ref_i:
                     pts = ref_pts
                 else:
-                    indices = []
-                    duplicates = []
-                    pts = []
-                    for ref_pt in ref_pts:
-                        _i, _d = closest_index_of_point_list(lanelet.center_vertices, ref_pt)
-                        if _i in indices:
-                            duplicates.append((len(indices) - 1))
-                        else:
-                            indices.append(_i)
-                    for k, l in enumerate(indices):
-                        pt = lanelet.center_vertices[l]
-                        pts.append(pt)
-                        for n in duplicates:
-                            if n > k:
-                                break
-                            if k == n:
-                                pts.append(np.random.rand() * 1e-3)
-                                rospy.logwarn_throttle(1, "[global planner] duplicate found in matching points")
+                    _vertices = lanelet.center_vertices
+                    indices = get_ref_indices(_vertices)
+                    if indices is None:
+                        _vertices = bezier_refit_all_with_tangents(_vertices, ds=0.1, convert_to_pts=False)
+                        indices = get_ref_indices(_vertices)
+                    if indices is None:
+                        raise RuntimeError("[global planner] Unable to calculate pts of lanelet")
+
+                    pts = [_vertices[j] for j in indices]
+
                 vertices.append(np.array(pts))
             out.append((vertices, anchor, avg_len))
         return out
+
+    @staticmethod
+    def _end_of_segment(lanes_l, anchor_l, anchor_r, num_lanelets):
+        if lanes_l != 0 or anchor_l != 0 or anchor_r != num_lanelets - 1:
+            return True
+        return False
 
     def as_msg(self) -> PafLaneletRoute:
 
@@ -441,7 +438,7 @@ class GlobalPath:
             f"[global planner] creating plan to {[self.target.x, self.target.y]} "
             f"with lanelet ids {self.lanelet_ids}"
         )
-        groups = self.get_lanelet_groups(self.lanelet_ids)
+        groups = self.get_lanelet_groups()
         last_limits = None
         self.signal_positions = []
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
@@ -500,7 +497,7 @@ class GlobalPath:
                 self.route.sections = self.route.sections[: section_idx + 1]
                 self.route.sections[-1].target_lanes = [target_lane]
 
-            if (lanes_l != 0 or anchor_l != 0 or anchor_r != len(lanelet_id_list) - 1) or i == len(groups) - 1:
+            if i == len(groups) - 1 or self._end_of_segment(lanes_l, anchor_l, anchor_r, len(lanelet_id_list)):
                 # shift speed limit lanes
                 # print(lanes_l, anchor_l, anchor_r)
                 last_limits_new = [-1 for _ in range(anchor_l, anchor_r + 1)]

@@ -106,7 +106,7 @@ def sparse_list_from_dense_pts(pts: np.ndarray, num_pts: int, distances: List[fl
             path += [p]
 
     if not np.all(path[-1] == pts[-1]):
-        path += [pts[-1] * np.random.rand() * 1e-4]
+        path += [pts[-1] + np.random.rand() * 1e-4]
     return path
 
 

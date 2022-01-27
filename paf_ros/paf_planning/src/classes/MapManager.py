@@ -73,26 +73,26 @@ class MapManager:
         town = MapManager.get_map()
 
         # if town == "Town03":
-        #     return [
-        #         Point2D(247, 62.6),
-        #     ], MapManager.point_to_pose((70, -5.7), -90)
+        #     return MapManager.point_to_pose((0,150), 180), [
+        #         Point2D(-6.6, 101),
+        #     ]
         if town == "Town03":
-            return [
+            return MapManager.point_to_pose((-6, -159), 180), [
                 Point2D(-23, -134),
                 Point2D(68, -61),
                 Point2D(122, 201.6),
                 Point2D(-7, 43.5),
                 Point2D(8.8, 84),
                 Point2D(-149, -38),
-            ], MapManager.point_to_pose((-6, -159), 180)
+            ]
         elif town == "Town04":
-            return [
+            return MapManager.point_to_pose((389, 45), 180), [
                 Point2D(64, -14),
                 Point2D(-454, -18),
                 Point2D(10, -243),
                 Point2D(54, 326),
                 Point2D(388, 199),
-            ], MapManager.point_to_pose((389, 45), 180)
+            ]
         else:
             return None, None
 

@@ -361,7 +361,7 @@ def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3, simple=False):
     return corrected_pts
 
 
-def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None):
+def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None, convert_to_pts=True):
     ds0 = ds if ds2 is None else ds2
     if len(pts_list) < 2:
         return pts_list
@@ -382,7 +382,9 @@ def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None):
     if ds2 is not None:
         out_pts = calc_bezier_curve(out_pts, ds=ds)
 
-    return xy_to_pts(out_pts)
+    if convert_to_pts:
+        return xy_to_pts(out_pts)
+    return out_pts
 
 
 def bezier_refit_with_tangents(
