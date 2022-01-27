@@ -55,12 +55,12 @@ class MapManager:
         return rospy.get_param("/carla/town", None)
 
     @staticmethod
-    def point_to_pose(pt: Tuple[float, float], yaw_deg: float) -> PoseWithCovarianceStamped:
+    def point_to_pose(pt: Tuple[float, float], yaw_deg: float, height=2) -> PoseWithCovarianceStamped:
         initial_pose = PoseWithCovarianceStamped()
         x, y = pt
         initial_pose.pose.pose.position.x = x
         initial_pose.pose.pose.position.y = y
-        initial_pose.pose.pose.position.z = 10
+        initial_pose.pose.pose.position.z = height
         x, z, y, w = quaternion_from_euler(0, np.deg2rad(yaw_deg + 90), 0)
         # rospy.logerr((x, y, z, w))
         initial_pose.pose.pose.orientation = Quaternion(x, y, z, w)
@@ -71,11 +71,11 @@ class MapManager:
     @staticmethod
     def get_demo_route():
         town = MapManager.get_map()
-        #
+
         if town == "Town03":
             return [
                 Point2D(122, 201.6),
-            ], MapManager.point_to_pose((220.4, 202.7), 90)
+            ], MapManager.point_to_pose((170, -5.7), -90)
         # if town == "Town03":
         #     return [
         #                Point2D(-23, -134),

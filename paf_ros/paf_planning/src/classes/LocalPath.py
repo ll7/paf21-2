@@ -276,8 +276,14 @@ class LocalPath:
             #     f"{s.target_lanes_index_distance}: {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
             #     f"{list(range(len(s.points)))}")
             i += idx1
+
+            s_prev = None if i == 0 else self.global_path.route.sections[i - 1]
+            if s_prev.target_lanes_distance == 0:
+                # rospy.logerr(f"current_lane={current_lane}, target_lanes={list(s_prev.target_lanes)},"
+                #              f" shift={s_prev.target_lanes_left_shift}")
+                current_lane += -s_prev.target_lanes[0] + s_prev.target_lanes_left_shift
+
             # test if current lane exists on this section
-            current_lane = np.abs(current_lane)
             if not 0 <= current_lane < len(s.points):
                 rospy.logerr(f"{current_lane} does not exist in available lanes: {list(range(len(s.points)))}")
                 rospy.logerr(
@@ -292,6 +298,7 @@ class LocalPath:
                     current_lane = 0
                 else:
                     current_lane = len(s.points) - 1
+                # raise RuntimeError()
 
             if distance_planned > target_distance:
                 # rospy.logerr("break1")
@@ -332,20 +339,13 @@ class LocalPath:
             else:
                 sparse_traffic_signals.append(self.global_path.get_signals(s, current_lane))
 
-            if s.target_lanes_distance == 0:
-                # rospy.logerr(f"current_lane={current_lane}, target_lanes={list(s.target_lanes)},"
-                #              f" shift={s.target_lanes_left_shift}")
-                current_lane += -s.target_lanes[0] + s.target_lanes_left_shift
-                # rospy.logerr("continue2")
-                continue
-
             # target is right == number of lanes off > 0
             # target is left == number of lanes off < 0
             # on target lanes: number of lanes off == 0
             if current_lane > s.target_lanes[-1]:
-                number_of_lanes_off = current_lane - s.target_lanes[-1]
+                number_of_lanes_off = current_lane - s.target_lanes[-1]  # eg. 3 - 0 = 3 (go right)
             elif current_lane < s.target_lanes[0]:
-                number_of_lanes_off = s.target_lanes[0] - current_lane
+                number_of_lanes_off = current_lane - s.target_lanes[0]  # eg. 0 - 3 = -3 (go left)
             else:
                 number_of_lanes_off = 0
             # rospy.loginfo(
@@ -358,32 +358,32 @@ class LocalPath:
             distance_for_one_lane_change = (
                 max([target_speed * lane_change_secs, current_speed * lane_change_secs]) - buffer
             )
-            distance_to_next_lane_change = s.target_lanes_distance
-            distance_to_off_lanes_change = np.abs(number_of_lanes_off) * distance_for_one_lane_change
-            distance_to_off_plus_1_lanes_change = (np.abs(number_of_lanes_off) + 2) * distance_for_one_lane_change
 
-            l_limit, r_limit = 0, len(s.points) - 1
-            l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
-            l_change, r_change = False, False
-
-            # rospy.loginfo(f"({l_change_allowed} and {number_of_lanes_off} < 0 "
-            #               f"== {l_change_allowed and number_of_lanes_off < 0} OR "
-            #               f"{r_change_allowed} and {number_of_lanes_off} > 0 "
-            #               f"== {r_change_allowed and number_of_lanes_off > 0}) "
-            #               f"AND {distance_to_next_lane_change <= distance_to_off_lanes_change}")
-
-            # rospy.loginfo(f"{distance_to_next_lane_change}, {distance_to_off_plus_1_lanes_change}")
-            if 0 < distance_to_next_lane_change <= distance_to_off_lanes_change:
-                # need to lane change here (the latest possibility)
-                l_change = l_change_allowed and number_of_lanes_off < 0  # must go left is isR
-                r_change = r_change_allowed and number_of_lanes_off > 0  # must go right if isL
-            elif distance_to_next_lane_change <= distance_to_off_plus_1_lanes_change:
-                # no lane changes in "wrong" direction allowed anymore
-                l_change_allowed = l_change_allowed and number_of_lanes_off < 0  # can go left if isR
-                r_change_allowed = r_change_allowed and number_of_lanes_off > 0  # can go right if isL
             if lane_change_until_distance is not None:
                 l_change_allowed = l_change = False
                 r_change_allowed = r_change = False
+            else:
+                distance_to_off_lanes_change = np.abs(number_of_lanes_off) * distance_for_one_lane_change
+                distance_to_off_plus_1_lanes_change = (np.abs(number_of_lanes_off) + 2) * distance_for_one_lane_change
+
+                l_limit, r_limit = 0, len(s.points) - 1
+                l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
+                l_change, r_change = False, False
+
+                # rospy.loginfo(f"A ({number_of_lanes_off}): {s.target_lanes_distance} <= "
+                #   f"{distance_to_off_lanes_change} -> {s.target_lanes_distance <= distance_to_off_lanes_change}")
+                # rospy.loginfo(f"B ({l_change_allowed}|{r_change_allowed}): {s.target_lanes_distance} <= "
+                #               f"{distance_to_off_plus_1_lanes_change} -> "
+                #               f"{s.target_lanes_distance <= distance_to_off_plus_1_lanes_change}")
+
+                if s.target_lanes_distance <= distance_to_off_lanes_change:
+                    # need to lane change here (the latest possibility)
+                    l_change = number_of_lanes_off > 0
+                    r_change = number_of_lanes_off < 0
+                elif s.target_lanes_distance <= distance_to_off_plus_1_lanes_change:
+                    l_change_allowed = l_change_allowed and number_of_lanes_off > 0
+                    r_change_allowed = r_change_allowed and number_of_lanes_off < 0
+
             lane_change_distance = min(distance_for_one_lane_change, dist_to_target)
 
             left_lane, right_lane = None, None
@@ -408,7 +408,6 @@ class LocalPath:
                 choice = self._choose_lane(left, straight, right)
             except ValueError:
                 choice = "straight"
-
             if choice == "left" or choice == "right":
                 # rospy.logwarn(
                 #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
@@ -418,6 +417,7 @@ class LocalPath:
                 # )
                 pts, speeds, signs = left if choice == "left" else right
                 current_lane = left_lane if choice == "left" else right_lane
+                # rospy.logerr((choice, current_lane, s.target_lanes, s.target_lanes_distance))
                 for pt, sp, sgn in zip(pts, speeds, signs):
                     sparse_local_path.append(pt)
                     sparse_local_path_speeds.append(sp)

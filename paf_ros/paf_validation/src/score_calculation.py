@@ -10,6 +10,8 @@ from std_msgs.msg import Empty
 
 class ScoreCalculationNode:
     EVENT_THRESHOLD_SECS = 2
+    MIN_RUN_TIME = 15
+    MAX_RUN_TIME = 300
 
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
@@ -71,12 +73,14 @@ class ScoreCalculationNode:
         if not self._running:
             return
         rospy.logerr("[score calculation] stop recording")
-        value = self._update_score(True)
+        value, t = self._update_score(True)
         self._running = False
-        msg = PafLogScalar()
-        msg.section = "PENALTY standard loop"
-        msg.value = value
-        self._score_total_pub.publish(msg)
+
+        # if self.MIN_RUN_TIME <= t <= self.MAX_RUN_TIME :
+        #     msg = PafLogScalar()
+        #     msg.section = "PENALTY standard loop"
+        #     msg.value = value
+        #     self._score_total_pub.publish(msg)
 
     def _update_score(self, verbose=False):
         """
@@ -115,15 +119,17 @@ class ScoreCalculationNode:
                 len(self.speed_limit_overridden),
                 len(self.crossed_solid_line),
             )
-        try:
-            msg = PafLogScalar()
-            msg.section = "PENALTY total (time per km)"
-            msg.value = penalty_total / self._driven_distance * 1000
-            self._score_total_pub.publish(msg)
-        except ZeroDivisionError:
-            pass
 
-        return penalty_total
+        if self.MIN_RUN_TIME <= score_time <= self.MAX_RUN_TIME:
+            try:
+                msg = PafLogScalar()
+                msg.section = "PENALTY total (time per km)"
+                msg.value = penalty_total / self._driven_distance * 1000
+                self._score_total_pub.publish(msg)
+            except ZeroDivisionError:
+                pass
+
+        return penalty_total, score_time
 
     @staticmethod
     def _sec_format(secs, distance=None):
