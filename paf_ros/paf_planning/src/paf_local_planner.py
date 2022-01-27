@@ -167,12 +167,12 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
             self._create_paf_local_path_msg()
 
-        if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
-            a, b = self._local_path_idx, self._local_path_idx + 100
-            speed = self._local_path.message.target_speed[a:b:10]
-            rospy.loginfo_throttle(
-                5, f"[local planner] current target speeds: " f"{[float(f'{(sp * 3.6):.2f}') for sp in speed]}"
-            )
+        # if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
+        #     a, b = self._local_path_idx, self._local_path_idx + 100
+        #     speed = self._local_path.message.target_speed[a:b:4]
+        #     rospy.loginfo_throttle(
+        #         .5, f"[local planner] current target speeds: " f"{[float(f'{(sp * 3.6):.2f}') for sp in speed]}"
+        #     )
 
     def _is_waiting_for_clear_event(self):
         pass  # todo implement this

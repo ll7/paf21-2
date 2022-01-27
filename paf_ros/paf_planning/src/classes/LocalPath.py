@@ -22,7 +22,7 @@ class LocalPath:
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
     STRAIGHT_TO_TARGET_DIST = 15
-    END_OF_ROUTE_SPEED = 5.0
+    END_OF_ROUTE_SPEED = 5
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
         self._local_path_start_section = 0
@@ -227,6 +227,8 @@ class LocalPath:
         section_from = -1
         current_lane = 0
 
+        end_of_route = False
+
         if prev_idx > 0:
             current_idx = prev_idx
             prev_idx = max(0, prev_idx - num_points_previous_plan)
@@ -279,19 +281,20 @@ class LocalPath:
 
         s: PafRouteSection
         for i, s in enumerate(self.global_path.route.sections[idx1:]):
+            i += idx1
             # rospy.logwarn(
-            #     f"{s.target_lanes_index_distance}: {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
+            #     f"{s.target_lanes_index_distance} ({i}): {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
             #     f"{list(range(len(s.points)))}"
             # )
-            i += idx1
 
             s_prev = None if i == 0 else self.global_path.route.sections[i - 1]
             if s_prev.target_lanes_distance == 0:
                 future_lane = current_lane - s_prev.target_lanes[0] + s_prev.target_lanes_left_shift
-                rospy.logwarn(
-                    f"end of segment ({i})! current_lane={current_lane}, target_lanes={list(s_prev.target_lanes)},"
-                    f" shift={s_prev.target_lanes_left_shift} => {future_lane}"
-                )
+                lane_change_pts += s.points
+                # rospy.logerr(
+                #     f"end of segment ({i})! current_lane={current_lane}, target_lanes={list(s_prev.target_lanes)},"
+                #     f" shift={s_prev.target_lanes_left_shift} => {future_lane}"
+                # )
                 current_lane = future_lane
 
             # test if current lane exists on this section
@@ -327,12 +330,13 @@ class LocalPath:
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
                 pth = sparse_local_path[-10:] + [self.global_path.target]
                 pth = calc_bezier_curve(pts_to_xy(pth), ds=1, convert_to_pts=True)
-                sp = [self.END_OF_ROUTE_SPEED for _ in pth[:-1]] + [self.END_OF_ROUTE_SPEED / 2]
+                sp = [sparse_local_path_speeds[-1] for _ in pth]
 
                 sparse_local_path = sparse_local_path[:-5] + pth
                 sparse_local_path_speeds = sparse_local_path_speeds[:-5] + sp
                 sparse_traffic_signals = sparse_traffic_signals[:-5] + [[] for _ in pth]
                 distance_planned += dist_to_target
+                end_of_route = True
                 break
 
             distance_planned += s.distance_from_last_section
@@ -420,7 +424,7 @@ class LocalPath:
             except ValueError:
                 choice = "straight"
             if choice == "left" or choice == "right":
-                # rospy.logwarn(
+                # rospy.logerr(
                 #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
                 #     f"lanes {left_lane}|{current_lane}|{right_lane} ({choice}), "
                 #     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
@@ -428,9 +432,8 @@ class LocalPath:
                 # )
                 pts, speeds, signs = left if choice == "left" else right
                 future_lane = left_lane if choice == "left" else right_lane
-                # rospy.logwarn(f"changing lanes: {current_lane}->{future_lane}")
+                # rospy.logerr(f"changing lanes: {current_lane}->{future_lane} ({distance_changed:.1f}m)")
                 current_lane = future_lane
-                # rospy.logerr((choice, current_lane, s.target_lanes, s.target_lanes_distance))
                 for pt, sp, sgn in zip(pts, speeds, signs):
                     sparse_local_path.append(pt)
                     sparse_local_path_speeds.append(sp)
@@ -447,7 +450,7 @@ class LocalPath:
 
         t0 = perf_counter()
         points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)
-        target_speed = self._update_target_speed(points, target_speed)
+        target_speed = self._update_target_speed(points, target_speed, end_of_route)
 
         t3 = f"{(perf_counter() - t0):.2f}s"
 
@@ -460,8 +463,6 @@ class LocalPath:
             f"(sparse={t1}, smooth={t3})"
         )
 
-        for s in self.global_path.route.sections:
-            lane_change_pts += s.points
         self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         # self._draw_path_pts(points, "lanechnge2", (200, 24, 200))
         self.message = local_path
@@ -492,10 +493,16 @@ class LocalPath:
             speeds = [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in pts]
         return pts, speeds
 
-    def _update_target_speed(self, local_path, speed_limit):
+    def _update_target_speed(self, local_path, speed_limit, end_of_route=False):
         speed = self.speed_calc.get_curve_speed(local_path)
         if self.rules_enabled:  # todo speed limit logic for no rules
             speed = np.clip(speed, 0, speed_limit)
+        if end_of_route and speed[-1] > self.END_OF_ROUTE_SPEED:
+            n = int(10 / 0.25)
+            speed = list(speed[:-n])
+            for _ in range(len(speed[-n:])):
+                speed.append(self.END_OF_ROUTE_SPEED)
+
         speed = self.speed_calc.add_linear_deceleration(speed)
         return speed
 

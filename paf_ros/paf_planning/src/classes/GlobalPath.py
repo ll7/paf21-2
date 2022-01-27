@@ -1,3 +1,5 @@
+from collections import deque
+
 import numpy as np
 from typing import List, Tuple
 
@@ -352,12 +354,32 @@ class GlobalPath:
                     return _i, successor
             return None, successor
 
+        def sort_blob(blob):
+            _li = [self._lanelet_network.find_lanelet_by_id(_id) for _id in blob]
+            _lanelets = deque(_li[1:])
+            _out = deque(_li[:1])
+            iae = 0
+            for _let in _lanelets:
+                if _let in _out:
+                    continue
+                for _let2 in _out:
+                    iae += 1
+                    if _let2.adj_left == _let.lanelet_id:
+                        _out.appendleft(_let)
+                        break
+                    if _let2.adj_right == _let.lanelet_id:
+                        _out.append(_let)
+                        break
+
+            return [_let.lanelet_id for _let in _out]
+
         blobs = []
         anchors = []
         for a, b, c in self._adjacent_lanelets:
             li = b + [a] + c
             if len(blobs) > 0 and a in blobs[-1]:
                 continue
+            li = sort_blob(li)
             blobs.append(li)
 
         for blob0, blob1 in zip(blobs, blobs[1:]):
@@ -444,8 +466,7 @@ class GlobalPath:
 
         msg = PafLaneletRoute()
         rospy.loginfo(
-            f"[global planner] creating plan to {[self.target.x, self.target.y]} "
-            f"with lanelet ids {self.lanelet_ids}"
+            f"[global planner] creating plan. target, ids = {(self.target.x, self.target.y)}, {self.lanelet_ids}"
         )
         groups = self.get_lanelet_groups()
         matrix = self.get_paf_lanelet_matrix(groups)
@@ -499,13 +520,14 @@ class GlobalPath:
                 # print(len(section_points))
                 msg.sections.append(paf_section)
 
-            if i == len(groups) - 1:
-                self.route = msg
-                section_idx, target_lane = self.get_section_and_lane_indices(self.target)
-                self.route.sections = self.route.sections[: section_idx + 1]
-                self.route.sections[-1].target_lanes = [target_lane]
+            # if i == len(groups) - 1:
+            #     self.route = msg
+            #     section_idx, target_lane = self.get_section_and_lane_indices(self.target)
+            #     self.route.sections = self.route.sections[: section_idx + 1]
+            #     self.route.sections[-1].target_lanes = [target_lane]
 
-            if i == len(groups) - 1 or self._end_of_segment(lanes_l, anchor_l, anchor_r, len(lanelet_id_list)):
+            next_lanelet_list_len = 1 if i == len(groups) - 1 else len(groups[i + 1][0])
+            if i == len(groups) - 1 or self._end_of_segment(lanes_l, anchor_l, anchor_r, next_lanelet_list_len):
                 # shift speed limit lanes
                 # print(lanes_l, anchor_l, anchor_r)
                 last_limits_new = [-1 for _ in range(anchor_l, anchor_r + 1)]
@@ -527,10 +549,12 @@ class GlobalPath:
 
                 # set target lanes etc. for all previous lanes
                 target_lanes = list(range(anchor_l, anchor_r + 1))
+                if len(target_lanes) == 0:
+                    RuntimeError(f"target lanes unspecified (lanes {anchor_l} to {anchor_r})")
                 target_lanes_left_shift = lanes_l
                 distance_to_target = 0
                 for target_lanes_index_distance, paf_section in enumerate(reversed(msg.sections)):
-                    if paf_section.target_lanes_index_distance != -1:
+                    if len(paf_section.target_lanes) > 0:
                         break
                     paf_section.target_lanes = target_lanes
                     paf_section.target_lanes_index_distance = target_lanes_index_distance
@@ -540,8 +564,7 @@ class GlobalPath:
                     distance_to_target += paf_section.distance_from_last_section
                     for target in paf_section.target_lanes:
                         if not 0 <= target < len(paf_section.points):
-                            rospy.logerr_throttle(1, f"target_lanes incorrect: {anchor_l}->{anchor_r}")
-                            paf_section.target_lanes = [0]
+                            raise RuntimeError(f"target_lanes incorrect: {anchor_l}->{anchor_r}")
         msg.target = self.target
 
         self.route = msg
@@ -550,8 +573,10 @@ class GlobalPath:
             #               f"{paf_section.target_lanes}, {paf_section.target_lanes_left_shift}, "
             #               f"{paf_section.target_lanes_distance}")
             if len(paf_section.target_lanes) == 0:
-                paf_section.target_lanes = [0]
-                rospy.logerr_throttle(1, f"[global planner] no target lanes specified in section {i}")
+                raise RuntimeError(
+                    f"[global planner] no target lanes specified in section {i}, "
+                    f"{[s.target_lanes for s in msg.sections]}"
+                )
             if len(paf_section.points) == 0:
                 rospy.logerr(f"[global planner] section {i} has no points")
 
