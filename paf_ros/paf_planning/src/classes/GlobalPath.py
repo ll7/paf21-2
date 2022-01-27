@@ -374,7 +374,11 @@ class GlobalPath:
                 shift_l = min(successor_idx, shift_l)
 
             anchors.append((shift_l, anchor_l, anchor_r))
-        anchors.append((0, 0, len(blobs[-1]) - 1))
+
+        i, _ = closest_index_of_point_list(
+            [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
+        )
+        anchors.append((0, i, i))
 
         return [x for x in zip(blobs, anchors)]
 

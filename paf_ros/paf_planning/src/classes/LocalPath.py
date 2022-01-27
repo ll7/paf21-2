@@ -17,14 +17,12 @@ from .Spline import (
 
 
 class LocalPath:
-    REPLANNING_THRESHOLD_DISTANCE_M = 15
     STEP_SIZE = 5
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
-    STRAIGHT_TO_TARGET_DIST = 10
-    THRES_RESTART_BEZIER_EVERY_M = 50
-    END_OF_ROUTE_SPEED = 0
+    STRAIGHT_TO_TARGET_DIST = 15
+    END_OF_ROUTE_SPEED = 5.0
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
         self._local_path_start_section = 0
@@ -327,16 +325,14 @@ class LocalPath:
             # end of route handling
             dist_to_target = dist_pts(s.points[current_lane], self.global_path.target)
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
-                sparse_local_path.append(self.global_path.target)
-                sparse_local_path_speeds += [self.END_OF_ROUTE_SPEED]
-                for _i in range(1, 10):
-                    try:
-                        sparse_local_path_speeds[-i] = self.END_OF_ROUTE_SPEED + 5
-                    except IndexError:
-                        break
-                sparse_traffic_signals += [[]]
+                pth = sparse_local_path[-10:] + [self.global_path.target]
+                pth = calc_bezier_curve(pts_to_xy(pth), ds=1, convert_to_pts=True)
+                sp = [self.END_OF_ROUTE_SPEED for _ in pth[:-1]] + [self.END_OF_ROUTE_SPEED / 2]
+
+                sparse_local_path = sparse_local_path[:-5] + pth
+                sparse_local_path_speeds = sparse_local_path_speeds[:-5] + sp
+                sparse_traffic_signals = sparse_traffic_signals[:-5] + [[] for _ in pth]
                 distance_planned += dist_to_target
-                # rospy.logerr("break2")
                 break
 
             distance_planned += s.distance_from_last_section

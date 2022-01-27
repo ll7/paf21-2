@@ -32,7 +32,7 @@ class LocalPlanner:
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC_GLOBAL = 5
     REPLAN_THROTTLE_SEC_LOCAL = 1
-    END_OF_ROUTE_REACHED_DIST = 3
+    END_OF_ROUTE_REACHED_DIST = 2
 
     rules_enabled = MapManager.get_rules_enabled()
 
