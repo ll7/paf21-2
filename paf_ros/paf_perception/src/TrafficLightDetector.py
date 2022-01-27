@@ -2,7 +2,7 @@ from enum import Enum
 import json
 import os
 from datetime import datetime
-from typing import Tuple
+from typing import Callable, List, Tuple
 
 import cv2
 import numpy as np
@@ -13,7 +13,7 @@ from torch.autograd import Variable
 from torchvision.transforms import transforms
 import torch.backends.cudnn as cudnn
 
-from paf_perception.src.utils.FusionCamera import FusionCamera, SegmentationTag
+from paf_ros.paf_perception.src.FusionCamera import FusionCamera, SegmentationTag
 
 times = []
 
@@ -53,7 +53,6 @@ class DetectedObject:
                  label: Labels = 0,
                  confidence: float = 0.01):
         """
-
         :param x: relative x coord in image
         :param y: relative y coord in image
         :param height: relative height of bounding box
@@ -85,13 +84,15 @@ class TrafficLightDetector():
         :param use_gpu: whether the classification model should be loaded to the gpu
         """
 
+        self.__listener = None
+
         self.logger_name = "TrafficLightDetector"
 
         self.confidence_min = 0.75
         self.threshold = 0.7
         self.canny_threshold = 100
 
-        #self.data_collect_path = None  # "/home/psaf1/Documents/traffic_light_data"
+        self.data_collect_path = None  # "/home/psaf1/Documents/traffic_light_data"
 
         rospack = rospkg.RosPack()
         root_path = rospack.get_path('paf_perception')
@@ -255,11 +256,29 @@ class TrafficLightDetector():
 
         self.inform_listener(time,detected)
 
+    def inform_listener(self,time_stamp, detected_list):
+        """
+        Informs all listeners about the new list of detected objects
+        :param detected_list: the list of detected objects
+        :param time_stamp: time stamp of the detection
+        :return: None
+        """
+        if self.__listener is not None:
+            self.__listener(time_stamp,detected_list)
+
+    def set_on_detection_listener(self, func: Callable[[List[DetectedObject],rospy.Time], None]):
+        """
+        Set function to be called with detected objects
+        :param func: the function
+        :return: None
+        """
+        self.__listener = func
+
 
 # Show case code
 if __name__ == "__main__":
-    from paf_perception.src.utils.RGBCamera import RGBCamera
-    from paf_perception.src.utils.perception_util import show_image
+    from paf_ros.paf_perception.src.RGBCamera import RGBCamera
+    from paf_ros.paf_perception.src.perception_util import show_image
 
 
     rospy.init_node("DetectionTest")
