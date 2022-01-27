@@ -15,6 +15,5 @@ Neue Lanelets können über die **Create Lanelet**-Sektion einfach erstellt werd
 
 ### Hinweise zur Verwendung:
 
-- Werden neben einem Lanelet auch dessen Nachbarn automatisch geteilt, sind die Nachbarreferenzen danach unter Umständen vertauscht.
 - Wird ein Lanelet, welches Nachbarn besitzt, alleine geteilt, sollten die Nachbarreferenzen danach manuell angepasst werden.
 - Beim Festlegen der Center-Line eines neuen Lanelets durch Klicken auf die Map sollte beachtet werden, dass diese beim Klicken manchmal springt.
