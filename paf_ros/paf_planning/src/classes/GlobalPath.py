@@ -389,18 +389,44 @@ class GlobalPath:
         out = list(out.values())
         return out
 
-    def get_paf_lanelet_matrix(self, groups, distance_m=5):
+    def get_paf_lanelet_matrix(self, groups):
         out = []
         for blob, anchor in groups:
             lanelets = [self._lanelet_network.find_lanelet_by_id(lanelet) for lanelet in blob]
             lengths = [
-                np.sum([np.abs(x - y) for x, y in zip(lanelet.center_vertices, lanelet.center_vertices[1:])])
+                [np.abs(x - y) for x, y in zip(lanelet.center_vertices, lanelet.center_vertices[1:])]
                 for lanelet in lanelets
             ]
-            avg_len = np.average(lengths)
+            tot_lengths = [np.sum(length) for length in lengths]
+            ref_i = np.argmax(tot_lengths)
+            num_pts = int(tot_lengths[ref_i] / self.POINT_DISTANCE)
+            avg_len = np.average(tot_lengths)
             vertices = []
-            for i, (lanelet, length) in enumerate(zip(lanelets, lengths)):
-                pts = sparse_list_from_dense_pts(lanelet.center_vertices, self.POINT_DISTANCE)
+
+            ref_pts = sparse_list_from_dense_pts(lanelets[ref_i].center_vertices, num_pts)
+
+            for i, lanelet in enumerate(lanelets):
+                if i == ref_i:
+                    pts = ref_pts
+                else:
+                    indices = []
+                    duplicates = []
+                    pts = []
+                    for ref_pt in ref_pts:
+                        _i, _d = closest_index_of_point_list(lanelet.center_vertices, ref_pt)
+                        if _i in indices:
+                            duplicates.append((len(indices) - 1))
+                        else:
+                            indices.append(_i)
+                    for k, l in enumerate(indices):
+                        pt = lanelet.center_vertices[l]
+                        pts.append(pt)
+                        for n in duplicates:
+                            if n > k:
+                                break
+                            if k == n:
+                                pts.append(np.random.rand() * 1e-3)
+                                rospy.logwarn_throttle(1, "[global planner] duplicate found in matching points")
                 vertices.append(np.array(pts))
             out.append((vertices, anchor, avg_len))
         return out
@@ -416,11 +442,10 @@ class GlobalPath:
             f"with lanelet ids {self.lanelet_ids}"
         )
         groups = self.get_lanelet_groups(self.lanelet_ids)
-        distance_m = 5
         last_limits = None
         self.signal_positions = []
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(
-            zip(groups, self.get_paf_lanelet_matrix(groups, distance_m=distance_m))
+            zip(groups, self.get_paf_lanelet_matrix(groups))
         ):
             if last_limits is None:
                 last_limits = [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]

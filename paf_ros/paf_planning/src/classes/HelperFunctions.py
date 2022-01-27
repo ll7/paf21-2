@@ -7,13 +7,13 @@ from commonroad.scenario.lanelet import LaneletNetwork
 from paf_messages.msg import Point2D
 
 
-def dist_pts(a, b):
+def dist_pts(a: Point2D, b: Point2D) -> float:
     a = a.x, a.y
     b = b.x, b.y
     return dist(a, b)
 
 
-def dist(a, b):  # todo change to np.hypot()
+def dist(a, b) -> float:  # todo change to np.hypot()
     try:
         x1, y1 = a
         x2, y2 = b
@@ -89,39 +89,24 @@ def expand_sparse_list(sparse_list, points_current, points_target, fill_value=No
     return out, indices_new
 
 
-def expand_sparse_list2(sparse_list, to_len, fill_value=None):
-    if len(sparse_list) == 0 or to_len < len(sparse_list):
-        raise ValueError
-    ratio = to_len / (len(sparse_list))
-    expanded_list = []
-    filler = fill_value
-    for i, sp in enumerate(sparse_list):
-        if i == 0:
-            continue
-        if fill_value is None:
-            filler = sp
-        else:
-            expanded_list.append(sp)
-            if len(expanded_list) > to_len:
-                expanded_list[to_len - 1] = sp
-        new_i = int((i + 2) * ratio)
-        for _ in range(len(expanded_list), new_i):
-            expanded_list.append(filler)
-
-    if fill_value is None:
-        filler = sparse_list[-1]
-    expanded_list += [filler for _ in range(to_len - len(expanded_list))]
-    return expanded_list[:to_len]
-
-
-def sparse_list_from_dense_pts(pts: np.ndarray, min_dist: float):
+def sparse_list_from_dense_pts(pts: np.ndarray, num_pts: int, distances: List[float] = None):
     path = []
     dist_measure = 0
-    for prev, p in zip(pts, pts[1:]):
-        dist_measure += dist(prev, p)
+    if distances is None:
+        distances = [0.0] + [dist(prev, p) for prev, p in zip(pts, pts[1:])]
+    elif len(distances) == len(pts) - 1:
+        distances = [0.0] + distances
+    tot_dist = int(np.sum(distances))
+
+    min_dist = tot_dist / num_pts
+    for d, p in zip(distances, pts):
+        dist_measure += d
         if dist_measure >= min_dist:
             dist_measure = 0
             path += [p]
+
+    if not np.all(path[-1] == pts[-1]):
+        path += [pts[-1] * np.random.rand() * 1e-4]
     return path
 
 

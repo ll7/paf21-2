@@ -72,19 +72,19 @@ class MapManager:
     def get_demo_route():
         town = MapManager.get_map()
 
-        if town == "Town03":
-            return [
-                Point2D(122, 201.6),
-            ], MapManager.point_to_pose((170, -5.7), -90)
         # if town == "Town03":
         #     return [
-        #                Point2D(-23, -134),
-        #                Point2D(68, -61),
-        #                Point2D(122, 201.6),
-        #                Point2D(-7, 43.5),
-        #                Point2D(8.8, 84),
-        #                Point2D(-149, -38)
-        #            ], MapManager.point_to_pose((-6, -159), 180)
+        #         Point2D(247, 62.6),
+        #     ], MapManager.point_to_pose((70, -5.7), -90)
+        if town == "Town03":
+            return [
+                Point2D(-23, -134),
+                Point2D(68, -61),
+                Point2D(122, 201.6),
+                Point2D(-7, 43.5),
+                Point2D(8.8, 84),
+                Point2D(-149, -38),
+            ], MapManager.point_to_pose((-6, -159), 180)
         elif town == "Town04":
             return [
                 Point2D(64, -14),

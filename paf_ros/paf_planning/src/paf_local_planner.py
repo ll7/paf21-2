@@ -308,9 +308,11 @@ class LocalPlanner:
     def _on_local_path(self):
         return self._distance_to_local_path < 15
 
-    #
-    # def __del__(self):
-    #     self._create_paf_local_path_msg(send_empty=True)
+    def __del__(self):
+        try:
+            self._create_paf_local_path_msg(send_empty=True)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
