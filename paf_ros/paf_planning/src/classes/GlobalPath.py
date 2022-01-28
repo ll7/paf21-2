@@ -348,12 +348,13 @@ class GlobalPath:
         return traffic_signals, speed_limits
 
     def get_lanelet_groups(self):
-        def match_lane(lanelet_needle, successors):
-            successor = None
+        def match_lane(_l_id, successors):
             for _i, successor in enumerate(successors):
-                if successor in lanelet_needle.successor:
+                p0 = lanelets[_l_id].center_vertices[-1]
+                p1 = lanelets[successor].center_vertices[0]
+                if dist(p0, p1) < 0.5:  # check if last and first point are close
                     return _i, successor
-            return None, successor
+            return None, None
 
         def sort_blob(blob):
             _li = [self._lanelet_network.find_lanelet_by_id(_id) for _id in blob]
@@ -372,15 +373,18 @@ class GlobalPath:
                         _out.append(_let)
                         break
 
-            return [_let.lanelet_id for _let in _out]
+            return [_let.lanelet_id for _let in _out], _li
 
         blobs = []
         anchors = []
+        lanelets = {}
         for a, b, c in self._adjacent_lanelets:
             li = b + [a] + c
             if len(blobs) > 0 and a in blobs[-1]:
                 continue
-            li = sort_blob(li)
+            li, __lanelets = sort_blob(li)
+            for __let in __lanelets:
+                lanelets[__let.lanelet_id] = __let
             blobs.append(li)
 
         for blob0, blob1 in zip(blobs, blobs[1:]):
@@ -388,8 +392,7 @@ class GlobalPath:
             anchor_r = -1  # rightmost lane to continue on
             shift_l = 99  # merging lanes from next segment on the left
             for i, l_id in enumerate(blob0):
-                lanelet = self._lanelet_network.find_lanelet_by_id(l_id)
-                successor_idx, successor_id = match_lane(lanelet, blob1)
+                successor_idx, successor_id = match_lane(l_id, blob1)
                 if successor_idx is None:
                     continue
                 anchor_l = min(i, anchor_l)
