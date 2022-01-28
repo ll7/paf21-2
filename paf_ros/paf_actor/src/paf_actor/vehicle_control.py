@@ -48,6 +48,7 @@ class VehicleController:
         self._unstuck_check_time: float = 0.5  # max duration for the rear gear
         # true while the car is driving backwards to unstuck
         self._is_unstucking: bool = False
+        self._is_unstucking_left: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
         self._obstacle_follow_min_distance: float = 4.0
@@ -142,14 +143,14 @@ class VehicleController:
                     self._is_unstucking = False
                 else:
                     rear_gear = True
-            elif self.__check_stuck():
+            elif self.__check_stuck() or self.__check_wrong_way():
                 self._is_unstucking = True
                 self._unstuck_start_time = rospy.get_rostime().secs
                 rear_gear = True
 
             if rear_gear:
                 throttle = 1.0
-                steering = 0.0
+                steering = 0.33 * -1 if self._is_unstucking_left else 1
                 self._is_reverse = True
 
         except RuntimeError as e:
@@ -194,8 +195,13 @@ class VehicleController:
 
         return control
 
+    def __check_wrong_way(self):
+        self._is_unstucking_left = self._lat_controller.heading_error > 0
+        return np.abs(self._lat_controller.heading_error) > np.pi / 2
+
     def __check_stuck(self):
-        if not self._emergency_mode and self._current_speed < self._stuck_value_threshold < self._target_speed:
+        stuck = self._current_speed < self._stuck_value_threshold < self._target_speed
+        if not self._emergency_mode and stuck:
             if self._stuck_start_time == 0.0:
                 self._stuck_start_time = rospy.get_rostime().secs
                 return False
@@ -351,6 +357,9 @@ class VehicleController:
                     r.sleep()
                 except rospy.ROSInterruptException:
                     pass
+
+    def __del__(self):
+        self.__generate_control_message(0, 0)
 
 
 def main():

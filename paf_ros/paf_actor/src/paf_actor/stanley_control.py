@@ -34,9 +34,10 @@ class StanleyLateralController:
         self.max_steer: float = np.deg2rad(max_steer)
         self.min_speed: float = min_speed
 
+        self.heading_error = 0
         self._local_plan_publisher = rospy.Publisher("/paf/paf_actor/path", PafLocalPath, queue_size=1)
 
-    def run_step(self, msg: PafLocalPath, pose: PoseStamped, speed: float, is_reverse: bool) -> float:
+    def run_step(self, msg: PafLocalPath, pose: PoseStamped, speed: float, is_reverse: bool):
         """
         Runs the Stanley-Controller calculations once
 
@@ -76,6 +77,7 @@ class StanleyLateralController:
         # rospy.loginfo_throttle(
         #    1, f"theta_e: {theta_e}, theta_d: {theta_d}, delta: {delta}")
 
+        self.heading_error = theta_e
         return np.clip(delta, -self.max_steer, self.max_steer), target_speed, distance
 
     def calc_target_index(self, msg: PafLocalPath, pose: PoseStamped, is_reverse: bool):
