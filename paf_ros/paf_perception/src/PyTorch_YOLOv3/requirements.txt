@@ -1,9 +1,0 @@
-matplotlib
-numpy
-pillow
-tensorboard
-tensorflow
-terminaltables
-torch>=1.0
-torchvision
-tqdm
