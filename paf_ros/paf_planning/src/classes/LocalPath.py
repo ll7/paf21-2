@@ -315,7 +315,7 @@ class LocalPath:
                     current_lane = len(s.points) - 1
 
                 self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
-                # raise RuntimeError()
+                raise RuntimeError()
 
             if distance_planned > target_distance:
                 # rospy.logerr(f"break! distance_planned > target_distance: {distance_planned} > {target_distance}")
@@ -329,13 +329,14 @@ class LocalPath:
             # end of route handling
             dist_to_target = dist_pts(s.points[current_lane], self.global_path.target)
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
-                pth = sparse_local_path[-10:] + [self.global_path.target]
+                n = 5
+                pth = sparse_local_path[-n:] + [self.global_path.target]
                 pth = calc_bezier_curve(pts_to_xy(pth), ds=1, convert_to_pts=True)
                 sp = [sparse_local_path_speeds[-1] for _ in pth]
 
-                sparse_local_path = sparse_local_path[:-5] + pth
-                sparse_local_path_speeds = sparse_local_path_speeds[:-5] + sp
-                sparse_traffic_signals = sparse_traffic_signals[:-5] + [[] for _ in pth]
+                sparse_local_path = sparse_local_path[:-n] + pth
+                sparse_local_path_speeds = sparse_local_path_speeds[:-n] + sp
+                sparse_traffic_signals = sparse_traffic_signals[:-n] + [[] for _ in pth]
                 distance_planned += dist_to_target
                 end_of_route = True
                 break
@@ -464,8 +465,10 @@ class LocalPath:
             f"(sparse={t1}, smooth={t3})"
         )
 
-        lane_change_pts += sparse_local_path
-        # self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
+        # lane_change_pts += sparse_local_path
+        # for s in self.global_path.route.sections:
+        #     lane_change_pts += s.points
+        self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         # self._draw_path_pts(points, "lanechnge2", (200, 24, 200))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
@@ -502,7 +505,6 @@ class LocalPath:
         pts = []
         try:
             ds = 0.25
-            draw = []
             prev = 0
             for i, j in change_idx:
                 if prev < i:
@@ -510,9 +512,7 @@ class LocalPath:
                 prev = j
                 spline = calc_spline_course_from_point_list(pts_to_xy(sparse_pts[i:j]), ds, to_pts=True)
                 pts += spline
-                draw += spline
             pts += bezier_refit_all_with_tangents(sparse_pts[prev:], ds, ds, convert_to_pts=True)[1:]
-            LocalPath._draw_path_pts(draw, "lanechnge", (200, 24, 0))
             if len(pts) == 0:
                 raise ValueError(f"len: {len(sparse_pts)}->0, {pts_to_xy(sparse_pts)}")
         except ValueError as e:
@@ -530,7 +530,7 @@ class LocalPath:
         if self.rules_enabled:  # todo speed limit logic for no rules
             speed = np.clip(speed, 0, speed_limit)
         if end_of_route and speed[-1] > self.END_OF_ROUTE_SPEED:
-            n = int(10 / 0.25)
+            n = int(1 / 0.25)
             speed = list(speed[:-n])
             for _ in range(len(speed[-n:])):
                 speed.append(self.END_OF_ROUTE_SPEED)

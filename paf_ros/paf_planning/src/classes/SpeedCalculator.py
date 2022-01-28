@@ -27,14 +27,14 @@ class SpeedCalculator:
         self.set_limits()
 
     @staticmethod
-    def set_limits(value: bool = None):
-        if value is None:
-            value = MapManager.get_rules_enabled()
-        SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if value else 250 / 3.6
-        SpeedCalculator.MAX_SPEED = 95 / 3.6 if value else 120 / 3.6
-        SpeedCalculator.MIN_SPEED = 30 / 3.6 if value else 35 / 3.6
-        SpeedCalculator.CURVE_FACTOR = 1.5 if value else 1.5  # higher value = more drifting
-        SpeedCalculator.MAX_DECELERATION = 10 if value else 15
+    def set_limits(rules_enabled: bool = None):
+        if rules_enabled is None:
+            rules_enabled = MapManager.get_rules_enabled()
+        SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if rules_enabled else 250 / 3.6
+        SpeedCalculator.MAX_SPEED = 95 / 3.6 if rules_enabled else 120 / 3.6
+        SpeedCalculator.MIN_SPEED = 25 / 3.6 if rules_enabled else 25 / 3.6
+        SpeedCalculator.CURVE_FACTOR = 2 if rules_enabled else 2.5  # higher value = more drifting
+        SpeedCalculator.MAX_DECELERATION = 1 if rules_enabled else 1
         # m/s^2, higher value = later and harder braking
 
     def _get_deceleration_distance(self, v_0, v_target):
@@ -105,7 +105,14 @@ class SpeedCalculator:
             x0, y0 = p0.x, p0.y
             x2, y2 = p2.x, p2.y
 
+            if np.any(np.isnan([x1, y1, x0, y0, x2, y2])):
+                raise RuntimeError()
+
             arc_w = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+            if arc_w < 1e-8:
+                radius_list.append(max_radius)
+                continue
+
             arc_h = np.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1)) / arc_w
 
             if arc_h < 1e-8:

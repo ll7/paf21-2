@@ -393,7 +393,7 @@ class TopDownView(BirdViewProducer):
         vals = list(self.point_sets.values())
         for i, pts_set in enumerate(vals):
             rgb_color = pts_set.color
-            if i + len(MaskPriority) > len(birdview) - 1:
+            if i + add_to_idx > len(birdview) - 1:
                 break
             nonzero = self.nonzero_indices(birdview[i + add_to_idx])
             rgb_canvas[nonzero] = rgb_color

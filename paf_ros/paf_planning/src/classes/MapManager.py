@@ -16,6 +16,7 @@ from commonroad_route_planner.utility.visualization import obtain_plot_limits_fr
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
 from paf_messages.msg import Point2D
+from .HelperFunctions import pts_to_xy
 from tf.transformations import quaternion_from_euler
 
 
@@ -62,15 +63,18 @@ class MapManager:
         initial_pose.pose.pose.position.y = y
         initial_pose.pose.pose.position.z = height
         x, z, y, w = quaternion_from_euler(0, np.deg2rad(yaw_deg + 90), 0)
-        # rospy.logerr((x, y, z, w))
         initial_pose.pose.pose.orientation = Quaternion(x, y, z, w)
-        # initial_pose.pose.pose.orientation.z = -.707
-        # initial_pose.pose.pose.orientation.w = .707
         return initial_pose
 
     @staticmethod
     def get_demo_route():
         town = MapManager.get_map()
+
+        # # uncomment for custom path debugging
+        # if "Town" in town:
+        #     return MapManager.point_to_pose((148.4, -241), -90), [
+        #         Point2D(193.8,-220),
+        #     ]
 
         if town == "Town01":
             return MapManager.point_to_pose((398, -61), 0), [
@@ -196,9 +200,10 @@ class MapManager:
         from .Spline import calc_spline_course_from_point_list, bezier_refit_all_with_tangents, calc_bezier_curve
 
         try:
+            _xy = pts
             pts = xy_to_pts(pts)
         except ValueError:
-            pass
+            _xy = pts_to_xy(pts)
 
         x = [p.x for p in pts]
         y = [p.y for p in pts]
@@ -223,7 +228,7 @@ class MapManager:
         y = [p.y for p in pts4]
         plt.plot(x, y, color="orange", label="Bezier(Bezier with Tangents)")
 
-        pts5 = calc_bezier_curve(pts, convert_to_pts=True)
+        pts5 = calc_bezier_curve(_xy, convert_to_pts=True)
         x = [p.x for p in pts5]
         y = [p.y for p in pts5]
         plt.plot(x, y, color="magenta", label="Bezier(Eingangswert)")

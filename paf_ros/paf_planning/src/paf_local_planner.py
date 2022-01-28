@@ -269,7 +269,7 @@ class LocalPlanner:
         delta_t = t - self._last_replan_request_glob
         if self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:
             self._last_replan_request_glob = t
-            rospy.loginfo_throttle(20, "[local planner] requesting new global route")
+            rospy.loginfo("[local planner] requesting new global route")
             self._reroute_publisher.publish(Empty())
 
     def _send_standard_loop_request(self):
@@ -277,7 +277,7 @@ class LocalPlanner:
         delta_t = t - self._last_replan_request_glob
         if self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:
             self._last_replan_request_glob = t
-            rospy.loginfo_throttle(20, "[local planner] requesting new standard loop route")
+            rospy.loginfo("[local planner] requesting new standard loop route")
             self._reroute_standard_loop_publisher.publish(Empty())
 
     def _send_random_global_path_request(self):
@@ -285,13 +285,13 @@ class LocalPlanner:
         delta_t = t - self._last_replan_request_glob
         if self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:
             self._last_replan_request_glob = t
-            rospy.loginfo_throttle(20, "[local planner] requesting new random global route")
+            rospy.loginfo("[local planner] requesting new random global route")
             self._reroute_random_publisher.publish(Empty())
 
     def _end_of_route_handling(self, sleep=0):
         self._global_path = GlobalPath()
         rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1).publish(Empty())
-        if self._current_speed < 0.5:
+        if self._current_speed < 5:
             self._emergency_break_pub.publish(Bool(False))
         if self._current_speed < 0.01:
             if sleep > 0:

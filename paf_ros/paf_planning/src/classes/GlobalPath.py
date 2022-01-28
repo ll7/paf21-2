@@ -16,6 +16,7 @@ from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRout
 
 from .HelperFunctions import dist_pts, closest_index_of_point_list, dist, sparse_list_from_dense_pts
 from .SpeedCalculator import SpeedCalculator
+from .Spline import bezier_refit_all_with_tangents
 
 
 class GlobalPath:
@@ -405,43 +406,53 @@ class GlobalPath:
         return [x for x in zip(blobs, anchors)]
 
     def get_paf_lanelet_matrix(self, groups):
+        def normalize_lanelet_vertices(_pts: np.ndarray):
+            return bezier_refit_all_with_tangents(_pts, GlobalPath.POINT_DISTANCE / resolution, convert_to_pts=False)
+
+        def get_ref_indices(_vertices):
+            _indices = []
+            _remove = []
+            _i_prev = 0
+            _search_space = 25
+            for _j, ref_pt in enumerate(ref_pts):
+                _i_max = _i_prev + _search_space
+                _i, _ = closest_index_of_point_list(_vertices[_i_prev:_i_max], ref_pt)
+                _i += _i_prev
+                _i_prev = _i
+                if _i in _indices:
+                    _remove.append(_j)
+                    continue
+                _indices.append(_i)
+            return _indices, _remove
+
         out = []
+        resolution = 10
         for blob, anchor in groups:
             lanelets = [self._lanelet_network.find_lanelet_by_id(lanelet) for lanelet in blob]
-            lengths = [
-                [np.abs(x - y) for x, y in zip(lanelet.center_vertices, lanelet.center_vertices[1:])]
+            distances = [
+                [np.sum(np.abs(x - y)) for x, y in zip(lanelet.center_vertices, lanelet.center_vertices[1:])]
                 for lanelet in lanelets
             ]
-            tot_lengths = [np.sum(length) for length in lengths]
+            tot_lengths = [np.sum(length) for length in distances]
             ref_i = np.argmax(tot_lengths)
-            num_pts = int(tot_lengths[ref_i] / self.POINT_DISTANCE)
+            num_pts = max(5, int(tot_lengths[ref_i] / self.POINT_DISTANCE))
             avg_len = np.average(tot_lengths)
             vertices = []
 
-            ref_pts = sparse_list_from_dense_pts(lanelets[ref_i].center_vertices, num_pts)
+            lanelet_vertices = []
+            for i, (let, lengths) in enumerate(zip(lanelets, distances)):
+                max_delta = np.max(lengths)
+                if max_delta < self.POINT_DISTANCE:
+                    lanelet_vertices += [let.center_vertices]
+                else:
+                    lanelet_vertices += [normalize_lanelet_vertices(let.center_vertices)]
 
-            def get_ref_indices(_vertices):
-                _indices = []
-                _remove = []
-                _i_prev = 0
-                _search_space = 25
-                for _j, ref_pt in enumerate(ref_pts):
-                    _i_max = _i_prev + _search_space
-                    _i, _ = closest_index_of_point_list(_vertices[_i_prev:_i_max], ref_pt)
-                    _i += _i_prev
-                    _i_prev = _i
-                    if _i in _indices:
-                        _remove.append(_j)
-                        continue
-                    _indices.append(_i)
-                return _indices, _remove
+            ref_pts = sparse_list_from_dense_pts(lanelet_vertices[ref_i], num_pts)
 
-            for i, lanelet in enumerate(lanelets):
+            for i, _vertices in enumerate(lanelet_vertices):
                 if i == ref_i:
                     pts = ref_pts
                 else:
-                    _vertices = lanelet.center_vertices
-                    # _vertices = bezier_refit_all_with_tangents(_vertices, ds=.1, convert_to_pts=False)
                     indices, remove = get_ref_indices(_vertices)
                     if indices is None:
                         raise RuntimeError("[global planner] Unable to calculate pts of lanelet")
@@ -451,13 +462,14 @@ class GlobalPath:
 
                 vertices.append(np.array(pts))
             out.append((vertices, anchor, avg_len))
+
         return out
 
     @staticmethod
-    def _end_of_segment(lanes_l, anchor_l, anchor_r, num_lanelets):
+    def _end_of_segment(lanes_l, anchor_l, anchor_r, num_lanelets, num_lanelets_after):
         if lanes_l != 0 or anchor_l != 0 or anchor_r != num_lanelets - 1:
             return True
-        return False
+        return num_lanelets != num_lanelets_after
 
     def as_msg(self) -> PafLaneletRoute:
 
@@ -520,14 +532,10 @@ class GlobalPath:
                 # print(len(section_points))
                 msg.sections.append(paf_section)
 
-            # if i == len(groups) - 1:
-            #     self.route = msg
-            #     section_idx, target_lane = self.get_section_and_lane_indices(self.target)
-            #     self.route.sections = self.route.sections[: section_idx + 1]
-            #     self.route.sections[-1].target_lanes = [target_lane]
-
             next_lanelet_list_len = 1 if i == len(groups) - 1 else len(groups[i + 1][0])
-            if i == len(groups) - 1 or self._end_of_segment(lanes_l, anchor_l, anchor_r, next_lanelet_list_len):
+            if i == len(groups) - 1 or self._end_of_segment(
+                lanes_l, anchor_l, anchor_r, len(lanelet_id_list), next_lanelet_list_len
+            ):
                 # shift speed limit lanes
                 # print(lanes_l, anchor_l, anchor_r)
                 last_limits_new = [-1 for _ in range(anchor_l, anchor_r + 1)]

@@ -267,7 +267,11 @@ def calc_bezier_curve(pts, ds=0.1, convert_to_pts=False):
         if not valid:
             raise ValueError(f"ERROR, unable to calc bezier\n{pts2}")
         if k != 1:
-            rospy.logwarn_throttle(1, f"bezier is limited to every {k}th item of list (len={len(pts)})")
+            msg = f"bezier is limited to every {k}th item of list (len={len(pts)})"
+            try:
+                rospy.logwarn_throttle(1, msg)
+            except rospy.ROSInitException:
+                print(msg)
         _x = _x[::k]
         _y = _y[::k]
         curve = _calc_bezier_curve(_x, _y, degree=len(_x) - 1)

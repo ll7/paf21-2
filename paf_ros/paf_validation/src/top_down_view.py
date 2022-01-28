@@ -127,6 +127,12 @@ class TopDownRosNode(object):
         ) ** 2 > 20 ** 2:
             self._spectator.set_transform(vehicle_tf)
 
+    def __del__(self):
+        try:
+            self._spectator.set_transform(carla.Transform())
+        except Exception:
+            pass
+
 
 def main():
     client = carla.Client("127.0.0.1", 2000)
