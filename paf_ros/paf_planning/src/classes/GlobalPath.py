@@ -395,7 +395,8 @@ class GlobalPath:
                 anchor_l = min(i, anchor_l)
                 anchor_r = max(i, anchor_r)
                 shift_l = min(successor_idx, shift_l)
-
+            if shift_l != 0 and len(blob0) == len(blob1) and anchor_l == 0 and anchor_r == len(blob1) - 1:
+                shift_l = 0
             anchors.append((shift_l, anchor_l, anchor_r))
 
         i, _ = closest_index_of_point_list(
@@ -403,7 +404,7 @@ class GlobalPath:
         )
         anchors.append((0, i, i))
 
-        return [x for x in zip(blobs, anchors)]
+        return list(zip(blobs, anchors))
 
     def get_paf_lanelet_matrix(self, groups):
         def normalize_lanelet_vertices(_pts: np.ndarray):

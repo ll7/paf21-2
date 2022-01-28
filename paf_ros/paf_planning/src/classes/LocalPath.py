@@ -29,7 +29,7 @@ class LocalPath:
         self._local_path_start_section = 0
         self._sparse_local_path_speeds = []
         self._sparse_traffic_signals = []
-        self._sparse_local_path = []
+        self.sparse_local_path = []
         self._lane_change_indices = []
         self.traffic_signals = []
         self.global_path = global_path
@@ -44,7 +44,7 @@ class LocalPath:
         return self.global_path.get_section_and_lane_indices(position)
 
     def _next_lanechange_index(self, from_index: int = 0):
-        max_idx = len(self._sparse_local_path) - 1
+        max_idx = len(self.sparse_local_path) - 1
         for idx in self._lane_change_indices:
             if idx > max_idx:
                 return max_idx
@@ -210,9 +210,9 @@ class LocalPath:
         sparse_local_path, sparse_local_path_speeds, sparse_traffic_signals = [], [], []
 
         if not ignore_previous:
-            prev_idx, _ = closest_index_of_point_list(self._sparse_local_path, from_position)
+            prev_idx, _ = closest_index_of_point_list(self.sparse_local_path, from_position)
         else:
-            self._sparse_local_path = []
+            self.sparse_local_path = []
             self._sparse_traffic_signals = []
             self._sparse_local_path_speeds = []
             prev_idx = -1
@@ -234,14 +234,12 @@ class LocalPath:
             current_idx = prev_idx
             prev_idx = max(0, prev_idx - num_points_previous_plan)
             end_index = self._next_lanechange_index(current_idx) + 1
-            sparse_local_path = self._sparse_local_path[prev_idx:end_index]
+            sparse_local_path = self.sparse_local_path[prev_idx:end_index]
             sparse_local_path_speeds = self._sparse_local_path_speeds[prev_idx:end_index]
             sparse_traffic_signals = self._sparse_traffic_signals[prev_idx:end_index]
             section_from, current_lane = self.global_path.get_section_and_lane_indices(sparse_local_path[-1])
             offset2 = current_idx + 1
-            for p1, p2 in zip(
-                self._sparse_local_path[current_idx:end_index], self._sparse_local_path[offset2:end_index]
-            ):
+            for p1, p2 in zip(self.sparse_local_path[current_idx:end_index], self.sparse_local_path[offset2:end_index]):
                 distance_planned += dist_pts(p1, p2)
             #
             # prev_idx = end_index  # set for reference later
@@ -289,7 +287,7 @@ class LocalPath:
             # )
 
             s_prev = None if i == 0 else self.global_path.route.sections[i - 1]
-            if s_prev.target_lanes_distance == 0:
+            if s_prev is not None and s_prev.target_lanes_distance == 0:
                 future_lane = current_lane - s_prev.target_lanes[0] + s_prev.target_lanes_left_shift
                 lane_change_pts += s.points
                 # rospy.logerr(
@@ -315,6 +313,8 @@ class LocalPath:
                     current_lane = len(s.points) - 1
 
                 self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
+                # from paf_ros.paf_planning.src.classes.MapManager import MapManager
+                # MapManager.visualize_pts_list(sparse_local_path)
                 raise RuntimeError()
 
             if distance_planned > target_distance:
@@ -323,8 +323,6 @@ class LocalPath:
             if i <= end_idx_lane_change:
                 # rospy.logerr("continue1")
                 continue
-
-            lane_change_until_distance = None
 
             # end of route handling
             dist_to_target = dist_pts(s.points[current_lane], self.global_path.target)
@@ -376,55 +374,67 @@ class LocalPath:
                 max([target_speed * lane_change_secs, current_speed * lane_change_secs]) - buffer
             )
 
-            if lane_change_until_distance is not None:
-                l_change_allowed = l_change = False
-                r_change_allowed = r_change = False
-            else:
-                distance_to_off_lanes_change = np.abs(number_of_lanes_off) * distance_for_one_lane_change
-                distance_to_off_plus_1_lanes_change = (np.abs(number_of_lanes_off) + 2) * distance_for_one_lane_change
+            distance_to_off_lanes_change = np.abs(number_of_lanes_off) * distance_for_one_lane_change
+            distance_to_off_plus_1_lanes_change = (np.abs(number_of_lanes_off) + 2) * distance_for_one_lane_change
 
-                l_limit, r_limit = 0, len(s.points) - 1
-                l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
-                l_change, r_change = False, False
+            l_limit, r_limit = 0, len(s.points) - 1
+            l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
+            l_change, r_change = False, False
 
-                # rospy.loginfo(f"A ({number_of_lanes_off}): {s.target_lanes_distance} <= "
-                #   f"{distance_to_off_lanes_change} -> {s.target_lanes_distance <= distance_to_off_lanes_change}")
-                # rospy.loginfo(f"B ({l_change_allowed}|{r_change_allowed}): {s.target_lanes_distance} <= "
-                #               f"{distance_to_off_plus_1_lanes_change} -> "
-                #               f"{s.target_lanes_distance <= distance_to_off_plus_1_lanes_change}")
+            # rospy.loginfo(f"A ({number_of_lanes_off}): {s.target_lanes_distance} <= "
+            #   f"{distance_to_off_lanes_change} -> {s.target_lanes_distance <= distance_to_off_lanes_change}")
+            # rospy.loginfo(f"B ({l_change_allowed}|{r_change_allowed}): {s.target_lanes_distance} <= "
+            #               f"{distance_to_off_plus_1_lanes_change} -> "
+            #               f"{s.target_lanes_distance <= distance_to_off_plus_1_lanes_change}")
 
-                if s.target_lanes_distance <= distance_to_off_lanes_change:
-                    # need to lane change here (the latest possibility)
-                    l_change = number_of_lanes_off > 0
-                    r_change = number_of_lanes_off < 0
-                elif s.target_lanes_distance <= distance_to_off_plus_1_lanes_change:
-                    l_change_allowed = l_change_allowed and number_of_lanes_off > 0
-                    r_change_allowed = r_change_allowed and number_of_lanes_off < 0
+            if s.target_lanes_distance <= distance_to_off_lanes_change:
+                # need to lane change here (the latest possibility)
+                l_change = number_of_lanes_off > 0
+                r_change = number_of_lanes_off < 0
+            elif s.target_lanes_distance <= distance_to_off_plus_1_lanes_change:
+                l_change_allowed = l_change_allowed and number_of_lanes_off > 0 or (current_lane - 1 in s.target_lanes)
+                r_change_allowed = r_change_allowed and number_of_lanes_off < 0 or (current_lane + 1 in s.target_lanes)
 
             lane_change_distance = min(distance_for_one_lane_change, dist_to_target)
 
             left_lane, right_lane = None, None
-            if l_change or l_change_allowed:
-                if lane_change_until_distance == s.target_lanes_distance:
-                    left_lane = current_lane - number_of_lanes_off
-                else:
-                    left_lane = current_lane - 1
-            if r_change or r_change_allowed:
-                if lane_change_until_distance == s.target_lanes_distance:
-                    right_lane = current_lane - number_of_lanes_off
-                else:
-                    right_lane = current_lane + 1
+
+            if l_change_allowed and not l_change:
+                left_lane = current_lane - 1
+            if r_change_allowed and not r_change:
+                right_lane = current_lane + 1
+
+            if s.target_lanes_distance <= distance_to_off_lanes_change:
+                change_num_lanes = abs(number_of_lanes_off)
+                if l_change:
+                    left_lane = current_lane - change_num_lanes
+                elif r_change:
+                    right_lane = current_lane + change_num_lanes
+            elif l_change:
+                left_lane = current_lane - 1
+            elif r_change:
+                right_lane = current_lane + 1
+
             end_idx_lane_change, distance_changed, left, straight, right = self._calculate_lane_options(
                 i, lane_change_distance, current_lane, left_lane, right_lane, not (l_change or r_change)
             )
-            # rospy.logerr(f"{s.target_lanes_index_distance}: lane={current_lane}->{list(s.target_lanes)}, avail:|"
-            #              f"{'|'.join([str(x) for x in [left_lane, current_lane, right_lane] if x is not None])}"
-            #              f"|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
-            #              f"result={left is not None}/{straight is not None}/{right is not None}")
+            # avail = [str(x) for x in [left_lane, current_lane, right_lane] if x is not None]
+            # cur = [int(x.x) for x in s.points]
+            # rospy.logerr(
+            # f"{s.target_lanes_index_distance}: lane={current_lane}->{list(s.target_lanes)}, avail:|"
+            # f"{'|'.join([str(x) for x in [left_lane, current_lane, right_lane] if x is not None])}"
+            # f"|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
+            # f"result={left is not None}/{straight is not None}/{right is not None}"
+            # )
+            # print(f"{s.target_lanes_index_distance} ({cur}): "
+            #       f"lane={current_lane}/{len(s.points)}->{list(s.target_lanes)}, avail:|"
+            #       f"{'|'.join(avail)}|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
+            #       f"result={left is not None}/{straight is not None}/{right is not None}, {l_limit, r_limit}")
             try:
                 choice = self._choose_lane(left, straight, right)
             except ValueError:
                 choice = "straight"
+
             if choice == "left" or choice == "right":
                 # rospy.logerr(
                 #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
@@ -446,7 +456,7 @@ class LocalPath:
                 end_idx_lane_change = 0
 
         t1 = f"{(perf_counter() - t0):.2f}s"
-        self._sparse_local_path = sparse_local_path
+        self.sparse_local_path = sparse_local_path
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
 
@@ -530,7 +540,7 @@ class LocalPath:
         if self.rules_enabled:  # todo speed limit logic for no rules
             speed = np.clip(speed, 0, speed_limit)
         if end_of_route and speed[-1] > self.END_OF_ROUTE_SPEED:
-            n = int(1 / 0.25)
+            n = int(10 / 0.25)
             speed = list(speed[:-n])
             for _ in range(len(speed[-n:])):
                 speed.append(self.END_OF_ROUTE_SPEED)

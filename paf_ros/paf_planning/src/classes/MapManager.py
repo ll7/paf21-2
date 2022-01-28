@@ -202,7 +202,7 @@ class MapManager:
         try:
             _xy = pts
             pts = xy_to_pts(pts)
-        except ValueError:
+        except TypeError:
             _xy = pts_to_xy(pts)
 
         x = [p.x for p in pts]
@@ -232,6 +232,47 @@ class MapManager:
         x = [p.x for p in pts5]
         y = [p.y for p in pts5]
         plt.plot(x, y, color="magenta", label="Bezier(Eingangswert)")
+
+        plt.legend()
+        plt.show()
+
+    @staticmethod
+    def visualize_lp_and_gp(local_path_obj, cur_pt: Point2D):
+
+        from matplotlib import pyplot as plt
+
+        def pts_to_x_y(pts):
+            _x = [p.x for p in pts]
+            _y = [p.y for p in pts]
+            return (_x, _y), (np.min(_x), np.min(_y), np.max(_x), np.max(_y))
+
+        pts_gl_1 = []
+        pts_gl_2 = []
+
+        local_path_obj.global_path.as_msg()
+
+        for s in local_path_obj.global_path.route.sections:
+            pts_gl_1 += s.points
+            pts_gl_2 += [p for i, p in enumerate(s.points) if i in s.target_lanes]
+
+        pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
+        pts_loc_1 = local_path_obj.sparse_local_path
+
+        xy1, minima1 = pts_to_x_y(pts_gl_1)
+        xy2, minima2 = pts_to_x_y(pts_gl_2)
+        xy3, minima3 = pts_to_x_y(pts_loc_1)
+        xy4, minima4 = pts_to_x_y(pts_loc_2)
+
+        x_min, y_min = np.min(np.array([minima1, minima2]), axis=1)
+        x_max, y_max = np.max(np.array([minima3, minima4]), axis=1)
+
+        plt.xlim([x_min - 10, x_max + 10])
+        plt.ylim([y_min - 10, y_max + 10])
+
+        plt.scatter(*xy1, label="Global Path (all)", s=1)
+        plt.scatter(*xy2, label="Global Path (target)", s=1)
+        plt.plot(*xy3, label="Local Path (sparse)")
+        plt.plot(*xy4, label="Local Path (dense)")
 
         plt.legend()
         plt.show()
