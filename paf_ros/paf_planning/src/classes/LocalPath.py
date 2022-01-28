@@ -395,6 +395,8 @@ class LocalPath:
                 l_change_allowed = l_change_allowed and number_of_lanes_off > 0 or (current_lane - 1 in s.target_lanes)
                 r_change_allowed = r_change_allowed and number_of_lanes_off < 0 or (current_lane + 1 in s.target_lanes)
 
+            if l_change or r_change:
+                l_change_allowed = r_change_allowed = False
             lane_change_distance = min(distance_for_one_lane_change, dist_to_target)
 
             left_lane, right_lane = None, None
@@ -418,14 +420,14 @@ class LocalPath:
             end_idx_lane_change, distance_changed, left, straight, right = self._calculate_lane_options(
                 i, lane_change_distance, current_lane, left_lane, right_lane, not (l_change or r_change)
             )
-            avail = [str(x) for x in [left_lane, current_lane, right_lane] if x is not None]
-            cur = [int(x.x) for x in s.points]
-            print(
-                f"{s.target_lanes_index_distance} ({cur}): "
-                f"lane={current_lane}/{len(s.points)}->{list(s.target_lanes)}, avail:|"
-                f"{'|'.join(avail)}|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
-                f"result={left is not None}/{straight is not None}/{right is not None}, {l_limit, r_limit}"
-            )
+            # avail = [str(x) for x in [left_lane, current_lane, right_lane] if x is not None]
+            # cur = [int(x.x) for x in s.points]
+            # print(
+            #     f"{s.target_lanes_index_distance} ({cur}): "
+            #     f"lane={current_lane}/{len(s.points)}->{list(s.target_lanes)}, avail:|"
+            #     f"{'|'.join(avail)}|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
+            #     f"result={left is not None}/{straight is not None}/{right is not None}, {l_limit, r_limit}"
+            # )
             try:
                 choice = self._choose_lane(left, straight, right)
             except ValueError:
