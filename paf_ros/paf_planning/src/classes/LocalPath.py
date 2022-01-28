@@ -513,11 +513,6 @@ class LocalPath:
                 draw += spline
             pts += bezier_refit_all_with_tangents(sparse_pts[prev:], ds, ds, convert_to_pts=True)[1:]
             LocalPath._draw_path_pts(draw, "lanechnge", (200, 24, 0))
-
-            # pts = bezier_refit_all_with_tangents(sparse_pts, ds=0.25, ds2=0.25)
-            # if len(pts) == 0:
-            #     rospy.logerr(f"[local planner] Bezier curve could not be calculated")
-            #     pts = calc_spline_course_from_point_list(sparse_pts, ds=0.25)
             if len(pts) == 0:
                 raise ValueError(f"len: {len(sparse_pts)}->0, {pts_to_xy(sparse_pts)}")
         except ValueError as e:

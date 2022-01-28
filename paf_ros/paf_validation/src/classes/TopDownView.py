@@ -86,9 +86,9 @@ class TopDownView(BirdViewProducer):
         self.center_on_agent = not show_whole_map
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
-        self.path_width_px = 10
-        self.pt_width_px = 7
-        self.line_width_px = 5
+        self.path_width_px = 4
+        self.pt_width_px = 1
+        self.line_width_px = 4
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.info_text = [0, 0, 0, (0, 0)]
@@ -177,7 +177,8 @@ class TopDownView(BirdViewProducer):
 
     def _get_line_sets_masks(self):
         lines_masks = []
-        for line_set in self.line_sets.values():
+        vals = list(self.line_sets.values())
+        for line_set in vals:
             points = line_set.points
             mask = self.masks_generator.make_empty_mask()
             pixels = [
@@ -190,7 +191,8 @@ class TopDownView(BirdViewProducer):
 
     def _get_pts_sets_masks(self):
         pts_masks = []
-        for point_set in self.point_sets.values():
+        vals = list(self.point_sets.values())
+        for point_set in vals:
             points = point_set.points
             mask = self.masks_generator.make_empty_mask()
             for point in points:
@@ -380,14 +382,16 @@ class TopDownView(BirdViewProducer):
             rgb_canvas[self.nonzero_indices(birdview[mask_type])] = rgb_color
 
         add_to_idx = len(MaskPriority)
-        for i, line_set in enumerate(self.line_sets.values()):
+        vals = list(self.line_sets.values())
+        for i, line_set in enumerate(vals):
             rgb_color = line_set.color
-            if i + len(MaskPriority) > len(birdview) - 1:
+            if i + add_to_idx > len(birdview) - 1:
                 break
             nonzero = self.nonzero_indices(birdview[i + add_to_idx])
             rgb_canvas[nonzero] = rgb_color
         add_to_idx += len(self.line_sets)
-        for i, pts_set in enumerate(self.point_sets.values()):
+        vals = list(self.point_sets.values())
+        for i, pts_set in enumerate(vals):
             rgb_color = pts_set.color
             if i + len(MaskPriority) > len(birdview) - 1:
                 break

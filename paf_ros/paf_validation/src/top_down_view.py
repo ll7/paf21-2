@@ -75,7 +75,8 @@ class TopDownRosNode(object):
                 point = section.points[section.target_lanes[0]]
             except IndexError:
                 nan += 1
-                point = section.points[0]
+                continue
+                # point = section.points[0]
             if np.isnan(point.x):
                 nan += 1
                 continue

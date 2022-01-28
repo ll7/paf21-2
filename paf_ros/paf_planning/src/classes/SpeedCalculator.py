@@ -201,6 +201,8 @@ class SpeedCalculator:
             speed[0] = speed[1]
         except IndexError:
             pass
+
+        speed = np.clip(speed, 0, 999)
         return speed
 
     def get_next_traffic_signal_deceleration(
