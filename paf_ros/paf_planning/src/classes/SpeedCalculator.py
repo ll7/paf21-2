@@ -85,12 +85,41 @@ class SpeedCalculator:
         return speed
 
     @staticmethod
-    def get_curve_radius_list(path_in: List[Point2D]):
+    def get_curve_radius_list(path: List[Point2D], max_radius=99999999, equal_dist=False):
         # https://www.mathopenref.com/arcradius.html
         # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
-        max_radius = 99999999
-        min_dist = SpeedCalculator.CURVE_RAD_MEASURE_STEP
 
+        if equal_dist:
+            radius_list, fill, _ = SpeedCalculator._get_curve_radius_list_equal_distances(path)
+            out = []
+            for r, f in zip(radius_list, fill):
+                out += [r for _ in range(f)]
+            return out
+
+        if len(path) <= 2:
+            return [max_radius for _ in path]
+
+        radius_list = [max_radius]
+        for p1, p0, p2 in zip(path, path[1:], path[2:]):
+            x1, y1 = p1.x, p1.y
+            x0, y0 = p0.x, p0.y
+            x2, y2 = p2.x, p2.y
+
+            arc_w = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+            arc_h = np.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1)) / arc_w
+
+            if arc_h < 1e-8:
+                radius_list.append(max_radius)
+            else:
+                radius_list.append(arc_h / 2 + arc_w ** 2 / (8 * arc_h))
+
+        radius_list += [max_radius]
+        return radius_list
+
+    @staticmethod
+    def _get_curve_radius_list_equal_distances(path_in: List[Point2D]):
+        min_dist = SpeedCalculator.CURVE_RAD_MEASURE_STEP
+        max_radius = 99999999
         path = []
         fill = [1]
         distances = [0]
@@ -109,26 +138,12 @@ class SpeedCalculator:
         if len(path) < 3:
             return [max_radius for _ in path], fill, distances
 
-        radius_list = [max_radius]
-        for p1, p0, p2 in zip(path, path[1:], path[2:]):
-            x1, y1 = p1.x, p1.y
-            x0, y0 = p0.x, p0.y
-            x2, y2 = p2.x, p2.y
-
-            arc_w = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-            arc_h = np.abs((x2 - x1) * (y1 - y0) - (x1 - x0) * (y2 - y1)) / arc_w
-
-            if arc_h < 1e-8:
-                radius_list.append(max_radius)
-            else:
-                radius_list.append(arc_h / 2 + arc_w ** 2 / (8 * arc_h))
-
-        radius_list += [max_radius]
+        radius_list = SpeedCalculator.get_curve_radius_list(path, max_radius)
 
         return radius_list, fill, distances
 
     def get_curve_speed(self, path: List[Point2D]):
-        curve_radius_list, fill, distances = self.get_curve_radius_list(path)
+        curve_radius_list, fill, distances = self._get_curve_radius_list_equal_distances(path)
         speed1 = [SpeedCalculator._radius_to_speed(r) for r in curve_radius_list]
         speed2 = []
 

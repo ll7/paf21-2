@@ -23,6 +23,7 @@ class LocalPath:
     LANE_CHANGE_SECS = 7
     STRAIGHT_TO_TARGET_DIST = 7.5
     END_OF_ROUTE_SPEED = 5
+    SPLINE_IN_CURVE_RADIUS = 15
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None):
         self._local_path_start_section = 0
@@ -314,7 +315,7 @@ class LocalPath:
                     current_lane = len(s.points) - 1
 
                 self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
-                raise RuntimeError()
+                # raise RuntimeError()
 
             if distance_planned > target_distance:
                 # rospy.logerr(f"break! distance_planned > target_distance: {distance_planned} > {target_distance}")
@@ -343,9 +344,9 @@ class LocalPath:
             sparse_local_path.append(s.points[current_lane])
 
             target_speed = s.speed_limits[current_lane]
-            if s.speed_limits[current_lane] < 30 / 3.6:
+            if s.speed_limits[current_lane] < 25 / 3.6:
                 rospy.logerr_throttle(
-                    5, f"[local planner] Speed limit < 30, correcting.. {s.speed_limits[current_lane]}"
+                    5, f"[local planner] Speed limit < 25, correcting.. {s.speed_limits[current_lane]}"
                 )
                 target_speed = 30 / 3.6
             sparse_local_path_speeds.append(target_speed)
@@ -463,7 +464,8 @@ class LocalPath:
             f"(sparse={t1}, smooth={t3})"
         )
 
-        self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
+        lane_change_pts += sparse_local_path
+        # self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
         # self._draw_path_pts(points, "lanechnge2", (200, 24, 200))
         self.message = local_path
         self.traffic_signals = sparse_traffic_signals
@@ -477,10 +479,45 @@ class LocalPath:
 
     @staticmethod
     def _smooth_out_path(sparse_pts, sparse_speeds):
+        min_radius = LocalPath.SPLINE_IN_CURVE_RADIUS
+        n1, n2 = 1, 4  # indices to add before and after high curve radius
+        curve_radius_list = SpeedCalculator.get_curve_radius_list(sparse_pts, equal_dist=True)
+        change_idx = []
+        first_smaller = None
+        for i, r in enumerate(curve_radius_list):
+            if first_smaller is not None:
+                if r >= min_radius:
+                    change_idx.append((first_smaller, i + n2))
+                    first_smaller = None
+                else:
+                    continue
+            else:
+                if r >= min_radius:
+                    continue
+                else:
+                    first_smaller = i - n1
+        if first_smaller is not None:
+            change_idx.append((first_smaller, len(curve_radius_list)))
+
+        pts = []
         try:
-            pts = bezier_refit_all_with_tangents(sparse_pts, ds=0.25, ds2=0.25)
-            if len(pts) == 0:
-                pts = calc_spline_course_from_point_list(sparse_pts, ds=0.25)
+            ds = 0.25
+            draw = []
+            prev = 0
+            for i, j in change_idx:
+                if prev < i:
+                    pts += bezier_refit_all_with_tangents(sparse_pts[prev : i + 1], ds, ds, convert_to_pts=True)[1:-1]
+                prev = j
+                spline = calc_spline_course_from_point_list(pts_to_xy(sparse_pts[i:j]), ds, to_pts=True)
+                pts += spline
+                draw += spline
+            pts += bezier_refit_all_with_tangents(sparse_pts[prev:], ds, ds, convert_to_pts=True)[1:]
+            LocalPath._draw_path_pts(draw, "lanechnge", (200, 24, 0))
+
+            # pts = bezier_refit_all_with_tangents(sparse_pts, ds=0.25, ds2=0.25)
+            # if len(pts) == 0:
+            #     rospy.logerr(f"[local planner] Bezier curve could not be calculated")
+            #     pts = calc_spline_course_from_point_list(sparse_pts, ds=0.25)
             if len(pts) == 0:
                 raise ValueError(f"len: {len(sparse_pts)}->0, {pts_to_xy(sparse_pts)}")
         except ValueError as e:

@@ -101,6 +101,13 @@ class MapManager:
                 Point2D(54, 326),
                 Point2D(388, 199),
             ]
+        elif town == "Town05":
+            return MapManager.point_to_pose((211, -94), 0), [
+                Point2D(151.6, 28.4),
+                Point2D(-161.5, 143),
+                Point2D(-276, -47.6),
+                Point2D(40.4, -208.6),
+            ]
         else:
             return None, None
 

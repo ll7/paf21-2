@@ -35,7 +35,7 @@ repos:
         exclude: "CRDesigner_Modified_Files"
         args:
           - "--max-line-length=120"
-          - "--ignore=W291,W503,W504"
+          - "--ignore=W291,W503,W504,E203"
   - repo: local
     hooks:
       - id: build
