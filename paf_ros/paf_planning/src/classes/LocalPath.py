@@ -21,7 +21,7 @@ class LocalPath:
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
-    STRAIGHT_TO_TARGET_DIST = 7.5
+    STRAIGHT_TO_TARGET_DIST = 10
     END_OF_ROUTE_SPEED = 5
     SPLINE_IN_CURVE_RADIUS = 15
 
@@ -468,7 +468,8 @@ class LocalPath:
         local_path.target_speed = target_speed
 
         msg = (
-            f"[local planner] planned local path with length={distance_planned:.1f}m "
+            f"[local planner] planned local path from ({from_position.x:.1f}, {from_position.y:.1f}) "
+            f"with length={distance_planned:.1f}m "
             f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)} "
             f"(sparse={t1}, smooth={t3})"
         )

@@ -53,6 +53,7 @@ class GlobalPath:
             self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, lanelet_network)
             self.route = None
             self.signal_positions = []
+        self.sections_visited = 0
 
     def __len__(self):
         if self.route is None:
@@ -76,7 +77,7 @@ class GlobalPath:
             lane_idx = 0
             return section.points[lane_idx], section.speed_limits[lane_idx], self.get_signals(section, lane_idx)
 
-    def get_section_and_lane_indices(self, position, not_found_threshold_meters=100, min_section=0):
+    def get_section_and_lane_indices(self, position, not_found_threshold_meters=100, min_section=None):
         if hasattr(position, "x"):
             ref = (position.x, position.y)
         else:
@@ -84,6 +85,9 @@ class GlobalPath:
 
         if len(self.route.sections) == 0:
             return -1, -1
+
+        if min_section is None:
+            min_section = self.sections_visited
 
         filter1 = [section.points[int(len(section.points) / 2 - 0.5)] for section in self.route.sections[min_section:]]
         section, d = closest_index_of_point_list(filter1, ref)
@@ -406,7 +410,7 @@ class GlobalPath:
             [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
         )
         anchors.append((0, i, i))
-
+        print(blobs)
         return list(zip(blobs, anchors))
 
     def get_paf_lanelet_matrix(self, groups):
@@ -580,6 +584,10 @@ class GlobalPath:
         msg.target = self.target
 
         self.route = msg
+        # final_section, _ = self.get_section_and_lane_indices(self.target)
+        # rospy.logerr((final_section, self.target))
+        # # msg.sections = msg.sections[:final_section + 20]
+
         for i, paf_section in enumerate(msg.sections):
             # rospy.logwarn(f"section {i}: {[(round(p.x), round(p.y)) for p in paf_section.points]}, "
             #               f"{paf_section.target_lanes}, {paf_section.target_lanes_left_shift}, "
@@ -605,6 +613,7 @@ class GlobalPath:
         except rospy.exceptions.ROSException:
             pass
 
+        self.route = msg
         return msg
 
 
