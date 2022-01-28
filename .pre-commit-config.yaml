@@ -32,7 +32,7 @@ repos:
     rev: "4.0.1"
     hooks:
       - id: flake8
-        exclude: Docs
+        exclude: "CRDesigner_Modified_Files"
         args:
           - "--max-line-length=120"
           - "--ignore=W291,W503,W504"

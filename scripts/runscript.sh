@@ -150,7 +150,7 @@ for VAR in "$@"; do
     TOWN_ARGS="town:=$VAR"
   fi
 done
-if [ ! -d "$HOME/carla-ros-bridge/catkin_ws/devel" ]; then
+if [ ! -f "$HOME/carla-ros-bridge/catkin_ws/devel/setup.bash" ]; then
   BUILD_ROS=1
 fi
 if ((BUILD_ROS)); then

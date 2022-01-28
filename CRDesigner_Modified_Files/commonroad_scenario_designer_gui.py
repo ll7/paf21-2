@@ -29,8 +29,11 @@ from crdesigner.input_output.gui.settings import config
 from crdesigner.input_output.gui.misc import util
 
 from crdesigner.input_output.gui.toolboxes.gui_sumo_simulation import SUMO_AVAILABLE
+
 if SUMO_AVAILABLE:
     from crdesigner.input_output.gui.settings.sumo_settings import SUMOSettings
+
+_ = CR_Scenario_Designer
 
 
 class MWindow(QMainWindow, Ui_mainWindow):
@@ -42,9 +45,9 @@ class MWindow(QMainWindow, Ui_mainWindow):
         pathlib.Path(self.tmp_folder).mkdir(parents=True, exist_ok=True)
 
         self.setupUi(self)
-        self.setWindowIcon(QIcon(':/icons/cr.ico'))
+        self.setWindowIcon(QIcon(":/icons/cr.ico"))
         self.setWindowTitle("CommonRoad Scenario Designer")
-        self.centralwidget.setStyleSheet('background-color:rgb(150,150,150)')
+        self.centralwidget.setStyleSheet("background-color:rgb(150,150,150)")
         self.setWindowFlag(Qt.Window)
 
         # attributes
@@ -86,19 +89,19 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.status.showMessage("Welcome to CR Scenario Designer")
 
         menu_bar = self.menuBar()  # instant of menu
-        menu_file = menu_bar.addMenu('File')  # add menu 'file'
+        menu_file = menu_bar.addMenu("File")  # add menu 'file'
         menu_file.addAction(self.fileNewAction)
         menu_file.addAction(self.fileOpenAction)
         menu_file.addAction(self.fileSaveAction)
         menu_file.addAction(self.separator)
         menu_file.addAction(self.exitAction)
 
-        menu_setting = menu_bar.addMenu('Setting')  # add menu 'Setting'
+        menu_setting = menu_bar.addMenu("Setting")  # add menu 'Setting'
         menu_setting.addAction(self.gui_settings)
         menu_setting.addAction(self.sumo_settings)
         menu_setting.addAction(self.osm_settings)
 
-        menu_help = menu_bar.addMenu('Help')  # add menu 'Help'
+        menu_help = menu_bar.addMenu("Help")  # add menu 'Help'
         menu_help.addAction(self.open_web)
         menu_help.addAction(self.open_forum)
 
@@ -108,42 +111,56 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.open_path(path)
 
     def create_road_network_toolbox(self):
-        """ Create the Road network toolbox."""
-        self.road_network_toolbox = RoadNetworkToolbox(current_scenario=self.cr_viewer.current_scenario,
-                                                       text_browser=self.text_browser,
-                                                       callback=self.toolbox_callback,
-                                                       tmp_folder=self.tmp_folder,
-                                                       selection_changed_callback=self.cr_viewer.update_plot)
+        """Create the Road network toolbox."""
+        self.road_network_toolbox = RoadNetworkToolbox(
+            current_scenario=self.cr_viewer.current_scenario,
+            text_browser=self.text_browser,
+            callback=self.toolbox_callback,
+            tmp_folder=self.tmp_folder,
+            selection_changed_callback=self.cr_viewer.update_plot,
+        )
         self.addDockWidget(Qt.LeftDockWidgetArea, self.road_network_toolbox)
 
     def create_converter_toolbox(self):
-        """ Create the map converter toolbox."""
-        self.map_converter_toolbox = MapConversionToolbox(self.cr_viewer.current_scenario,
-                                                          self.toolbox_callback, self.text_browser,
-                                                          self.obstacle_toolbox.sumo_simulation)
+        """Create the map converter toolbox."""
+        self.map_converter_toolbox = MapConversionToolbox(
+            self.cr_viewer.current_scenario,
+            self.toolbox_callback,
+            self.text_browser,
+            self.obstacle_toolbox.sumo_simulation,
+        )
         self.addDockWidget(Qt.RightDockWidgetArea, self.map_converter_toolbox)
 
     def create_obstacle_toolbox(self):
-        """ Create the obstacle toolbox."""
+        """Create the obstacle toolbox."""
         self.obstacle_toolbox = ObstacleToolbox(self.cr_viewer.current_scenario, self.toolbox_callback, self.tmp_folder)
         self.addDockWidget(Qt.RightDockWidgetArea, self.obstacle_toolbox)
 
     def click_callback(self, pos_x: float, pos_y: float):
         self.road_network_toolbox.update_create_lane_table(pos_x=pos_x, pos_y=pos_y)
-    
-    def viewer_callback(self, selected_object: Union[Lanelet, Obstacle], output: str, pos_x=0.0, pos_y=0.0, vertices_click=False):
+
+    def viewer_callback(
+        self, selected_object: Union[Lanelet, Obstacle], output: str, pos_x=0.0, pos_y=0.0, vertices_click=False
+    ):
         if vertices_click:
             self.click_callback(pos_x=pos_x, pos_y=pos_y)
             return
         if isinstance(selected_object, Lanelet):
             self.road_network_toolbox.road_network_toolbox.selected_lanelet_two.setCurrentText(
-                self.road_network_toolbox.road_network_toolbox.selected_lanelet_one.currentText())
+                self.road_network_toolbox.road_network_toolbox.selected_lanelet_one.currentText()
+            )
             self.road_network_toolbox.road_network_toolbox.selected_lanelet_one.setCurrentText(
-                str(selected_object.lanelet_id))
+                str(selected_object.lanelet_id)
+            )
             self.road_network_toolbox.road_network_toolbox.selected_lanelet_update.setCurrentText(
-                str(selected_object.lanelet_id))
+                str(selected_object.lanelet_id)
+            )
             if self.road_network_toolbox.road_network_toolbox.split_lanelets_info_click.isChecked():
-                self.road_network_toolbox.road_network_toolbox.selected_lanelet_split.setCurrentIndex(self.road_network_toolbox.road_network_toolbox.selected_lanelet_split.findText(str(selected_object.lanelet_id)))
+                self.road_network_toolbox.road_network_toolbox.selected_lanelet_split.setCurrentIndex(
+                    self.road_network_toolbox.road_network_toolbox.selected_lanelet_split.findText(
+                        str(selected_object.lanelet_id)
+                    )
+                )
                 self.road_network_toolbox.road_network_toolbox.x_position_split.setText(str(pos_x))
                 self.road_network_toolbox.road_network_toolbox.y_position_split.setText(str(pos_y))
         elif isinstance(selected_object, Obstacle):
@@ -188,7 +205,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
     def time_step_change(self, value):
         if self.cr_viewer.current_scenario:
             self.cr_viewer.set_timestep(value)
-            self.label1.setText('  Time Stamp: ' + str(value))
+            self.label1.setText("  Time Stamp: " + str(value))
             self.cr_viewer.animation.event_source.start()
 
     def play_pause_animation(self):
@@ -196,10 +213,13 @@ class MWindow(QMainWindow, Ui_mainWindow):
         if not self.cr_viewer.current_scenario:
             messbox = QMessageBox()
             reply = messbox.warning(
-                self, "Warning",
+                self,
+                "Warning",
                 "Please load or create a CommonRoad scenario before attempting to play",
-                QMessageBox.Ok | QMessageBox.No, QMessageBox.Ok)
-            if (reply == QMessageBox.Ok):
+                QMessageBox.Ok | QMessageBox.No,
+                QMessageBox.Ok,
+            )
+            if reply == QMessageBox.Ok:
                 self.open_commonroad_file()
             return
         if not self.play_activated:
@@ -217,25 +237,28 @@ class MWindow(QMainWindow, Ui_mainWindow):
         """Function connected with the save button in the Toolbar."""
         if not self.cr_viewer.current_scenario:
             messbox = QMessageBox()
-            reply = messbox.warning(self, "Warning",
-                                    "Please load or create a CommonRoad scenario before saving a video",
-                                    QMessageBox.Ok | QMessageBox.No,
-                                    QMessageBox.Ok)
-            if (reply == QMessageBox.Ok):
+            reply = messbox.warning(
+                self,
+                "Warning",
+                "Please load or create a CommonRoad scenario before saving a video",
+                QMessageBox.Ok | QMessageBox.No,
+                QMessageBox.Ok,
+            )
+            if reply == QMessageBox.Ok:
                 self.open_commonroad_file()
             else:
                 messbox.close()
         else:
-            self.text_browser.append("Save video for scenario with ID " +
-                                     str(self.cr_viewer.current_scenario.scenario_id))
+            self.text_browser.append(
+                "Save video for scenario with ID " + str(self.cr_viewer.current_scenario.scenario_id)
+            )
             self.cr_viewer.save_animation()
             self.text_browser.append("Saving the video finished.")
 
     def create_console(self):
         """Function to create the console."""
         self.console = QDockWidget(self)
-        self.console.setTitleBarWidget(QWidget(
-            self.console))  # no title of Dock
+        self.console.setTitleBarWidget(QWidget(self.console))  # no title of Dock
         self.text_browser = QTextBrowser()
         self.text_browser.setMaximumHeight(80)
         self.text_browser.setObjectName("textBrowser")
@@ -250,19 +273,18 @@ class MWindow(QMainWindow, Ui_mainWindow):
         action_new = QAction(QIcon(":/icons/new_file.png"), "new CR File", self)
         tb1.addAction(action_new)
         action_new.triggered.connect(self.file_new)
-        action_open = QAction(QIcon(":/icons/open_file.png"), "open CR File",
-                              self)
+        action_open = QAction(QIcon(":/icons/open_file.png"), "open CR File", self)
         tb1.addAction(action_open)
         action_open.triggered.connect(self.open_commonroad_file)
-        action_save = QAction(QIcon(":/icons/save_file.png"), "save CR File",
-                              self)
+        action_save = QAction(QIcon(":/icons/save_file.png"), "save CR File", self)
         tb1.addAction(action_save)
         action_save.triggered.connect(self.file_save)
 
         tb1.addSeparator()
         tb2 = self.addToolBar("Toolboxes")
-        action_road_network_toolbox = QAction(QIcon(":/icons/road_network_toolbox.png"), "Open Road Network Toolbox",
-                                              self)
+        action_road_network_toolbox = QAction(
+            QIcon(":/icons/road_network_toolbox.png"), "Open Road Network Toolbox", self
+        )
         tb2.addAction(action_road_network_toolbox)
         action_road_network_toolbox.triggered.connect(self.road_network_toolbox_show)
         action_obstacle_toolbox = QAction(QIcon(":/icons/obstacle_toolbox.png"), "Open Obstacle Toolbox", self)
@@ -304,10 +326,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.cr_viewer.time_step.subscribe(self.slider.setValue)
         tb4.addWidget(self.slider)
 
-        self.label1 = QLabel('  Time Stamp: 0', self)
+        self.label1 = QLabel("  Time Stamp: 0", self)
         tb4.addWidget(self.label1)
 
-        self.label2 = QLabel(' / 0', self)
+        self.label2 = QLabel(" / 0", self)
         tb4.addWidget(self.label2)
 
         action_save_video = QAction(QIcon(":/icons/save_video.png"), "Save Video", self)
@@ -315,9 +337,9 @@ class MWindow(QMainWindow, Ui_mainWindow):
         action_save_video.triggered.connect(self.save_video)
 
     def update_max_step(self, value: int = -1):
-        logging.info('update_max_step')
+        logging.info("update_max_step")
         value = value if value > -1 else self.cr_viewer.max_timestep
-        self.label2.setText(' / ' + str(value))
+        self.label2.setText(" / " + str(value))
         self.slider.setMaximum(value)
 
     def create_setting_actions(self):
@@ -328,21 +350,24 @@ class MWindow(QMainWindow, Ui_mainWindow):
             checkable=False,
             slot=self.show_osm_settings,
             tip="Show settings for osm converter",
-            shortcut=None)
+            shortcut=None,
+        )
         self.opendrive_settings = self.create_action(
             "OpenDRIVE Settings",
             icon="",
             checkable=False,
             slot=self.show_opendrive_settings,
             tip="Show settings for OpenDRIVE converter",
-            shortcut=None)
+            shortcut=None,
+        )
         self.gui_settings = self.create_action(
             "GUI Settings",
             icon="",
             checkable=False,
             slot=self.show_gui_settings,
             tip="Show settings for the CR Scenario Designer",
-            shortcut=None)
+            shortcut=None,
+        )
         if SUMO_AVAILABLE:
             self.sumo_settings = self.create_action(
                 "SUMO Settings",
@@ -350,22 +375,17 @@ class MWindow(QMainWindow, Ui_mainWindow):
                 checkable=False,
                 slot=self.show_sumo_settings,
                 tip="Show settings for the SUMO interface",
-                shortcut=None)
+                shortcut=None,
+            )
 
     def create_help_actions(self):
         """Function to create the help action in the menu bar."""
-        self.open_web = self.create_action("Open CR Web",
-                                           icon="",
-                                           checkable=False,
-                                           slot=self.open_cr_web,
-                                           tip="Open CommonRoad Website",
-                                           shortcut=None)
-        self.open_forum = self.create_action("Open Forum",
-                                             icon="",
-                                             checkable=False,
-                                             slot=self.open_cr_forum,
-                                             tip="Open CommonRoad Forum",
-                                             shortcut=None)
+        self.open_web = self.create_action(
+            "Open CR Web", icon="", checkable=False, slot=self.open_cr_web, tip="Open CommonRoad Website", shortcut=None
+        )
+        self.open_forum = self.create_action(
+            "Open Forum", icon="", checkable=False, slot=self.open_cr_forum, tip="Open CommonRoad Forum", shortcut=None
+        )
 
     def create_viewer_dock(self):
         self.viewer_dock = QWidget(self)
@@ -380,8 +400,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         """Function that makes sure the main window is in the center of screen."""
         screen = QDesktopWidget().screenGeometry()
         size = self.geometry()
-        self.move((screen.width() - size.width()) / 2,
-                  (screen.height() - size.height()) / 2)
+        self.move((screen.width() - size.width()) / 2, (screen.height() - size.height()) / 2)
 
     def create_file_actions(self):
         """Function to create the file action in the menu bar."""
@@ -391,14 +410,16 @@ class MWindow(QMainWindow, Ui_mainWindow):
             checkable=False,
             slot=self.file_new,
             tip="New Commonroad File",
-            shortcut=QKeySequence.New)
+            shortcut=QKeySequence.New,
+        )
         self.fileOpenAction = self.create_action(
             "Open",
             icon=QIcon(":/icons/open_file.png"),
             checkable=False,
             slot=self.open_commonroad_file,
             tip="Open Commonroad File",
-            shortcut=QKeySequence.Open)
+            shortcut=QKeySequence.Open,
+        )
         self.separator = QAction(self)
         self.separator.setSeparator(True)
 
@@ -408,22 +429,19 @@ class MWindow(QMainWindow, Ui_mainWindow):
             checkable=False,
             slot=self.file_save,
             tip="Save Commonroad File",
-            shortcut=QKeySequence.Save)
+            shortcut=QKeySequence.Save,
+        )
         self.separator.setSeparator(True)
-        self.exitAction = self.create_action("Quit",
-                                             icon=QIcon(":/icons/close.png"),
-                                             checkable=False,
-                                             slot=self.close_window,
-                                             tip="Quit",
-                                             shortcut=QKeySequence.Close)
+        self.exitAction = self.create_action(
+            "Quit",
+            icon=QIcon(":/icons/close.png"),
+            checkable=False,
+            slot=self.close_window,
+            tip="Quit",
+            shortcut=QKeySequence.Close,
+        )
 
-    def create_action(self,
-                      text,
-                      icon=None,
-                      checkable=False,
-                      slot=None,
-                      tip=None,
-                      shortcut=None):
+    def create_action(self, text, icon=None, checkable=False, slot=None, tip=None, shortcut=None):
         """Function to create the action in the menu bar."""
         action = QAction(text, self)
         if icon is not None:
@@ -460,7 +478,8 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.cr_viewer.current_scenario = scenario
         self.cr_viewer.current_pps = None
         self.open_scenario(scenario)
-#        self.restore_parameters()
+
+    #        self.restore_parameters()
 
     def open_commonroad_file(self):
         """ """
@@ -503,14 +522,15 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.map_converter_toolbox.sumo_simulation.scenario = scenario
 
     def open_scenario(self, new_scenario, filename="new_scenario", pps=None):
-        """  """
+        """ """
         if self.check_scenario(new_scenario) >= 2:
             self.text_browser.append("loading aborted")
             return
         self.filename = filename
         if SUMO_AVAILABLE:
-            self.cr_viewer.open_scenario(new_scenario, self.obstacle_toolbox.sumo_simulation.config,
-                                         planning_problem_set=pps)
+            self.cr_viewer.open_scenario(
+                new_scenario, self.obstacle_toolbox.sumo_simulation.config, planning_problem_set=pps
+            )
             self.obstacle_toolbox.sumo_simulation.scenario = self.cr_viewer.current_scenario
         else:
             self.cr_viewer.open_scenario(new_scenario, planning_problem_set=pps)
@@ -520,7 +540,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.update_to_new_scenario()
 
     def update_to_new_scenario(self):
-        """  """
+        """ """
         self.update_max_step()
         self.initialize_toolboxes()
         self.viewer_dock.setWindowIcon(QIcon(":/icons/cr1.ico"))
@@ -545,26 +565,22 @@ class MWindow(QMainWindow, Ui_mainWindow):
         found_ids = util.find_invalid_ref_of_traffic_lights(scenario)
         if found_ids and verbose:
             error_score = max(error_score, fatal_error)
-            self.text_browser.append("invalid traffic light refs: " +
-                                     str(found_ids))
+            self.text_browser.append("invalid traffic light refs: " + str(found_ids))
             QMessageBox.critical(
                 self,
                 "CommonRoad XML error",
-                "Scenario contains invalid traffic light refenence(s): " +
-                str(found_ids),
+                "Scenario contains invalid traffic light refenence(s): " + str(found_ids),
                 QMessageBox.Ok,
             )
 
         found_ids = util.find_invalid_ref_of_traffic_signs(scenario)
         if found_ids and verbose:
             error_score = max(error_score, fatal_error)
-            self.text_browser.append("invalid traffic sign refs: " +
-                                     str(found_ids))
+            self.text_browser.append("invalid traffic sign refs: " + str(found_ids))
             QMessageBox.critical(
                 self,
                 "CommonRoad XML error",
-                "Scenario contains invalid traffic sign refenence(s): " +
-                str(found_ids),
+                "Scenario contains invalid traffic sign refenence(s): " + str(found_ids),
                 QMessageBox.Ok,
             )
 
@@ -575,13 +591,11 @@ class MWindow(QMainWindow, Ui_mainWindow):
         found_ids = util.find_invalid_lanelet_polygons(scenario)
         if found_ids and verbose:
             error_score = max(error_score, warning)
-            self.text_browser.append(
-                "Warning: Lanelet(s) with invalid polygon:" + str(found_ids))
+            self.text_browser.append("Warning: Lanelet(s) with invalid polygon:" + str(found_ids))
             QMessageBox.warning(
                 self,
                 "CommonRoad XML error",
-                "Scenario contains lanelet(s) with invalid polygon: " +
-                str(found_ids),
+                "Scenario contains lanelet(s) with invalid polygon: " + str(found_ids),
                 QMessageBox.Ok,
             )
 
@@ -592,21 +606,19 @@ class MWindow(QMainWindow, Ui_mainWindow):
 
         if self.cr_viewer.current_scenario is None:
             messbox = QMessageBox()
-            messbox.warning(self, "Warning", "There is no file to save!",
-                            QMessageBox.Ok, QMessageBox.Ok)
+            messbox.warning(self, "Warning", "There is no file to save!", QMessageBox.Ok, QMessageBox.Ok)
             messbox.close()
             return
 
         self.scenario_saving_dialog.show(self.cr_viewer.current_scenario, self.cr_viewer.current_pps)
 
     def process_trigger(self, q):
-        self.status.showMessage(q.text() + ' is triggered')
+        self.status.showMessage(q.text() + " is triggered")
 
     def close_window(self):
-        reply = QMessageBox.warning(self, "Warning",
-                                    "Do you really want to quit?",
-                                    QMessageBox.Yes | QMessageBox.No,
-                                    QMessageBox.Yes)
+        reply = QMessageBox.warning(
+            self, "Warning", "Do you really want to quit?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+        )
         if reply == QMessageBox.Yes:
             qApp.quit()
 
@@ -624,7 +636,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.map_converter_toolbox.show()
 
     def update_view(self, focus_on_network=None):
-        """ update all components."""
+        """update all components."""
 
         # reset selection of all other selectable elements
         if self.cr_viewer.current_scenario is None:
@@ -668,5 +680,5 @@ def start_gui(input_file: str = None):
     sys.exit(app.exec_())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     start_gui()

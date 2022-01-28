@@ -1,20 +1,15 @@
 <?xml version="1.0"?>
 <package>
-  <name>paf_messages</name>
+  <name>paf_map_manipulation</name>
   <version>1.2.0</version>
-  <description>The custom paf_messages package</description>
+  <description>The paf_map_manipulation package</description>
   <maintainer email="todo@todo.de">paf21-2</maintainer>
   <license>TODO</license>
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
 
-  <build_export_depend>rospy</build_export_depend>
-  <build_export_depend>std_msgs</build_export_depend>
-  <exec_depend>rospy</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
+  <run_depend>rospy</run_depend>
+  <run_depend>std_msgs</run_depend>
 
-  <build_depend>paf_messages</build_depend>
-  <build_export_depend>paf_messages</build_export_depend>
-  <exec_depend>paf_messages</exec_depend>
 </package>
