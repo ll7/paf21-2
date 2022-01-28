@@ -48,7 +48,6 @@ class VehicleController:
         self._unstuck_check_time: float = 0.5  # max duration for the rear gear
         # true while the car is driving backwards to unstuck
         self._is_unstucking: bool = False
-        self._is_unstucking_left: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
         self._obstacle_follow_min_distance: float = 4.0
@@ -138,19 +137,25 @@ class VehicleController:
             throttle: float = self.__calculate_throttle(dt, distance)
 
             rear_gear = False
+            is_left_of_path = self._lat_controller.cross_err < 0
+            is_unstucking_left = self._lat_controller.heading_error < 0
+            if is_left_of_path:
+                is_unstucking_left = not is_unstucking_left
+
             if self._is_unstucking:
                 if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
                     self._is_unstucking = False
                 else:
                     rear_gear = True
             elif self.__check_stuck() or self.__check_wrong_way():
+                rospy.logerr(f"stuck {'left' if is_unstucking_left else 'right'} " f"{self._lat_controller.cross_err}")
                 self._is_unstucking = True
                 self._unstuck_start_time = rospy.get_rostime().secs
                 rear_gear = True
 
             if rear_gear:
-                throttle = 1.0
-                steering = 0.33 * -1 if self._is_unstucking_left else 1
+                throttle = 1
+                steering = 0.33 * -1 if is_unstucking_left else 1
                 self._is_reverse = True
 
         except RuntimeError as e:
@@ -196,8 +201,7 @@ class VehicleController:
         return control
 
     def __check_wrong_way(self):
-        self._is_unstucking_left = self._lat_controller.heading_error > 0
-        return np.abs(self._lat_controller.heading_error) > np.pi / 2
+        return np.abs(self._lat_controller.heading_error) > np.pi * 0.66
 
     def __check_stuck(self):
         stuck = self._current_speed < self._stuck_value_threshold < self._target_speed
@@ -261,7 +265,7 @@ class VehicleController:
         # perform pid control step with distance and speed controllers
         target_speed = self._target_speed * self._target_speed_offset
 
-        if distance >= 0.5 and self._current_speed > 10:
+        if distance >= 2 and self._current_speed > 10:
             target_speed = max(10, self._current_speed * (1 - 1e-8))
 
         lon: float = self._lon_controller.run_step(target_speed, self._current_speed, dt)
