@@ -156,8 +156,8 @@ fi
 if ((BUILD_ROS)); then
   echo building ros
   close_all
-  ./build_ros.sh --clean
-  cd $paf_dir/scripts/ || exit
+  ./build_ros.sh --clean || exit 1
+  cd "$paf_dir/scripts/" || exit 1
 fi
 if ((CARLA_SKIP)); then
   if carla_available; then
