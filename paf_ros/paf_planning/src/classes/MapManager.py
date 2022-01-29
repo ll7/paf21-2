@@ -85,6 +85,10 @@ class MapManager:
         #     return MapManager.point_to_pose((148.4, -241), -90), [
         #         Point2D(193.8,-220),
         #     ]
+        if "Town" in town:
+            return MapManager.point_to_pose((-80, 0), -90), [
+                Point2D(63, -59),
+            ]
 
         if town == "Town01":
             return MapManager.point_to_pose((398, -61), 0), [
@@ -168,7 +172,8 @@ class MapManager:
         if draw_route_lanelets:
             dict_param = {
                 "lanelet": {
-                    "unique_colors": False,  # colorizes center_vertices and labels of each lanelet differently
+                    # colorizes center_vertices and labels of each lanelet differently
+                    "unique_colors": False,
                     "draw_stop_line": False,
                     "stop_line_color": "#ffffff",
                     "draw_line_markings": True,
