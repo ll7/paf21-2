@@ -26,3 +26,14 @@ Credits: psaf1 WS 20/21
 Benötigt PyTorch:
 "Ebenso muss pytorch entsprechen der Anleitung auf (Pytorch.org)[https://pytorch.org/] installiert werden. Dabei ist auf die lokal verwendete Treiberversion zu achten. Für eine optimale Nutzung wird eine Nvidia-Grafikarte in Verbindung mit dem ensprechenden Cuda-Treiber benötigt."
 (pip3 install torch==1.10.1+cu113 torchvision==0.11.2+cu113 torchaudio==0.10.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html)
+
+```
+Subscribed Topics:
+- /paf/paf_local_planner/activate_traffic_light_detection
+
+Published Topics:
+- TODO
+
+Launchers:
+- roslaunch paf_perception traffic_light_detector.launch
+```

@@ -1,22 +1,16 @@
 import math
-from threading import Lock
-from time import time
 from typing import Callable, Set
-from typing import Tuple, List, Dict
 
 import cv2
 import numpy
 import numpy as np
 import rospy
 from cv_bridge import CvBridge
-from genpy import Time
 
-# from paf_messages.msg import PafCombinedCameraImage
-from sensor_msgs.msg import Image
 from std_msgs.msg import Time
-from paf_ros.paf_perception.src.SegmentationCamera import Tag as SegmentationTag, SegmentationCamera
-from paf_ros.paf_perception.src.DepthCamera import DepthCamera
-from paf_ros.paf_perception.src.RGBCamera import RGBCamera
+from SegmentationCamera import Tag as SegmentationTag, SegmentationCamera
+from DepthCamera import DepthCamera
+from RGBCamera import RGBCamera
 
 
 class FusionCamera:
@@ -55,9 +49,6 @@ class FusionCamera:
 
         self.visible_tags = visible_tags
 
-        # self.__subscriber = rospy.Subscriber(f"/psaf/sensors/{role_name}/fusionCamera/{camera_name}/fusion_image", PafCombinedCameraImage,
-        #                                     self.__update_image,queue_size=queue_size)
-
         self.__listener = None
         self.bridge = CvBridge()
 
@@ -92,7 +83,8 @@ class FusionCamera:
             # print("Time stamp seg: " + str(self.segmentation_time.to_sec()))
             # print("Time stamp rgb: " + str(self.rgb_time.to_sec()))
             # print("Time stamp dep: " + str(self.depth_time.to_sec()))
-            # print("Time diff seg and rgb: " + str(self.segmentation_time.to_sec() - self.rgb_time.to_sec()) + " | Time Diff seg and depth: " + str(self.segmentation_time.to_sec() - self.depth_time.to_sec()))
+            # print("Time diff seg and rgb: " + str(self.segmentation_time.to_sec() - self.rgb_time.to_sec()) +
+            # " | Time Diff seg and depth: " + str(self.segmentation_time.to_sec() - self.depth_time.to_sec()))
             self.__update_image()
             for k in list(self.rgb_image_list.keys()):
                 if k.to_nsec() < self.segmentation_time.to_nsec():
@@ -119,12 +111,12 @@ class FusionCamera:
         :return: None
         """
 
-        age = rospy.Time.now() - self.segmentation_time
+        # age = rospy.Time.now() - self.segmentation_time
 
         if self.visible_tags is not None:
             self.segmentation_image = SegmentationCamera.filter_for_tags(self.segmentation_image, self.visible_tags)
 
-        if self.__listener != None:
+        if self.__listener is not None:
             self.__listener(self.segmentation_time, self.segmentation_image, self.rgb_image, self.depth_image)
 
     def get_image(self):

@@ -1,8 +1,10 @@
+#!/usr/bin/env python
 from enum import Enum
 import json
 import os
 from datetime import datetime
 from typing import Callable, List, Tuple
+from std_msgs.msg import Bool
 
 import cv2
 import numpy as np
@@ -13,9 +15,7 @@ from torch.autograd import Variable
 from torchvision.transforms import transforms
 import torch.backends.cudnn as cudnn
 
-from paf_ros.paf_perception.src.FusionCamera import FusionCamera, SegmentationTag
-
-times = []
+from FusionCamera import FusionCamera, SegmentationTag
 
 
 class Labels(Enum):
@@ -87,16 +87,21 @@ class TrafficLightDetector:
     Detector for traffic lights
     """
 
-    def __init__(self, role_name: str = "ego_vehicle", use_gpu: bool = True):
+    def __init__(self, use_gpu: bool = True):
         """
         Init the speed traffic light detector
         :param role_name: the name of the vehicle to access the cameras
         :param use_gpu: whether the classification model should be loaded to the gpu
         """
 
+        rospy.init_node("traffic_light_detector", anonymous=True)
+        role_name = rospy.get_param("~role_name", "ego_vehicle")
+
+        self.detection_activated = True
+
         self.__listener = None
 
-        self.logger_name = "TrafficLightDetector"
+        self.logger_name = "traffic_light_detector"
 
         self.confidence_min = 0.75
         self.threshold = 0.7
@@ -110,13 +115,13 @@ class TrafficLightDetector:
         # Deep learning config and inits
         self.confidence_min = 0.70
         self.threshold = 1.0
-        rospy.loginfo(f"init device (use gpu={use_gpu})", logger_name=self.logger_name)
+        rospy.loginfo(f"[traffic light detector] init device (use gpu={use_gpu})", logger_name=self.logger_name)
         # select the gpu if allowed and a gpu is available
         self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-        rospy.loginfo("Device:" + str(self.device), logger_name=self.logger_name)
+        rospy.loginfo("[traffic light detector] Device:" + str(self.device), logger_name=self.logger_name)
         # load our model
         model_name = "traffic-light-classifiers-2021-03-27_23-55-48"
-        rospy.loginfo("loading classifier model from disk...", logger_name=self.logger_name)
+        rospy.loginfo("[traffic light detector] loading classifier model from disk...", logger_name=self.logger_name)
         model = torch.load(os.path.join(root_path, f"models/{model_name}.pt"))
 
         with open(os.path.join(root_path, f"models/{model_name}.names")) as f:
@@ -137,16 +142,26 @@ class TrafficLightDetector:
         )
         model.to(self.device)
         if self.device.type == "cuda":
-            rospy.loginfo("Enable cudnn", logger_name=self.logger_name)
+            rospy.loginfo("[traffic light detector] Enable cudnn", logger_name=self.logger_name)
             cudnn.enabled = True
             cudnn.benchmark = True
         self.net = model
         self.net.eval()
         torch.no_grad()  # reduce memory consumption and improve speed
 
+        activation_topic = "/paf/paf_local_planner/activate_traffic_light_detection"
+        rospy.Subscriber(activation_topic, Bool, self._activation_toggled, queue_size=1)
+
         # init image source = combination of segmentation, rgb and depth camera
         self.combinedCamera = FusionCamera(role_name=role_name, visible_tags={SegmentationTag.TrafficLight})
         self.combinedCamera.set_on_image_listener(self.__on_new_image_data)
+
+    def _activation_toggled(self, activate: bool):
+        self.detection_activated = activate.data
+        if activate.data:
+            rospy.loginfo("[traffic light detector] Detection activated", logger_name=self.logger_name)
+        else:
+            rospy.loginfo("[traffic light detector] Detection deactivated", logger_name=self.logger_name)
 
     def __extract_label(self, image) -> Tuple[Labels, float]:
         """
@@ -178,6 +193,9 @@ class TrafficLightDetector:
         :param time: time stamp when the images where taken
         :return: none
         """
+        if self.detection_activated is False:
+            self.inform_listener(time, None)
+            return
         if (rospy.Time.now() - time).to_sec() > 0.6:
             # Ignore the new image data if its older than 600ms
             # -> Reduce message aging
@@ -296,53 +314,62 @@ class TrafficLightDetector:
         """
         self.__listener = func
 
+    @staticmethod
+    def start():
+        """
+        starts ROS node
+        """
+        rospy.spin()
 
-# Show case code
+
 if __name__ == "__main__":
-    from paf_ros.paf_perception.src.RGBCamera import RGBCamera
-    from paf_ros.paf_perception.src.perception_util import show_image
 
-    rospy.init_node("DetectionTest")
+    node = TrafficLightDetector()
+    debug = True
+    # Show case code:
+    if debug:
+        from RGBCamera import RGBCamera
+        from perception_util import show_image
 
-    detected_r = None
-    time = None
+        detected_r = None
+        time = None
 
-    def store_image(image, _):
-        global detected_r, time
+        def store_image(image, _):
+            global detected_r, time
 
-        H, W = image.shape[:2]
+            H, W = image.shape[:2]
 
-        if detected_r is not None:
-            print("Detected Elements: " + str(len(detected_r)))
-            for element in detected_r:
-                # extract the bounding box coordinates
-                (x, y) = (int(element.x * W), int(element.y * H))
-                (w, h) = (int(element.w * W), int(element.h * H))
-                # draw a bounding box rectangle and label on the image
-                color_map = {
-                    Labels.TrafficLightRed: (255, 0, 0),
-                    Labels.TrafficLightGreen: (0, 255, 0),
-                    Labels.TrafficLightYellow: (255, 255, 0),
-                    Labels.TrafficLightUnknown: (0, 0, 0),
-                }
-                color = color_map.get(element.label, (0, 0, 0))
-                cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
-                text = "{}-{:.1f}m: {:.4f}".format(element.label.label_text, element.distance, element.confidence)
-                cv2.putText(image, text, (x - 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+            if detected_r is not None:
+                # print("Detected Elements: " + str(len(detected_r)))
+                for element in detected_r:
+                    # extract the bounding box coordinates
+                    (x, y) = (int(element.x * W), int(element.y * H))
+                    (w, h) = (int(element.w * W), int(element.h * H))
+                    # draw a bounding box rectangle and label on the image
+                    color_map = {
+                        Labels.TrafficLightRed: (255, 0, 0),
+                        Labels.TrafficLightGreen: (0, 255, 0),
+                        Labels.TrafficLightYellow: (255, 255, 0),
+                        Labels.TrafficLightUnknown: (0, 0, 0),
+                    }
+                    color = color_map.get(element.label, (0, 0, 0))
+                    cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+                    text = "{}-{:.1f}m: {:.4f}".format(element.label.label_text, element.distance, element.confidence)
+                    cv2.putText(image, text, (x - 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
-            # print(f"Age {(rospy.Time.now()-time).to_sec()}s")
-        show_image("Traffic light detection", image)
-        # print(f"took: {np.average(times)}ms")
+                # print(f"Age {(rospy.Time.now()-time).to_sec()}s")
+            show_image("Traffic light detection", image)
+            # print(f"took: {np.average(times)}ms")
 
-    def on_detected(time_in, detected_list):
-        global detected_r, time
-        detected_r = detected_list
-        time = time_in
+        def on_detected(time_in, detected_list):
+            global detected_r, time
+            detected_r = detected_list
+            time = time_in
 
-    cam = RGBCamera()
+        cam = RGBCamera()
 
-    cam.set_on_image_listener(store_image)
+        cam.set_on_image_listener(store_image)
 
-    s = TrafficLightDetector()
-    s.set_on_detection_listener(on_detected)
-    rospy.spin()
+        node.set_on_detection_listener(on_detected)
+
+    node.start()

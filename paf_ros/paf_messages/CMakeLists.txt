@@ -26,6 +26,7 @@ add_message_files(
   PafLogText.msg
   PafTopDownViewPointSet.msg
   PafSpeedMsg.msg
+  PafDetectedTrafficLights.msg
 )
 
 #add_service_files(
