@@ -4,7 +4,7 @@ import numpy as np
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 from paf_messages.msg import PafTrafficSignal, Point2D
-from .HelperFunctions import dist_pts
+from .HelperFunctions import dist
 from .MapManager import MapManager
 
 
@@ -133,7 +133,7 @@ class SpeedCalculator:
 
         dist_measure = 0
         for prev, p in zip(path_in, path_in[1:]):
-            distances.append(dist_pts(prev, p))
+            distances.append(dist(prev, p))
             dist_measure += distances[-1]
             if dist_measure < min_dist:
                 fill[-1] += 1

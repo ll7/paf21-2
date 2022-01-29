@@ -184,7 +184,7 @@ class TopDownView(BirdViewProducer):
             pixels = [
                 self.masks_generator.location_to_pixel(Namespace(**{"x": point.x, "y": -point.y})) for point in points
             ]
-            pixels = np.array([[p.x, p.y] for p in pixels])
+            pixels = np.array([(p.x, p.y) for p in pixels])
             mask = cv2.polylines(mask, [pixels.reshape((-1, 1, 2))], False, COLOR_ON, self.line_width_px)
             lines_masks.append(mask)
         return lines_masks
@@ -332,7 +332,7 @@ class TopDownView(BirdViewProducer):
         except ValueError:
             points = []
             rospy.logerr("[top down view] NaN / Invalid path!")
-        points = np.array([[p.x, p.y] for p in points])
+        points = np.array([(p.x, p.y) for p in points])
         mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
         return mask
 

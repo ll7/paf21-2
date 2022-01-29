@@ -314,7 +314,7 @@ def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3, simple=False):
         except rospy.exceptions.ROSException:
             pass
 
-    pts_xy = [[p.x, p.y] for p in pts]
+    pts_xy = [(p.x, p.y) for p in pts]
     _new_bezier_pts = xy_to_pts(calc_bezier_curve(pts_xy, ds))
 
     if simple:

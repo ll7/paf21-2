@@ -1,10 +1,10 @@
 from time import perf_counter
-from typing import List
+from typing import List, Tuple, Optional
 
 import rospy
-from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet
+from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
 from .GlobalPath import GlobalPath
-from .HelperFunctions import dist_pts, closest_index_of_point_list, expand_sparse_list, pts_to_xy
+from .HelperFunctions import dist, closest_index_of_point_list, expand_sparse_list, pts_to_xy
 
 import numpy as np
 
@@ -37,13 +37,20 @@ class LocalPath:
         self.rules_enabled = rules_enabled
         self.speed_calc = SpeedCalculator(self.STEP_SIZE)
 
-    def __len__(self):
-        return len(self.message.points)
-
-    def current_indices(self, position: Point2D):
+    def current_indices(self, position: Point2D) -> Tuple[int, int]:
+        """
+        get indices in current global path of a position
+        :param position: search point
+        :return: section, lane
+        """
         return self.global_path.get_section_and_lane_indices(position)
 
-    def _next_lanechange_index(self, from_index: int = 0):
+    def _next_lanechange_index(self, from_index: int = 0) -> int:
+        """
+        Get index of next lane change in sparse_local_path
+        :param from_index: search from index
+        :return: index
+        """
         max_idx = len(self.sparse_local_path) - 1
         for idx in self._lane_change_indices:
             if idx > max_idx:
@@ -52,7 +59,9 @@ class LocalPath:
                 return idx
         return from_index
 
-    def next_traffic_signal(self, position: Point2D, within_distance=100, buffer_idx=1):
+    def next_traffic_signal(
+        self, position: Point2D, within_distance: float = 100, buffer_idx: int = 1
+    ) -> Tuple[Optional[PafTrafficSignal], float]:
         distance = 0
         distance_buffer = 0
         sec_idx, l_idx = self.current_indices(position)
@@ -76,17 +85,38 @@ class LocalPath:
         return found, distance if distance > 0 else distance_buffer
 
     def _calculate_lane_options(
-        self, start_idx, lane_change_distance: float, current_lane, left_lane, right_lane, can_go_straight: bool
-    ):
+        self,
+        start_idx,
+        lane_change_distance: float,
+        current_lane: int,
+        left_lane: int = None,
+        right_lane: int = None,
+        can_go_straight: bool = True,
+    ) -> Tuple[
+        int,
+        float,
+        Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
+        Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
+        Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
+    ]:
+        """
+        Calculates left, straight and right lane points, signals and speeds with given parameters
+        :param start_idx: global section index to start the lane change on
+        :param lane_change_distance: distance to do the lanechange in
+        :param current_lane: current lane index
+        :param left_lane: left lane index (can be two lanes over in extreme cases)
+        :param right_lane: right lane index (can be two lanes over in extreme cases)
+        :param can_go_straight: boolean if straight is allowed (force lane change if false)
+        :return: end index, distance for lane change,
+                    left (pts, speed, signs), straight (pts, speed, signs), right (pts, speed, signs)
+        """
         if start_idx == 0:
             start_idx = 1
             rospy.logerr("[local planner] lane change at index 0 not possible (no tangent)")
-
         distance_planned = 0
         l_pts, r_pts = [], []
         l_speed, r_speed = [], []
         end_idx = start_idx
-        # additional_points = 10
 
         ds = 0.5
 
@@ -176,7 +206,12 @@ class LocalPath:
 
         return end_idx - 1, distance_planned, left, straight, right
 
-    def publish(self, msg=None, send_empty=False):
+    def publish(self, msg: PafLocalPath = None, send_empty: bool = False):
+        """
+        Publish a local path message (last one calculated OR the msg specified)
+        :param msg: optional other message (will replace self.message)
+        :param send_empty: send an empty message ("stop now" signal for acting)
+        """
         if send_empty:
             msg = PafLocalPath()
             msg.target_speed = []
@@ -198,8 +233,17 @@ class LocalPath:
         ignore_signs_distance: float = 0,
         ignore_previous: bool = False,
         min_section: int = 0,
-    ):
-
+    ) -> Tuple[PafLocalPath, int, int]:
+        """
+        Calculates the local path from from_position, if ignore_previous==False,
+        path starts at the end of the next lanechange (smoother driving)
+        :param from_position: start position of calculation
+        :param current_speed: current speed of car
+        :param ignore_signs_distance: ignore signs within distance of car
+        :param ignore_previous: start path at from_position, not after last lane change is completed
+        :param min_section: starting section
+        :return: path tuple (msg, section from, section to)
+        """
         t0 = perf_counter()
         local_path = PafLocalPath()
         section_target, target_lane = self.global_path.get_section_and_lane_indices(
@@ -240,29 +284,20 @@ class LocalPath:
             section_from, current_lane = self.global_path.get_section_and_lane_indices(sparse_local_path[-1])
             offset2 = current_idx + 1
             for p1, p2 in zip(self.sparse_local_path[current_idx:end_index], self.sparse_local_path[offset2:end_index]):
-                distance_planned += dist_pts(p1, p2)
-            #
-            # prev_idx = end_index  # set for reference later
-            #
-            # rospy.logwarn(f"1) GOOOO! {distance_planned}")
-            # lane_change_pts = [self._sparse_local_path[idx] for idx in self._lane_change_indices]
-            # lane_change_pts = self._sparse_local_path[:end_index]
-            # self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
-            # if hasattr(self, "blubb"):
-            #     raise RuntimeError()
-            # self.blubb = None
-            # pts = self.global_path.route.sections[section_from].points
-            # sp_pt = self._sparse_local_path[end_index]
-            # raise RuntimeError(f"{pts_to_xy(pts)} {sp_pt}")
+                distance_planned += dist(p1, p2)
 
         self._lane_change_indices = []
         if prev_idx < 0 or section_from < 0:
             section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
             if section_from > 0:
                 point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
-                sparse_local_path = [point]
-                sparse_local_path_speeds = [current_speed]
-                sparse_traffic_signals = [signals]
+                if current_speed < 0:
+                    rospy.logerr(f"section {section_from}, lane {current_lane} is undefined")
+                else:
+                    sparse_local_path = [point]
+                    sparse_local_path_speeds = [current_speed]
+                    sparse_traffic_signals = [signals]
+                    section_from += 2
             # prev_idx = 0
 
         if section_from < 0 or section_target < 0:
@@ -325,7 +360,7 @@ class LocalPath:
                 continue
 
             # end of route handling
-            dist_to_target = dist_pts(s.points[current_lane], self.global_path.target)
+            dist_to_target = dist(s.points[current_lane], self.global_path.target)
             if dist_to_target < self.STRAIGHT_TO_TARGET_DIST and len(sparse_local_path) > 0:
                 n = 5
                 pth = sparse_local_path[-n:] + [self.global_path.target]
@@ -490,7 +525,14 @@ class LocalPath:
         return local_path, section_from, section_target
 
     @staticmethod
-    def _smooth_out_path(sparse_pts, sparse_speeds):
+    def _smooth_out_path(sparse_pts: List[Point2D], sparse_speeds: List[float]) -> Tuple[List[Point2D], List[float]]:
+        """
+        Expand sparse path to dense path. Curves with radius > SPLINE_IN_CURVE_RADIUS will use spline,
+        others will use Bezier calculation for smoothness
+        :param sparse_pts: point list input
+        :param sparse_speeds: speed list input (will be expanded as well)
+        :return: dense lists (pts, speeds)
+        """
         min_radius = LocalPath.SPLINE_IN_CURVE_RADIUS
         n1, n2 = 1, 4  # indices to add before and after high curve radius
         curve_radius_list = SpeedCalculator.get_curve_radius_list(sparse_pts, equal_dist=True)
@@ -534,7 +576,16 @@ class LocalPath:
             speeds = [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in pts]
         return pts, speeds
 
-    def _update_target_speed(self, local_path, speed_limit, end_of_route=False):
+    def _update_target_speed(
+        self, local_path: List[Point2D], speed_limit: List[float], end_of_route: bool = False
+    ) -> List[float]:
+        """
+        Update target speeds with speed limit list and end of route slowdown
+        :param local_path: list of points
+        :param speed_limit: list of speed limits
+        :param end_of_route: bool if end of point list is end of global path
+        :return: list of speeds
+        """
         speed = self.speed_calc.get_curve_speed(local_path)
         if self.rules_enabled:  # todo speed limit logic for no rules
             speed = np.clip(speed, 0, speed_limit)
@@ -548,37 +599,56 @@ class LocalPath:
         return speed
 
     @staticmethod
-    def _draw_path_pts(points: List[Point2D], lbl: str = "lp_pts", color=(0, 45, 123)):
+    def _draw_path_pts(
+        points: List[Point2D],
+        lbl: str = "lp_pts",
+        color: Tuple[int, int, int] = (0, 45, 123),
+        topic: str = "/paf/paf_validation/draw_map_points",
+    ):
+        """
+        Draw points on the topdown view
+        :param points: pts to draw
+        :param lbl: label in tdv
+        :param color: color of points
+        """
         try:
             pts1 = PafTopDownViewPointSet()
             pts1.label = lbl
             pts1.points = points
             pts1.color = color
-            rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
+            rospy.Publisher(topic, PafTopDownViewPointSet, queue_size=1).publish(pts1)
         except rospy.exceptions.ROSException:
             pass
 
     @staticmethod
     def _draw_path_line(points: List[Point2D], lbl: str = "lp_line", color=(0, 45, 123)):
-        try:
-            pts1 = PafTopDownViewPointSet()
-            pts1.label = lbl
-            pts1.points = points
-            pts1.color = color
-            rospy.Publisher("/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, queue_size=1).publish(pts1)
-        except rospy.exceptions.ROSException:
-            pass
+        """
+        Draw line on the topdown view
+        :param points: pts to draw
+        :param lbl: label in tdv
+        :param color: color of points
+        """
+        LocalPath._draw_path_pts(points, lbl, color, "/paf/paf_validation/draw_map_lines")
 
     @staticmethod
-    def _choose_lane(left, straight, right) -> str:
-        # print(f"can go left: {can_go_left}, can_go_straight: {can_go_straight}, can_go_right: {can_go_right}, ")
-
+    def _choose_lane(
+        left: Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
+        straight: Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
+        right: Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
+    ) -> str:
+        """
+        Chose lane from lane change options
+        :param left: left option (or None)
+        :param straight: straight option (or None)
+        :param right: right option (or None)
+        :return: keyword "left", "straight" or "right"
+        """
         if left is None and straight is None and right is None:
             raise ValueError
 
-        left_percent = int(left is not None) * 1
-        right_percent = int(right is not None) * 1
-        straight_percent = int(straight is not None) * 1000
+        left_percent = int(left is not None) * 1000
+        right_percent = int(right is not None) * 1000
+        straight_percent = int(straight is not None) * 1
 
         # l_pts, l_speed, l_signs = left
         # s_pts, s_speed, s_signs = straight
@@ -587,5 +657,12 @@ class LocalPath:
         _sum = left_percent + right_percent + straight_percent
         probabilities = left_percent / _sum, straight_percent / _sum, right_percent / _sum
         choice = np.random.choice(["left", "straight", "right"], p=probabilities)
-        # rospy.logwarn(f"lane choice: {choice} [l={left_percent}, s={straight_percent}, r={right_percent}]")
+
         return choice
+
+    def __len__(self) -> int:
+        """
+        Length of local path message
+        :return: number
+        """
+        return len(self.message.points)

@@ -20,7 +20,7 @@ from paf_messages.msg import (
 from classes.MapManager import MapManager
 from classes.GlobalPath import GlobalPath
 from classes.LocalPath import LocalPath
-from classes.HelperFunctions import closest_index_of_point_list, dist_pts
+from classes.HelperFunctions import closest_index_of_point_list, dist
 from classes.SpeedCalculator import SpeedCalculator
 from std_msgs.msg import Bool, Empty
 from tf.transformations import euler_from_quaternion
@@ -209,18 +209,16 @@ class LocalPlanner:
     def _planner_at_end_of_local_path(self):
         if len(self._local_path) == 0:
             return True
-        if dist_pts(self._local_path.message.points[-1], self._current_pose.position) < 100:
-            return (
-                dist_pts(self._local_path.message.points[-1], self._global_path.target) > self.END_OF_ROUTE_REACHED_DIST
-            )
+        if dist(self._local_path.message.points[-1], self._current_pose.position) < 100:
+            return dist(self._local_path.message.points[-1], self._global_path.target) > self.END_OF_ROUTE_REACHED_DIST
 
     def _planner_at_end_of_global_path(self):
         if len(self._global_path) == 0:
             return False
         return (
             len(self._global_path) > 0
-            and dist_pts(self._global_path.target, self._current_pose.position) <= self.END_OF_ROUTE_REACHED_DIST
-            or dist_pts(self._global_path.route.sections[-1].points[0], self._current_pose.position)
+            and dist(self._global_path.target, self._current_pose.position) <= self.END_OF_ROUTE_REACHED_DIST
+            or dist(self._global_path.route.sections[-1].points[0], self._current_pose.position)
             <= self.END_OF_ROUTE_REACHED_DIST * 2
         )
 

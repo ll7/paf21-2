@@ -1,8 +1,7 @@
-from typing import Tuple
+from typing import Tuple, List, Optional
 
 import numpy as np
-from commonroad.scenario.traffic_sign import SupportedTrafficSignCountry
-from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
+from commonroad.scenario.scenario import Scenario
 
 import rospy
 from os.path import expanduser
@@ -16,21 +15,17 @@ from commonroad_route_planner.utility.visualization import obtain_plot_limits_fr
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
 from paf_messages.msg import Point2D
-from .HelperFunctions import pts_to_xy
 from tf.transformations import quaternion_from_euler
 
 
 class MapManager:
     @staticmethod
-    def get_current_scenario(rules=None, map_name=None):
+    def get_current_scenario(rules: bool = None, map_name: str = None) -> Scenario:
         """
         Loads the commonroad scenario with or without traffic rules of town with number map_number
-
-        Args:
-            rules (bool): Defines which driving mode the map should be loaded for
-            map_name (str): Defines the name of the town. None loads the current carla town
-        Returns:
-            Scenario: CommonRoad-Scenario of current town
+        :param rules: Defines which driving mode the map should be loaded for
+        :param map_name: Defines the name of the town. None loads the current carla town
+        :return: CommonRoad-Scenario of current town
         """
         if rules is None:
             rules = MapManager.get_rules_enabled()
@@ -52,11 +47,22 @@ class MapManager:
         return scenario
 
     @staticmethod
-    def get_map():
+    def get_map() -> str:
+        """
+        Get current map from carla parameters
+        :return: town name in format "TownX"
+        """
         return rospy.get_param("/carla/town", None)
 
     @staticmethod
     def point_to_pose(pt: Tuple[float, float], yaw_deg: float, height=2) -> PoseWithCovarianceStamped:
+        """
+        Convert a point and a yaw value to a teleport position
+        :param pt: teleporting target
+        :param yaw_deg: teleporting angle in degrees (counterclockwise)
+        :param height: height to spawn over sea leve(optional) if on bridge, set higher
+        :return: teleport pose
+        """
         initial_pose = PoseWithCovarianceStamped()
         x, y = pt
         initial_pose.pose.pose.position.x = x
@@ -67,7 +73,11 @@ class MapManager:
         return initial_pose
 
     @staticmethod
-    def get_demo_route():
+    def get_demo_route() -> Tuple[Optional[PoseWithCovarianceStamped], Optional[List[Point2D]]]:
+        """
+        Get Standard Loop route on request
+        :return: start pose, list of points
+        """
         town = MapManager.get_map()
 
         # # uncomment for custom path debugging
@@ -116,7 +126,11 @@ class MapManager:
             return None, None
 
     @staticmethod
-    def get_rules_enabled():
+    def get_rules_enabled() -> bool:
+        """
+        get rules enabled parameter
+        :return: boolean
+        """
         try:
             return rospy.get_param("rules_enabled", False)
         except ConnectionRefusedError:
@@ -125,7 +139,7 @@ class MapManager:
     @staticmethod
     def visualize_route(route: Route, draw_route_lanelets=False, draw_reference_path=False, size_x=10):
         """
-        Visualizes the given route.
+        Visualizes the given commonroad route with matplotlib.
         :param route: route object to be visualized
         :param draw_route_lanelets: flag to indicate if the lanelets should be visualized
         :param draw_reference_path: flag to indicate if the reference path should be visualized
@@ -194,51 +208,12 @@ class MapManager:
         plt.show()
 
     @staticmethod
-    def visualize_pts_list(pts):
-        import matplotlib.pyplot as plt
-        from .HelperFunctions import xy_to_pts
-        from .Spline import calc_spline_course_from_point_list, bezier_refit_all_with_tangents, calc_bezier_curve
-
-        try:
-            _xy = pts
-            pts = xy_to_pts(pts)
-        except TypeError:
-            _xy = pts_to_xy(pts)
-
-        x = [p.x for p in pts]
-        y = [p.y for p in pts]
-
-        plt.xlim([np.min(x) - 1, np.max(x) + 1])
-        plt.ylim([np.min(y) - 1, np.max(y) + 1])
-
-        plt.plot(x, y, marker="o", color="green", label="Eingangswert")
-
-        pts3 = xy_to_pts(calc_spline_course_from_point_list(pts, ds=0.25))
-        x = [p.x for p in pts3]
-        y = [p.y for p in pts3]
-        plt.plot(x, y, color="blue", label="Spline(Eingangswert)")
-
-        pts2 = bezier_refit_all_with_tangents(pts, ds=0.25)
-        x = [p.x for p in pts2]
-        y = [p.y for p in pts2]
-        plt.plot(x, y, color="red", label="Bezier with Tangents")
-
-        pts4 = bezier_refit_all_with_tangents(pts, ds=0.25, ds2=0.25)
-        x = [p.x for p in pts4]
-        y = [p.y for p in pts4]
-        plt.plot(x, y, color="orange", label="Bezier(Bezier with Tangents)")
-
-        pts5 = calc_bezier_curve(_xy, convert_to_pts=True)
-        x = [p.x for p in pts5]
-        y = [p.y for p in pts5]
-        plt.plot(x, y, color="magenta", label="Bezier(Eingangswert)")
-
-        plt.legend()
-        plt.show()
-
-    @staticmethod
     def visualize_lp_and_gp(local_path_obj, cur_pt: Point2D):
-
+        """
+        Visualize local and global path with matplotlib (for debugging planners)
+        :param local_path_obj: LocalPath object
+        :param cur_pt: location to start local plan on
+        """
         from matplotlib import pyplot as plt
 
         def pts_to_x_y(pts):
@@ -276,25 +251,3 @@ class MapManager:
 
         plt.legend()
         plt.show()
-
-    @staticmethod
-    def speed_sign_checker():
-        for i in range(1, 9):
-            town = f"Town0{i}"
-            if i == 8:
-                town = "Town10HD"
-            scenario = MapManager.get_current_scenario(map_name=town)
-            sig = TrafficSigInterpreter(SupportedTrafficSignCountry.GERMANY, scenario.lanelet_network)
-            limits = [
-                (sig.speed_limit(frozenset([lanelet.lanelet_id]))) for lanelet in scenario.lanelet_network.lanelets
-            ]
-            limits_d = {}
-            for limit in limits:
-                if limit is None:
-                    limit = "no limit"
-                if limit not in limits_d:
-                    limits_d[limit] = 1
-                else:
-                    limits_d[limit] += 1
-            print(town)
-            print(limits_d)
