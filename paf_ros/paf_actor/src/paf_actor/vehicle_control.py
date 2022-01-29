@@ -11,7 +11,9 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
-from paf_actor.stanley_control import StanleyLateralController
+
+# from paf_actor.stanley_control import StanleyLateralController
+from paf_actor.model_predictive_control import ModelPredictiveController
 from paf_messages.msg import PafLocalPath, PafLogScalar, PafObstacleFollowInfo
 
 
@@ -63,10 +65,12 @@ class VehicleController:
         self._target_speed_offset = 1.2
         # Stanley control parameters
         args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
+        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
-        self._lat_controller: StanleyLateralController = StanleyLateralController(**args_lateral)
+        # self._lat_controller: StanleyLateralController = StanleyLateralController(
+        #    **args_lateral)
+        self._lat_controller: ModelPredictiveController = ModelPredictiveController(**args_lateral)
         self._last_control_time: float = rospy.get_time()
 
         self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
@@ -126,7 +130,7 @@ class VehicleController:
 
         # self.__init_test_szenario()
         try:
-            steering, self._target_speed, distance = self.__calculate_steering()
+            steering, self._target_speed, distance = self.__calculate_steering(dt)
             self._is_reverse = self._target_speed < 0.0
             self._target_speed = abs(self._target_speed)
 
@@ -272,14 +276,18 @@ class VehicleController:
 
         return lon
 
-    def __calculate_steering(self) -> float:
+    def __calculate_steering(self, dt: float) -> float:
         """
         Calculate the steering angle with the Stanley Controller
 
         Returns:
             float: The steering angle to steer
         """
-        return self._lat_controller.run_step(self._route, self._current_pose, self._current_speed, self._is_reverse)
+        # TODO: find best value for sterring rate
+        steering_rate = 1
+        return self._lat_controller.run_step(
+            self._route, self._current_pose, self._current_speed, steering_rate, dt, self._is_reverse
+        )
 
     def __local_path_received(self, local_path: PafLocalPath) -> None:
         """
