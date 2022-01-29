@@ -8,7 +8,7 @@ fi
 bash "$SCRIPT_DIR/_set_python_executable.sh"
 sudo apt install -y python-is-python3 wmctrl ros-noetic-cv-bridge
 
-pip install pre-commit catkin_tools commonroad-io tensorflow #==2021.2
+pip install pre-commit catkin_tools commonroad-io tensorflow bezier  #==2021.2
 pip install carla_birdeye_view --no-dependencies
 pip install --upgrade numpy --no-dependencies
 

@@ -137,27 +137,33 @@ class VehicleController:
             throttle: float = self.__calculate_throttle(dt, distance)
 
             rear_gear = False
+            is_left_of_path = self._lat_controller.cross_err < 0
+            is_unstucking_left = self._lat_controller.heading_error < 0
+            if is_left_of_path:
+                is_unstucking_left = not is_unstucking_left
+
             if self._is_unstucking:
                 if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
                     self._is_unstucking = False
                 else:
                     rear_gear = True
-            elif self.__check_stuck():
+            elif self.__check_stuck() or self.__check_wrong_way():
+                rospy.logerr(f"stuck {'left' if is_unstucking_left else 'right'} " f"{self._lat_controller.cross_err}")
                 self._is_unstucking = True
                 self._unstuck_start_time = rospy.get_rostime().secs
                 rear_gear = True
 
             if rear_gear:
-                throttle = 1.0
-                steering = 0.0
+                throttle = 1
+                steering = 0.33 * -1 if is_unstucking_left else 1
                 self._is_reverse = True
 
-        except RuntimeError:
+        except RuntimeError as e:
             throttle = -1.0
             steering = 0.0
             self._is_reverse = False
             self._target_speed = 0.0
-            rospy.loginfo_throttle(10, "[Actor] waiting for new local path")
+            rospy.logwarn_throttle(10, f"[Actor] error ({e})")
 
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
 
@@ -194,8 +200,12 @@ class VehicleController:
 
         return control
 
+    def __check_wrong_way(self):
+        return np.abs(self._lat_controller.heading_error) > np.pi * 0.66
+
     def __check_stuck(self):
-        if self._current_speed < self._stuck_value_threshold and self._target_speed > self._stuck_value_threshold:
+        stuck = self._current_speed < self._stuck_value_threshold < self._target_speed
+        if not self._emergency_mode and stuck:
             if self._stuck_start_time == 0.0:
                 self._stuck_start_time = rospy.get_rostime().secs
                 return False
@@ -230,7 +240,7 @@ class VehicleController:
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
 
-        if control.brake > 0 and self._current_speed > 5:
+        if control.brake > 0 and self._current_speed > 1:
             control.reverse = not self._is_reverse
             control.throttle = control.brake
 
@@ -255,7 +265,7 @@ class VehicleController:
         # perform pid control step with distance and speed controllers
         target_speed = self._target_speed * self._target_speed_offset
 
-        if distance >= 0.5 and self._current_speed > 10:
+        if distance >= 2 and self._current_speed > 10:
             target_speed = max(10, self._current_speed * (1 - 1e-8))
 
         lon: float = self._lon_controller.run_step(target_speed, self._current_speed, dt)
@@ -280,6 +290,7 @@ class VehicleController:
         """
         # rospy.loginfo(
         #    f"INHALT VON LOCAL_PATH with speed {local_path.target_speed}")
+        rospy.loginfo_throttle(10, f"[Actor] received new local path (len={local_path.points.__len__()})")
         self._route = local_path
 
     def __emergency_break_received(self, do_emergency_break: bool):
@@ -350,6 +361,9 @@ class VehicleController:
                     r.sleep()
                 except rospy.ROSInterruptException:
                     pass
+
+    def __del__(self):
+        self.__generate_control_message(0, 0)
 
 
 def main():

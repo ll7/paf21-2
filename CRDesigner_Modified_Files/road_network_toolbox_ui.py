@@ -2,18 +2,20 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
-
 from crdesigner.input_output.gui.toolboxes.toolbox_ui import Toolbox, CheckableComboBox, QHLine
 
 from commonroad.scenario.lanelet import LaneletType, RoadUser, LineMarking
 from commonroad.scenario.traffic_sign import *
+
+_ = QHLine
 
 
 class RoadNetworkToolboxUI(Toolbox):
     """a dialog to which collapsible sections can be added;
     reimplement define_sections() to define sections and
     add them as (title, widget) tuples to self.sections
-        """
+    """
+
     def __init__(self):
         super().__init__()
 
@@ -141,8 +143,9 @@ class RoadNetworkToolboxUI(Toolbox):
         self.stop_line_end_y.setMaxLength(8)
         self.stop_line_end_y.setAlignment(Qt.AlignRight)
         self.line_marking_stop_line = QComboBox()
-        line_markings_stop_line = [e.value for e in LineMarking if e.value not in [LineMarking.UNKNOWN.value,
-                                                                                   LineMarking.NO_MARKING.value]]
+        line_markings_stop_line = [
+            e.value for e in LineMarking if e.value not in [LineMarking.UNKNOWN.value, LineMarking.NO_MARKING.value]
+        ]
         self.line_marking_stop_line.addItems(line_markings_stop_line)
         self.stop_line_at_end = QCheckBox("Stop line at end of lanelet")
 
@@ -312,8 +315,9 @@ class RoadNetworkToolboxUI(Toolbox):
         lanelet_operations_adjacency_groupbox_layout = QFormLayout()
         lanelet_operations_adjacency_groupbox = QGroupBox()
         lanelet_operations_adjacency_groupbox.setLayout(lanelet_operations_adjacency_groupbox_layout)
-        lanelet_operations_adjacency_groupbox_layout.addRow(self.create_adjacent_left_selection,
-                                                            self.create_adjacent_right_selection)
+        lanelet_operations_adjacency_groupbox_layout.addRow(
+            self.create_adjacent_left_selection, self.create_adjacent_right_selection
+        )
         lanelet_operations_adjacency_groupbox_layout.addRow(self.create_adjacent_same_direction_selection)
         lanelet_operations_adjacency_groupbox_layout.addRow(self.button_create_adjacent)
         lanelet_operations_layout.addRow(lanelet_operations_adjacency_groupbox)
@@ -372,7 +376,7 @@ class RoadNetworkToolboxUI(Toolbox):
         self.traffic_sign_element_label = QLabel("Traffic Sign Elements:")
         self.traffic_sign_element_table = QTableWidget()
         self.traffic_sign_element_table.setColumnCount(2)
-        self.traffic_sign_element_table.setHorizontalHeaderLabels(['Traffic Sign ID', 'Additional Value'])
+        self.traffic_sign_element_table.setHorizontalHeaderLabels(["Traffic Sign ID", "Additional Value"])
         self.traffic_sign_element_table.resizeColumnsToContents()
         self.traffic_sign_element_table.setColumnWidth(0, 180)
         self.traffic_sign_element_table.setMaximumHeight(100)
@@ -395,8 +399,9 @@ class RoadNetworkToolboxUI(Toolbox):
         traffic_sign_information_layout.addRow("Referenced lanelets", self.referenced_lanelets_traffic_sign)
         traffic_sign_information_layout.addRow(self.traffic_sign_element_label)
         traffic_sign_information_layout.addRow(self.traffic_sign_element_table)
-        traffic_sign_information_layout.addRow(self.button_add_traffic_sign_element,
-                                               self.button_remove_traffic_sign_element)
+        traffic_sign_information_layout.addRow(
+            self.button_add_traffic_sign_element, self.button_remove_traffic_sign_element
+        )
         traffic_sign_layout.addRow(self.button_add_traffic_sign)
         traffic_sign_layout.addRow("Selected Traffic Sign", self.selected_traffic_sign)
         traffic_sign_layout.addRow(self.button_update_traffic_sign)
@@ -498,7 +503,7 @@ class RoadNetworkToolboxUI(Toolbox):
 
         layout_traffic_light.addWidget(traffic_light_information_groupbox)
         layout_traffic_light.addLayout(traffic_light_layout)
-# >>>>>>> develop
+        # >>>>>>> develop
 
         title_traffic_light = "Traffic Light"
         return title_traffic_light, widget_traffic_light
@@ -539,8 +544,9 @@ class RoadNetworkToolboxUI(Toolbox):
         self.intersection_incomings_label = QLabel("Incomings:")
         self.intersection_incomings_table = QTableWidget()
         self.intersection_incomings_table.setColumnCount(6)
-        self.intersection_incomings_table.setHorizontalHeaderLabels(['ID', 'Lanelets', 'Suc. Left', 'Suc. Straight',
-                                                                     'Suc. Right', 'Left Of'])
+        self.intersection_incomings_table.setHorizontalHeaderLabels(
+            ["ID", "Lanelets", "Suc. Left", "Suc. Straight", "Suc. Right", "Left Of"]
+        )
         self.intersection_incomings_table.resizeColumnsToContents()
         self.intersection_incomings_table.setMaximumHeight(175)
         self.button_add_incoming = QPushButton("Add Incoming")
@@ -566,8 +572,9 @@ class RoadNetworkToolboxUI(Toolbox):
         intersection_templates_layout.addRow("Diameter [m]:", self.intersection_diameter)
         intersection_templates_layout.addRow("Lanelet Width [m]:", self.intersection_lanelet_width)
         intersection_templates_layout.addRow("Incoming Length [m]:", self.intersection_incoming_length)
-        intersection_templates_layout.addRow(self.intersection_with_traffic_signs,
-                                             self.intersection_with_traffic_lights)
+        intersection_templates_layout.addRow(
+            self.intersection_with_traffic_signs, self.intersection_with_traffic_lights
+        )
         intersection_templates_layout.addRow(self.button_three_way_intersection)
         intersection_templates_layout.addRow(self.button_four_way_intersection)
         intersection_templates_layout.addRow(self.button_fit_intersection)
@@ -650,11 +657,11 @@ class RoadNetworkToolboxUI(Toolbox):
         self.create_lanelet_width.setMaxLength(8)
         self.create_lanelet_width.setAlignment(Qt.AlignRight)
         self.create_lanelet_width.setText("4.0")
-        
+
         self.center_vertices_label = QLabel("Center Vertices:")
         self.center_vertices_table = QTableWidget()
         self.center_vertices_table.setColumnCount(2)
-        self.center_vertices_table.setHorizontalHeaderLabels(['X-Pos', 'Y-Pos'])
+        self.center_vertices_table.setHorizontalHeaderLabels(["X-Pos", "Y-Pos"])
         self.center_vertices_table.resizeColumnsToContents()
         self.center_vertices_table.setColumnWidth(0, 195)
         self.center_vertices_table.setMaximumHeight(1000)
