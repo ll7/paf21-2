@@ -1,0 +1,3 @@
+<launch>
+  <node pkg="paf_perception" type="traffic_light_detector.py" name="traffic_light_detector" output="screen" />
+</launch>
