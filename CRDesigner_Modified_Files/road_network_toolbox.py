@@ -15,6 +15,7 @@ from crdesigner.input_output.gui.toolboxes.road_network_toolbox_ui import RoadNe
 
 from crdesigner.input_output.gui.toolboxes.gui_sumo_simulation import SUMO_AVAILABLE
 from numpy import ndarray
+import numpy as np
 
 if SUMO_AVAILABLE:
     from crdesigner.map_conversion.sumo_map.cr2sumo.converter import CR2SumoMapConverter
@@ -1691,10 +1692,10 @@ class RoadNetworkToolbox(QDockWidget):
         if lanelet_copy is None:
             print("Could not find lanelet " + str(lanelet_id))
             return None, None
-        sep_index = 0
+        # sep_index = 0
         lanelet_center_list = lanelet_copy.center_vertices.tolist()
         end_index = self._find_closest_path_index(lanelet_center_list, split_pos_x, split_pos_y)
-        start_index = 0
+        # start_index = 0
         sep_index = end_index
         if sep_index > 1 and (len(lanelet_center_list) - 1) - sep_index >= 1:
             # bound lanelet_1

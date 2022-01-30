@@ -16,6 +16,7 @@ from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from commonroad.scenario.traffic_sign_interpreter import SupportedTrafficSignCountry
 
 from crdesigner.input_output.gui.toolboxes.gui_sumo_simulation import SUMO_AVAILABLE
+
 if SUMO_AVAILABLE:
     from crdesigner.map_conversion.sumo_map.config import SumoConfig
 from crdesigner.input_output.gui.misc.util import Observable
@@ -26,6 +27,7 @@ from matplotlib.figure import Figure
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 
+_ = (Union, TrafficSigInterpreter, SupportedTrafficSignCountry)
 
 __author__ = "Benjamin Orthen, Stefan Urban, Max Winklhofer, Guyue Huang, Max Fruehauf, Sebastian Maierhofer"
 __copyright__ = "TUM Cyber-Physical Systems Group"
@@ -39,8 +41,7 @@ ZOOM_FACTOR = 1.2
 
 
 def _merge_dict(source, destination):
-    """deeply merges two dicts
-    """
+    """deeply merges two dicts"""
     for key, value in source.items():
         if isinstance(value, dict):
             # get node or create one
@@ -52,7 +53,8 @@ def _merge_dict(source, destination):
 
 
 class DynamicCanvas(FigureCanvas):
-    """ this canvas provides zoom with the mouse wheel """
+    """this canvas provides zoom with the mouse wheel"""
+
     def __init__(self, parent=None, width=5, height=5, dpi=100):
 
         self.ax = None
@@ -60,61 +62,51 @@ class DynamicCanvas(FigureCanvas):
         self.rnd = MPRenderer(ax=self.ax)
 
         self.draw_params = {
-            'scenario': {
-                'dynamic_obstacle': {
-                    'trajectory': {
-                        'show_label': True,
-                        'draw_trajectory': False
-                    }
+            "scenario": {
+                "dynamic_obstacle": {"trajectory": {"show_label": True, "draw_trajectory": False}},
+                "lanelet_network": {
+                    "traffic_sign": {
+                        "draw_traffic_signs": True,
+                        "show_traffic_signs": "all",
+                    },
+                    "intersection": {
+                        "draw_intersections": False,
+                        "draw_incoming_lanelets": True,
+                        "incoming_lanelets_color": "#3ecbcf",
+                        "draw_crossings": True,
+                        "crossings_color": "#b62a55",
+                        "draw_successors": True,
+                        "successors_left_color": "#ff00ff",
+                        "successors_straight_color": "blue",
+                        "successors_right_color": "#ccff00",
+                        "show_label": True,
+                    },
                 },
-                'lanelet_network': {
-                    'traffic_sign': {
-                        'draw_traffic_signs': True,
-                        'show_traffic_signs': 'all',
-                    },
-                    'intersection': {
-                        'draw_intersections': False,
-                        'draw_incoming_lanelets': True,
-                        'incoming_lanelets_color': '#3ecbcf',
-                        'draw_crossings': True,
-                        'crossings_color': '#b62a55',
-                        'draw_successors': True,
-                        'successors_left_color': '#ff00ff',
-                        'successors_straight_color': 'blue',
-                        'successors_right_color': '#ccff00',
-                        'show_label': True,
-                    },
-                }
             }
         }
 
         self.draw_params_dynamic_only = {
-            'scenario': {
-                'dynamic_obstacle': {
-                    'trajectory': {
-                        'show_label': True,
-                        'draw_trajectory': False
-                    }
-                },
-                'lanelet_network': {
-                    'intersection': {'draw_intersections': False},
-                    'lanelet': {
-                        'draw_border_vertices': False,
-                        'draw_start_and_direction': False,
-                        'draw_stop_line': False,
-                        'draw_center_bound': False,
-                        'draw_right_bound': False,
-                        'draw_left_bound': False
+            "scenario": {
+                "dynamic_obstacle": {"trajectory": {"show_label": True, "draw_trajectory": False}},
+                "lanelet_network": {
+                    "intersection": {"draw_intersections": False},
+                    "lanelet": {
+                        "draw_border_vertices": False,
+                        "draw_start_and_direction": False,
+                        "draw_stop_line": False,
+                        "draw_center_bound": False,
+                        "draw_right_bound": False,
+                        "draw_left_bound": False,
                     },
                     # 'traffic_light': {
                     #     'scale_factor': 0.2
                     # },
-                    'traffic_sign': {
-                        'draw_traffic_signs': True,
-                        'show_traffic_signs': 'all',
+                    "traffic_sign": {
+                        "draw_traffic_signs": True,
+                        "show_traffic_signs": "all",
                         # 'scale_factor': 0.2
                     },
-                }
+                },
             }
         }
 
@@ -124,7 +116,7 @@ class DynamicCanvas(FigureCanvas):
         self.setParent(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.mpl_connect('scroll_event', self.zoom)
+        self.mpl_connect("scroll_event", self.zoom)
 
         self.clear_axes()
 
@@ -154,20 +146,20 @@ class DynamicCanvas(FigureCanvas):
         return self.ax
 
     def get_limits(self) -> List[float]:
-        """ return the current limits of the canvas """
+        """return the current limits of the canvas"""
         x_lim = self.ax.get_xlim()
         y_lim = self.ax.get_ylim()
         return [x_lim[0], x_lim[1], y_lim[0], y_lim[1]]
 
     def update_plot(self, limits: List[float] = None):
-        """ draw the canvas. optional with new limits"""
+        """draw the canvas. optional with new limits"""
         if limits:
             self.ax.set(xlim=limits[0:2])
             self.ax.set(ylim=limits[2:4])
         self.draw_idle()
 
     def zoom(self, event):
-        """ zoom in / out function in GUI by using mouse wheel """
+        """zoom in / out function in GUI by using mouse wheel"""
         x_min, x_max = self.ax.get_xlim()
         y_min, y_max = self.ax.get_ylim()
         center = ((x_min + x_max) / 2, (y_min + y_max) / 2)
@@ -175,10 +167,10 @@ class DynamicCanvas(FigureCanvas):
         y_dim = (y_max - y_min) / 2
 
         # enlarge / shrink limits
-        if event.button == 'up':
+        if event.button == "up":
             new_x_dim = x_dim / ZOOM_FACTOR
             new_y_dim = y_dim / ZOOM_FACTOR
-        elif event.button == 'down':
+        elif event.button == "down":
             new_x_dim = x_dim * ZOOM_FACTOR
             new_y_dim = y_dim * ZOOM_FACTOR
         else:
@@ -190,7 +182,7 @@ class DynamicCanvas(FigureCanvas):
             # TODO enhance zoom center
             new_center_diff_x = (center[0] - mouse_pos[0]) / 6
             new_center_diff_y = (center[1] - mouse_pos[1]) / 6
-            if event.button == 'up':
+            if event.button == "up":
                 new_center_x = center[0] - new_center_diff_x
                 new_center_y = center[1] - new_center_diff_y
             else:
@@ -200,25 +192,24 @@ class DynamicCanvas(FigureCanvas):
             # old limits should include new limits if zooming in
             dim_diff_x = abs(new_x_dim - x_dim)
             dim_diff_y = abs(new_y_dim - y_dim)
-            new_center_x = min(max(center[0] - dim_diff_x, new_center_x),
-                               center[0] + dim_diff_x)
-            new_center_y = min(max(center[1] - dim_diff_y, new_center_y),
-                               center[1] + dim_diff_y)
+            new_center_x = min(max(center[0] - dim_diff_x, new_center_x), center[0] + dim_diff_x)
+            new_center_y = min(max(center[1] - dim_diff_y, new_center_y), center[1] + dim_diff_y)
         else:
             new_center_x = center[0]
             new_center_y = center[1]
 
-        self.update_plot([
-            new_center_x - new_x_dim, new_center_x + new_x_dim,
-            new_center_y - new_y_dim, new_center_y + new_y_dim
-        ])
+        self.update_plot(
+            [new_center_x - new_x_dim, new_center_x + new_x_dim, new_center_y - new_y_dim, new_center_y + new_y_dim]
+        )
 
-    def draw_scenario(self,
-                      scenario: Scenario,
-                      pps: PlanningProblemSet = None,
-                      draw_params=None,
-                      plot_limits=None,
-                      draw_dynamic_only=False):
+    def draw_scenario(
+        self,
+        scenario: Scenario,
+        pps: PlanningProblemSet = None,
+        draw_params=None,
+        plot_limits=None,
+        draw_dynamic_only=False,
+    ):
         """[summary]
 
         :param scenario: [description]
@@ -261,10 +252,7 @@ class DynamicCanvas(FigureCanvas):
             self.ax.set(xlim=xlim)
             self.ax.set(ylim=ylim)
 
-    def update_obstacles(self,
-                         scenario: Scenario,
-                         draw_params=None,
-                         plot_limits=None):
+    def update_obstacles(self, scenario: Scenario, draw_params=None, plot_limits=None):
         """
         Redraw only the dynamic obstacles. This gives a large performance boost, when playing an animation
 
@@ -273,10 +261,13 @@ class DynamicCanvas(FigureCanvas):
         :param plot_limits: Matplotlib plot limits
         """
         # redraw dynamic obstacles
-        obstacles = scenario.obstacles_by_position_intervals([
-            Interval(plot_limits[0], plot_limits[1]),
-            Interval(plot_limits[2], plot_limits[3])
-        ]) if plot_limits else scenario.obstacles
+        obstacles = (
+            scenario.obstacles_by_position_intervals(
+                [Interval(plot_limits[0], plot_limits[1]), Interval(plot_limits[2], plot_limits[3])]
+            )
+            if plot_limits
+            else scenario.obstacles
+        )
 
         draw_params_merged = _merge_dict(self.draw_params.copy(), draw_params)
 
@@ -286,8 +277,7 @@ class DynamicCanvas(FigureCanvas):
             self.rnd.render(show=True)
 
 
-def draw_lanelet_polygon(lanelet, ax, color, alpha, zorder,
-                         label) -> Tuple[float, float, float, float]:
+def draw_lanelet_polygon(lanelet, ax, color, alpha, zorder, label) -> Tuple[float, float, float, float]:
     # TODO efficiency
     verts = []
     codes = [Path.MOVETO]
@@ -320,7 +310,8 @@ def draw_lanelet_polygon(lanelet, ax, color, alpha, zorder,
             alpha=alpha,
             zorder=zorder,
             label=label,
-        ))
+        )
+    )
 
     return [xlim1, xlim2, ylim1, ylim2]
 
@@ -343,10 +334,11 @@ class AnimatedViewer:
         self.animation: FuncAnimation = None
         # if playing or not
         self.playing = False
-        self.dynamic.mpl_connect('button_press_event', self.select_scenario_element)
+        self.dynamic.mpl_connect("button_press_event", self.select_scenario_element)
 
-    def open_scenario(self, scenario: Scenario, config: Observable = None,
-                      planning_problem_set: PlanningProblemSet = None):
+    def open_scenario(
+        self, scenario: Scenario, config: Observable = None, planning_problem_set: PlanningProblemSet = None
+    ):
         """[summary]
 
         :param scenario: [description]
@@ -362,9 +354,11 @@ class AnimatedViewer:
         # if we have not subscribed already, subscribe now
         if config is not None:
             if not self._config:
+
                 def set_config(conf):
                     self._config = conf
                     self._calc_max_timestep()
+
                 config.subscribe(set_config)
             self._config = config.value
 
@@ -379,14 +373,14 @@ class AnimatedViewer:
         if not self.current_scenario:
             return
 
-        print('init animation')
+        print("init animation")
         scenario = self.current_scenario
         pps = self.current_pps
         self.dynamic.clear_axes(keep_limits=True)
 
         start = self.min_time_step
         end = self.max_timestep
-        plot_limits: Union[list, None, str] = None
+        # plot_limits: Union[list, None, str] = None
         if self._config is not None:
             dt = self._config.dt
         else:
@@ -398,13 +392,15 @@ class AnimatedViewer:
 
         if start == end:
             warning_dialog = QMessageBox()
-            warning_dialog.warning(None, "Warning",
-                                   "This Scenario only has one time step!",
-                                   QMessageBox.Ok, QMessageBox.Ok)
+            warning_dialog.warning(
+                None, "Warning", "This Scenario only has one time step!", QMessageBox.Ok, QMessageBox.Ok
+            )
             warning_dialog.close()
 
-        assert start <= end, '<video/create_scenario_video> time_begin=%i needs to smaller than time_end=%i.' % (
-            start, end)
+        assert start <= end, "<video/create_scenario_video> time_begin=%i needs to smaller than time_end=%i." % (
+            start,
+            end,
+        )
 
         def draw_frame(draw_params):
             time_start = start + self.time_step.value
@@ -414,9 +410,9 @@ class AnimatedViewer:
                 self.time_step.value = 0
 
             draw_params = {
-                'time_begin': time_start,
-                'time_end': time_end,
-                'antialiased': True,
+                "time_begin": time_start,
+                "time_end": time_end,
+                "antialiased": True,
             }
 
             self.dynamic.draw_scenario(scenario, pps=pps, draw_params=draw_params)
@@ -424,14 +420,10 @@ class AnimatedViewer:
         # Interval determines the duration of each frame in ms
         interval = 1000 * dt
         self.dynamic.clear_axes(keep_limits=True)
-        self.animation = FuncAnimation(self.dynamic.figure,
-                                       draw_frame,
-                                       blit=False,
-                                       interval=interval,
-                                       repeat=True)
+        self.animation = FuncAnimation(self.dynamic.figure, draw_frame, blit=False, interval=interval, repeat=True)
 
     def play(self):
-        """ plays the animation if existing """
+        """plays the animation if existing"""
         if not self.animation:
             self._init_animation()
 
@@ -439,7 +431,7 @@ class AnimatedViewer:
         self.animation.event_source.start()
 
     def pause(self):
-        """ pauses the animation if playing """
+        """pauses the animation if playing"""
         if not self.animation:
             self._init_animation()
             return
@@ -447,7 +439,7 @@ class AnimatedViewer:
         self.animation.event_source.stop()
 
     def set_timestep(self, timestep: int):
-        """ sets the animation to the current timestep """
+        """sets the animation to the current timestep"""
         print("set timestep: ", timestep)
         if not self.animation:
             self._init_animation()
@@ -468,8 +460,11 @@ class AnimatedViewer:
         try:
             rnd = MPRenderer()
             with open(path, "w"):
-                QMessageBox.about(None, "Information",
-                                  "Exporting the video will take few minutes, please wait until process is finished!")
+                QMessageBox.about(
+                    None,
+                    "Information",
+                    "Exporting the video will take few minutes, please wait until process is finished!",
+                )
                 rnd.create_video([self.current_scenario], path, draw_params=self.dynamic.draw_params)
                 print("finished")
         except IOError as e:
@@ -486,8 +481,7 @@ class AnimatedViewer:
         if self.current_scenario is None:
             return 0
         timesteps = [
-            obstacle.prediction.occupancy_set[-1].time_step
-            for obstacle in self.current_scenario.dynamic_obstacles
+            obstacle.prediction.occupancy_set[-1].time_step for obstacle in self.current_scenario.dynamic_obstacles
         ]
         self.max_timestep = np.max(timesteps) if timesteps else 0
         return self.max_timestep
@@ -497,24 +491,34 @@ class AnimatedViewer:
         Select lanelets by clicking on the canvas. Selects only one of the
         lanelets that contains the click position.
         """
-        mouse_pos = np.array(
-            [mouse_clicked_event.xdata, mouse_clicked_event.ydata])
+        mouse_pos = np.array([mouse_clicked_event.xdata, mouse_clicked_event.ydata])
         click_shape = Circle(radius=0.01, center=mouse_pos)
 
-        self.callback_function(selected_object=[], output="", pos_x=mouse_clicked_event.xdata, pos_y=mouse_clicked_event.ydata, vertices_click=True)
+        self.callback_function(
+            selected_object=[],
+            output="",
+            pos_x=mouse_clicked_event.xdata,
+            pos_y=mouse_clicked_event.ydata,
+            vertices_click=True,
+        )
 
         if self.current_scenario is None:
             return
         l_network = self.current_scenario.lanelet_network
         selected_l_ids = l_network.find_lanelet_by_shape(click_shape)
         selected_lanelets = [l_network.find_lanelet_by_id(lid) for lid in selected_l_ids]
-        selected_obstacles = [obs for obs in self.current_scenario.obstacles
-                              if obs.occupancy_at_time(self.time_step.value) is not None and
-                              obs.occupancy_at_time(self.time_step.value).shape.contains_point(mouse_pos)]
+        selected_obstacles = [
+            obs
+            for obs in self.current_scenario.obstacles
+            if obs.occupancy_at_time(self.time_step.value) is not None
+            and obs.occupancy_at_time(self.time_step.value).shape.contains_point(mouse_pos)
+        ]
 
         # get selected traffic signs/lights id:
         info_output = ""
-        t_sign_interpreter = TrafficSigInterpreter(country=SupportedTrafficSignCountry.GERMANY, lanelet_network=l_network)
+        # t_sign_interpreter = TrafficSigInterpreter(
+        #     country=SupportedTrafficSignCountry.GERMANY, lanelet_network=l_network
+        # )
         click_shape2 = Circle(radius=2.0, center=mouse_pos)
         for sign in l_network.traffic_signs:
             if click_shape2.contains_point(sign.position):
@@ -533,12 +537,12 @@ class AnimatedViewer:
             if len(selected_lanelets) > 0:
                 for la in selected_lanelets:
                     output += str(la.lanelet_id) + ", "
-            output = output[:len(output) - 1]
+            output = output[: len(output) - 1]
             if len(selected_obstacles) > 0:
                 output += ". Obstacles: "
                 for obs in selected_obstacles:
                     output += str(obs.obstacle_id) + ", "
-            output = output[:len(output) - 1]
+            output = output[: len(output) - 1]
             output += "."
         else:
             output = ""
@@ -548,16 +552,23 @@ class AnimatedViewer:
             self.callback_function(selected_obstacles[0], output + selection + info_output)
         elif len(selected_lanelets) > 0:
             selection = " Lanelet with ID " + str(selected_lanelets[0].lanelet_id) + " is selected."
-            self.callback_function(selected_lanelets[0], output + selection + info_output, mouse_clicked_event.xdata, mouse_clicked_event.ydata)
+            self.callback_function(
+                selected_lanelets[0],
+                output + selection + info_output,
+                mouse_clicked_event.xdata,
+                mouse_clicked_event.ydata,
+            )
 
-    def update_plot(self,
-                    sel_lanelet: Lanelet = None,
-                    sel_intersection: Intersection = None,
-                    time_step_changed: bool = False,
-                    focus_on_network: bool = False,
-                    time_step: int = 0,
-                    clear_artists=False):
-        """ Update the plot accordinly to the selection of scenario elements
+    def update_plot(
+        self,
+        sel_lanelet: Lanelet = None,
+        sel_intersection: Intersection = None,
+        time_step_changed: bool = False,
+        focus_on_network: bool = False,
+        time_step: int = 0,
+        clear_artists=False,
+    ):
+        """Update the plot accordinly to the selection of scenario elements
         :param sel_lanelet: selected lanelet, defaults to None
         :param sel_intersection: selected intersection, defaults to None
         :param clear_artists: deletes artists from renderer (only required when opening new scenarios)
@@ -569,26 +580,22 @@ class AnimatedViewer:
         self.dynamic.clear_axes(clear_artists=clear_artists)
         ax = self.dynamic.get_axes()
 
-        network_limits = [
-            float("Inf"), -float("Inf"),
-            float("Inf"), -float("Inf")
-        ]
+        network_limits = [float("Inf"), -float("Inf"), float("Inf"), -float("Inf")]
 
         if time_step_changed:
             draw_params = {
-                'time_begin': time_step,
+                "time_begin": time_step,
             }
         else:
             draw_params = {
-                'time_begin': self.time_step.value - 1,
+                "time_begin": self.time_step.value - 1,
             }
 
         self.dynamic.draw_scenario(self.current_scenario, self.current_pps, draw_params=draw_params)
 
         for lanelet in self.current_scenario.lanelet_network.lanelets:
 
-            color, alpha, zorder, label = self.get_paint_parameters(
-                lanelet, sel_lanelet, sel_intersection)
+            color, alpha, zorder, label = self.get_paint_parameters(lanelet, sel_lanelet, sel_intersection)
             if color == "gray":
                 continue
 
@@ -623,8 +630,7 @@ class AnimatedViewer:
 
         self.dynamic.drawer.tight_layout()
 
-    def get_paint_parameters(self, lanelet: Lanelet, selected_lanelet: Lanelet,
-                             selected_intersection: Intersection):
+    def get_paint_parameters(self, lanelet: Lanelet, selected_lanelet: Lanelet, selected_intersection: Intersection):
         """
         Return the parameters for painting a lanelet regarding the selected lanelet.
         """
@@ -637,26 +643,24 @@ class AnimatedViewer:
                 zorder = 20
                 label = "{} selected".format(lanelet.lanelet_id)
 
-            elif (lanelet.lanelet_id in selected_lanelet.predecessor
-                  and lanelet.lanelet_id in selected_lanelet.successor):
+            elif (
+                lanelet.lanelet_id in selected_lanelet.predecessor and lanelet.lanelet_id in selected_lanelet.successor
+            ):
                 color = "purple"
                 alpha = 0.5
                 zorder = 10
-                label = "{} predecessor and successor of {}".format(
-                    lanelet.lanelet_id, selected_lanelet.lanelet_id)
+                label = "{} predecessor and successor of {}".format(lanelet.lanelet_id, selected_lanelet.lanelet_id)
 
             elif lanelet.lanelet_id in selected_lanelet.predecessor:
                 color = "blue"
                 alpha = 0.5
                 zorder = 10
-                label = "{} predecessor of {}".format(
-                    lanelet.lanelet_id, selected_lanelet.lanelet_id)
+                label = "{} predecessor of {}".format(lanelet.lanelet_id, selected_lanelet.lanelet_id)
             elif lanelet.lanelet_id in selected_lanelet.successor:
                 color = "green"
                 alpha = 0.5
                 zorder = 10
-                label = "{} successor of {}".format(
-                    lanelet.lanelet_id, selected_lanelet.lanelet_id)
+                label = "{} successor of {}".format(lanelet.lanelet_id, selected_lanelet.lanelet_id)
             elif lanelet.lanelet_id == selected_lanelet.adj_left:
                 color = "yellow"
                 alpha = 0.5
@@ -664,8 +668,7 @@ class AnimatedViewer:
                 label = "{} adj left of {} ({})".format(
                     lanelet.lanelet_id,
                     selected_lanelet.lanelet_id,
-                    "same" if selected_lanelet.adj_left_same_direction else
-                    "opposite",
+                    "same" if selected_lanelet.adj_left_same_direction else "opposite",
                 )
             elif lanelet.lanelet_id == selected_lanelet.adj_right:
                 color = "orange"
@@ -674,8 +677,7 @@ class AnimatedViewer:
                 label = "{} adj right of {} ({})".format(
                     lanelet.lanelet_id,
                     selected_lanelet.lanelet_id,
-                    "same" if selected_lanelet.adj_right_same_direction else
-                    "opposite",
+                    "same" if selected_lanelet.adj_right_same_direction else "opposite",
                 )
             else:
                 color = "gray"

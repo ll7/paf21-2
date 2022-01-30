@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from datetime import datetime
 
+import carla
 import rospy
 import tensorflow as tf
 from cv_bridge import CvBridge
@@ -19,9 +20,12 @@ class TensorBoardNode:
         self._distance_step = 0
         self._time_step = 0
 
+        client = carla.Client("127.0.0.1", 2000)
+        self._world = client.get_world()
+
         rospy.init_node("tensorboard", anonymous=True)
         self.bridge = CvBridge()
-        self.t0 = rospy.Time.now().to_time()
+        self.t0 = self._cur_time()
 
         rospy.Subscriber("/paf/paf_validation/tensorboard/scalar", PafLogScalar, self._log_scalar)
         rospy.Subscriber("/paf/paf_validation/tensorboard/text", PafLogText, self._log_text)
@@ -32,8 +36,11 @@ class TensorBoardNode:
 
         rospy.logwarn(f"tensorboard files saved in ~/.ros/{self.path}")
 
+    def _cur_time(self):
+        return self._world.wait_for_tick().timestamp.elapsed_seconds
+
     def _get_step_from_cur_time(self):
-        t1 = rospy.Time.now().to_time()
+        t1 = self._cur_time()
         n = int((t1 - self.t0) * 10)
         return n
 
