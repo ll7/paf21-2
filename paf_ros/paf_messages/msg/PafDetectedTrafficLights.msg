@@ -1,4 +1,4 @@
-# Possible states: 'green', 'yellow', 'red' and 'none'
+# Possible states: 'green', 'yellow', 'red' and 'unknown'
 string[] states
-float32[] orientations
+Point2D[] positions
 float32[] distances

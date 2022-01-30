@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 from enum import Enum
 import json
+import math
 import os
 from datetime import datetime
 from typing import Callable, List, Tuple
 from std_msgs.msg import Bool
+from paf_messages.msg import PafDetectedTrafficLights, Point2D
 
 import cv2
 import numpy as np
@@ -38,10 +40,10 @@ class Labels(Enum):
     def __str__(self):
         return self.label_text
 
-    TrafficLightUnknown = (20, "Traffic light unknown")
-    TrafficLightRed = (21, "Traffic light red")
-    TrafficLightYellow = (22, "Traffic light yellow")
-    TrafficLightGreen = (23, "Traffic light green")
+    TrafficLightUnknown = (20, "unknown")
+    TrafficLightRed = (21, "red")
+    TrafficLightYellow = (22, "yellow")
+    TrafficLightGreen = (23, "green")
 
     Other = (99, "Other")
 
@@ -96,6 +98,10 @@ class TrafficLightDetector:
 
         rospy.init_node("traffic_light_detector", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
+
+        self.traffic_light_publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_perception/detected_traffic_lights", PafDetectedTrafficLights, queue_size=1
+        )
 
         self.detection_activated = True
 
@@ -266,34 +272,63 @@ class TrafficLightDetector:
                     label = Labels.TrafficLightUnknown
                     confidence = 1.0
 
-                detected.append(
-                    DetectedObject(
-                        x=boxes[i][0],
-                        y=boxes[i][1],
-                        width=boxes[i][2],
-                        height=boxes[i][3],
-                        distance=distance,
-                        label=label,
-                        confidence=confidence,
-                    )
-                )
-                # Store traffic light data in folder to train a better network
-                if self.data_collect_path is not None and distance < 25:
-                    x1, y1, w, h = boxes[i]
-                    x1 = int(x1 * width_rgb)
-                    y1 = int(y1 * height_rgb)
-                    x2 = x1 + int(w * width_rgb)
-                    y2 = y1 + int(h * height_rgb)
-                    # get cropped rgb image
-                    crop_rgb = rgb_image[y1:y2, x1:x2, :]
-                    now = datetime.now().strftime("%H:%M:%S")
-                    folder = os.path.abspath(
-                        f"{self.data_collect_path}/{label.name if label is not None else 'unknown'}"
-                    )
-                    if not os.path.exists(folder):
-                        os.mkdir(folder)
-                    cv2.imwrite(os.path.join(folder, f"{now}-{i}.jpg"), cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2BGR))
+                keep_object = True
+                diff_threshold = 0.005
+                x = boxes[i][0]
+                y = boxes[i][1]
+                for j in range(0, len(detected)):
+                    x2 = detected[j].x
+                    y2 = detected[j].y
+                    diff = math.dist([x, y], [x2, y2])
+                    if diff < diff_threshold:
+                        keep_object = False
+                        break
 
+                if keep_object:
+                    detected.append(
+                        DetectedObject(
+                            x=boxes[i][0],
+                            y=boxes[i][1],
+                            width=boxes[i][2],
+                            height=boxes[i][3],
+                            distance=distance,
+                            label=label,
+                            confidence=confidence,
+                        )
+                    )
+                    # Store traffic light data in folder to train a better network
+                    if self.data_collect_path is not None and distance < 25:
+                        x1, y1, w, h = boxes[i]
+                        x1 = int(x1 * width_rgb)
+                        y1 = int(y1 * height_rgb)
+                        x2 = x1 + int(w * width_rgb)
+                        y2 = y1 + int(h * height_rgb)
+                        # get cropped rgb image
+                        crop_rgb = rgb_image[y1:y2, x1:x2, :]
+                        now = datetime.now().strftime("%H:%M:%S")
+                        folder = os.path.abspath(
+                            f"{self.data_collect_path}/{label.name if label is not None else 'unknown'}"
+                        )
+                        if not os.path.exists(folder):
+                            os.mkdir(folder)
+                        cv2.imwrite(os.path.join(folder, f"{now}-{i}.jpg"), cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2BGR))
+
+        states = []
+        distances = []
+        positions = []
+        if len(detected) > 0:
+            for d in detected:
+                states.append(d.label.label_text)
+                distances.append(d.distance)
+                point = Point2D()
+                point.x = d.x
+                point.y = d.y
+                positions.append(point)
+            msg = PafDetectedTrafficLights()
+            msg.states = states
+            msg.positions = positions
+            msg.distances = distances
+            self.traffic_light_publisher.publish(msg)
         self.inform_listener(time, detected)
 
     def inform_listener(self, time_stamp, detected_list):

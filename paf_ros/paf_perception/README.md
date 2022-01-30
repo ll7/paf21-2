@@ -29,10 +29,10 @@ Benötigt PyTorch:
 
 ```
 Subscribed Topics:
-- /paf/paf_local_planner/activate_traffic_light_detection
+- /paf/paf_local_planner/activate_traffic_light_detection (Bool)
 
 Published Topics:
-- TODO
+- /paf/paf_perception/detected_traffic_lights (PafDetectedTrafficLights)
 
 Launchers:
 - roslaunch paf_perception traffic_light_detector.launch
