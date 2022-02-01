@@ -1,5 +1,5 @@
 from time import perf_counter
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 import rospy
 from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
@@ -18,6 +18,7 @@ from .Spline import (
 
 class LocalPath:
     STEP_SIZE = 5
+    DENSE_POINT_DISTANCE = 0.25
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 7
@@ -34,8 +35,9 @@ class LocalPath:
         self.traffic_signals = []
         self.global_path = global_path
         self.message = PafLocalPath()
+        self.alternate_speeds = []
         self.rules_enabled = rules_enabled
-        self.speed_calc = SpeedCalculator(self.STEP_SIZE)
+        self.speed_calc = SpeedCalculator(self.DENSE_POINT_DISTANCE)
 
     def current_indices(self, position: Point2D) -> Tuple[int, int]:
         """
@@ -83,6 +85,58 @@ class LocalPath:
             distance += section.distance_from_last_section
 
         return found, distance if distance > 0 else distance_buffer
+
+    def reset_alternate_speed(self):
+        self.alternate_speeds = None
+
+    def set_alternate_speed(self, index_start_dense: int, speed: Optional[Union[np.ndarray, List[float]]]):
+        if speed is None or len(speed) == 0 or len(self) == 0:
+            rospy.logerr(f"skip alterations speed_unset={speed is None or len(speed) == 0} dense_len={len(self) == 0}")
+            return
+        if self.alternate_speeds is None:
+            self.alternate_speeds = np.ones_like(self.message.target_speed) * SpeedCalculator.MAX_SPEED
+        index_end = index_start_dense + len(speed)
+        self.alternate_speeds[index_start_dense:index_end] = speed
+        if speed[-1] < 1e-3:
+            self.alternate_speeds[index_end:] *= 0
+        # lane_change_pts = self.message.points[index_start_dense:index_end]
+        # self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
+
+    def set_alternate_speed_next_sign(self, current_sparse_index, current_dense_index, skip_first_hit=False):
+        alternate_speed, breaking_m, idx_found_sparse = self.speed_calc.get_next_traffic_signal_deceleration(
+            self.traffic_signals, current_sparse_index, skip_first_hit
+        )
+        idx_dense = self.sparse_to_dense_index(idx_found_sparse, current_dense_index)
+        if idx_dense < 0:
+            return
+        n = int(np.ceil(1 / self.DENSE_POINT_DISTANCE))
+        pts = list(reversed(self.message.points[: idx_dense + 1 : n]))
+        distance = 0
+        index = idx_dense - n
+        for p0, p1 in zip(pts, pts[1:]):
+            distance += dist(p0, p1)
+            index -= n
+            if distance >= breaking_m:
+                break
+        lane_change_pts = [
+            self.sparse_local_path[idx_found_sparse],
+            self.message.points[idx_dense],
+            self.message.points[index],
+        ]
+        self._draw_path_pts(lane_change_pts, "lanechnge", (200, 24, 0))
+        rospy.logerr_throttle(5, (idx_dense, index))
+        if index < 0:
+            return
+        self.set_alternate_speed(index, alternate_speed)
+
+    def sparse_to_dense_index(self, index, start_pos):
+        if start_pos < 0:
+            return -1
+        i, _ = closest_index_of_point_list(self.message.points[start_pos:], self.sparse_local_path[index])
+        rospy.logwarn_throttle(3, (index, start_pos, i + start_pos, _))
+        if i < 0:
+            return i
+        return i + start_pos
 
     def _calculate_lane_options(
         self,
@@ -206,22 +260,23 @@ class LocalPath:
 
         return end_idx - 1, distance_planned, left, straight, right
 
-    def publish(self, msg: PafLocalPath = None, send_empty: bool = False):
+    def publish(self, send_empty: bool = False):
         """
         Publish a local path message (last one calculated OR the msg specified)
-        :param msg: optional other message (will replace self.message)
         :param send_empty: send an empty message ("stop now" signal for acting)
         """
-        if send_empty:
-            msg = PafLocalPath()
-            msg.target_speed = []
-            msg.points = []
-        elif msg is None:
-            msg = self.message
-        elif len(msg.points) == 0:
-            rospy.logwarn("[local planner] skip publishing, cause len=0")
-            return
-        if not send_empty and msg is not self.message:
+        msg = PafLocalPath()
+        msg.target_speed = []
+        msg.points = []
+        if not send_empty:
+            if self.alternate_speeds is not None:
+                msg.target_speed = list(np.clip(self.message.target_speed, 0, self.alternate_speeds))
+            else:
+                msg.target_speed = self.message.target_speed
+            msg.points = self.message.points
+            if len(msg.points) == 0:
+                rospy.logwarn("[local planner] skip publishing, cause len=0")
+                return
             rospy.logwarn_throttle(1, f"[local planner] publishing {len(msg.points)} points to acting...")
         publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         publisher.publish(msg)
@@ -324,7 +379,7 @@ class LocalPath:
             s_prev = None if i == 0 else self.global_path.route.sections[i - 1]
             if s_prev is not None and s_prev.target_lanes_distance == 0:
                 future_lane = current_lane - s_prev.target_lanes[0] + s_prev.target_lanes_left_shift
-                lane_change_pts += s.points
+                # lane_change_pts += s.points
                 # rospy.logerr(
                 #     f"end of segment ({i})! current_lane={current_lane}, target_lanes={list(s_prev.target_lanes)},"
                 #     f" shift={s_prev.target_lanes_left_shift} => {future_lane}"
@@ -489,9 +544,11 @@ class LocalPath:
                 end_idx_lane_change = 0
 
         t1 = f"{(perf_counter() - t0):.2f}s"
+
         self.sparse_local_path = sparse_local_path
         self._sparse_traffic_signals = sparse_traffic_signals
         self._sparse_local_path_speeds = sparse_local_path_speeds
+        self.reset_alternate_speed()
 
         t0 = perf_counter()
         points, target_speed = self._smooth_out_path(sparse_local_path, sparse_local_path_speeds)
@@ -555,7 +612,7 @@ class LocalPath:
 
         pts = []
         try:
-            ds = 0.25
+            ds = LocalPath.DENSE_POINT_DISTANCE
             prev = 0
             for i, j in change_idx:
                 if prev < i:
