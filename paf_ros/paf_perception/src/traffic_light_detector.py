@@ -203,7 +203,10 @@ class TrafficLightDetector:
         :param time: time stamp when the images where taken
         :return: none
         """
-        if self.detection_activated is False:
+        if not self.detection_activated:
+            rospy.loginfo_throttle(
+                5, "[traffic light detector] skipping image detection, because detection is disabled"
+            )
             self.inform_listener(time, None)
             return
         if (rospy.Time.now() - time).to_sec() > 0.6:
@@ -320,6 +323,7 @@ class TrafficLightDetector:
         states = []
         distances = []
         positions = []
+        rospy.loginfo_throttle(5, f"[traffic light detector] publishing {len(detected)} detected lights.")
         if len(detected) > 0:
             for d in detected:
                 states.append(d.label.label_text)
@@ -328,11 +332,11 @@ class TrafficLightDetector:
                 point.x = d.x
                 point.y = d.y
                 positions.append(point)
-            msg = PafDetectedTrafficLights()
-            msg.states = states
-            msg.positions = positions
-            msg.distances = distances
-            self.traffic_light_publisher.publish(msg)
+        msg = PafDetectedTrafficLights()
+        msg.states = states
+        msg.positions = positions
+        msg.distances = distances
+        self.traffic_light_publisher.publish(msg)
         self.inform_listener(time, detected)
 
     def inform_listener(self, time_stamp, detected_list):

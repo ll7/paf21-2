@@ -55,7 +55,7 @@ class LocalPlanner:
         self._traffic_light_color = None
         self._ignore_sign = None
         self._last_sign = None
-        self._traffic_light_detector_enabled = False
+        self._traffic_light_detector_enabled = True
 
         self._last_local_reroute = rospy.get_time()
         self._speed_msg = PafSpeedMsg()
@@ -176,12 +176,10 @@ class LocalPlanner:
         self._last_sign, found_ignored_sign = self._local_path.set_alternate_speed_next_sign(
             self._local_path_idx, self._ignore_sign
         )
-        if self._traffic_light_color == "green" and self._last_sign is not None:
-            self._ignore_sign = self._last_sign
-        if self._last_sign is not None and not self._traffic_light_detector_enabled:
-            self._traffic_light_detector_enabled = True
-            self._traffic_light_detector_toggle_pub.publish(Bool(True))
-            rospy.loginfo_throttle(1, "[local planner] enabling traffic light detection")
+        # if self._last_sign is not None and not self._traffic_light_detector_enabled:
+        #     self._traffic_light_detector_enabled = True
+        #     self._traffic_light_detector_toggle_pub.publish(Bool(True))
+        #     rospy.loginfo_throttle(1, "[local planner] enabling traffic light detection")
         # elif not found_ignored_sign and self._last_sign is None and self._traffic_light_detector_enabled:
         #     self._traffic_light_detector_enabled = False
         #     self._traffic_light_detector_toggle_pub.publish(Bool(False))
@@ -197,24 +195,45 @@ class LocalPlanner:
 
     def _process_traffic_lights(self, msg: PafDetectedTrafficLights):
         if not self._traffic_light_detector_enabled:
+            rospy.logwarn_throttle(
+                5,
+                f"[local planner] traffic light detection is currently disabled, "
+                f"skipping {len(msg.states)} detections",
+            )
             return
         if len(msg.states) == 0:
             self._traffic_light_color = None
+            rospy.logwarn_throttle(5, "[local planner] traffic light detection sent an empty message")
+            return
 
-        max_distance = 100
-        section, current_lane = self._current_global_location
-        number_of_lanes = len(self._global_path.route.sections[section].points)
-        zipped = list(zip(msg.states, msg.distances, msg.positions))
-        zipped = [(a, b, c) for a, b, c in zipped if b < max_distance]
-        number_of_signs = len(zipped)
-        sort_by_x = sorted(zipped, key=lambda x: x[2].x, reverse=True)
-        closest_to_car = int(np.clip(current_lane, 0, len(sort_by_x)))
-        self._traffic_light_color = msg.states[closest_to_car]
+        def filter_msgs():
+            new_msg = PafDetectedTrafficLights()
+            for state, distance, position in zip(msg.states, msg.distances, msg.positions):
+                if distance > 50:
+                    continue
+                if position.x < 0.25 or position.x > 0.75:
+                    continue
+                new_msg.states.append(state)
+                new_msg.distances.append(distance)
+                new_msg.positions.append(position)
+            return new_msg
+
+        msg2 = filter_msgs()
+        if len(msg.states) == 0:
+            msg2 = msg
+        if len(msg2.states) == 0:
+            return
+        x_list = [np.abs(p.x - 0.5) for p in msg2.positions]
+        index_center = np.argmin(x_list)
+
+        self._traffic_light_color = msg2.states[index_center]
         rospy.logwarn_throttle(
-            5,
-            f"[local planner] detected lights: {[x for x,_,_ in sort_by_x]} "
-            f"(lanes: {number_of_lanes}, lights: {number_of_signs})",
+            1, f"[local planner] traffic sign state is " f"{self._traffic_light_color}. detected: {msg2.states}"
         )
+        if self._traffic_light_color == "green":
+            self._ignore_sign = self._last_sign
+            self._local_path.reset_alternate_speed()
+            self._local_path.publish()
 
     def _replan_local_path(self, ignore_prev=False):
         t = time.perf_counter()
