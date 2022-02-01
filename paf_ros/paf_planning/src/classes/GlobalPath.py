@@ -36,7 +36,6 @@ class GlobalPath:
     ):
         SpeedCalculator.set_limits()
         self._adjacent_lanelets = None
-        self.lanelet_ids = None
         self._lanelet_network = None
         self._graph = None
         self.route = None
@@ -315,6 +314,7 @@ class GlobalPath:
             idx = self._locate_obj_on_lanelet(vertices, merging_pt) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             paf_sign.value = self.MERGE_SPEED_RESET
+            paf_sign.point = Point2D(merging_pt[0], merging_pt[1])
             speed_limits += [paf_sign]
 
             # self.signal_positions.append(Point2D(merging_pt[0], merging_pt[1]))
@@ -333,6 +333,7 @@ class GlobalPath:
                 paf_sign.value = SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED
             idx = self._locate_obj_on_lanelet(vertices, tuple(sign.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
+            paf_sign.point = Point2D(sign.position[0], sign.position[1])
             if is_speed_limit:
                 speed_limits += [paf_sign]
             else:
@@ -356,6 +357,7 @@ class GlobalPath:
                 paf_sign.value /= paf_sign.value + red_value
             except ZeroDivisionError:
                 paf_sign.value = -33
+            paf_sign.point = Point2D(light.position[0], light.position[1])
             idx = self._locate_obj_on_lanelet(vertices, tuple(light.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             traffic_signals += [paf_sign]

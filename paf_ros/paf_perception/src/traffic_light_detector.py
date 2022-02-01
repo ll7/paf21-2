@@ -4,7 +4,7 @@ import json
 import math
 import os
 from datetime import datetime
-from typing import Callable, List, Tuple
+from typing import Callable, List, Tuple, Optional
 from std_msgs.msg import Bool
 from paf_messages.msg import PafDetectedTrafficLights, Point2D
 
@@ -107,8 +107,6 @@ class TrafficLightDetector:
 
         self.__listener = None
 
-        self.logger_name = "traffic_light_detector"
-
         self.confidence_min = 0.75
         self.threshold = 0.7
         self.canny_threshold = 100
@@ -121,14 +119,18 @@ class TrafficLightDetector:
         # Deep learning config and inits
         self.confidence_min = 0.70
         self.threshold = 1.0
-        rospy.loginfo(f"[traffic light detector] init device (use gpu={use_gpu})", logger_name=self.logger_name)
+        rospy.loginfo(f"[traffic light detector] init device (use gpu={use_gpu})")
         # select the gpu if allowed and a gpu is available
-        self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-        rospy.loginfo("[traffic light detector] Device:" + str(self.device), logger_name=self.logger_name)
+        use_gpu = use_gpu and torch.cuda.is_available()
+        self.device = torch.device("cuda:0" if use_gpu else "cpu")
+        rospy.loginfo("[traffic light detector] Device: " + str(self.device))
         # load our model
         model_name = "traffic-light-classifiers-2021-03-27_23-55-48"
-        rospy.loginfo("[traffic light detector] loading classifier model from disk...", logger_name=self.logger_name)
-        model = torch.load(os.path.join(root_path, f"models/{model_name}.pt"))
+        rospy.loginfo("[traffic light detector] loading classifier model from disk...")
+        map_location = None
+        if not use_gpu:
+            map_location = "cpu"
+        model = torch.load(os.path.join(root_path, f"models/{model_name}.pt"), map_location=map_location)
 
         with open(os.path.join(root_path, f"models/{model_name}.names")) as f:
             class_names = json.load(f)
@@ -148,7 +150,7 @@ class TrafficLightDetector:
         )
         model.to(self.device)
         if self.device.type == "cuda":
-            rospy.loginfo("[traffic light detector] Enable cudnn", logger_name=self.logger_name)
+            rospy.loginfo("[traffic light detector] Enable cudnn")
             cudnn.enabled = True
             cudnn.benchmark = True
         self.net = model
@@ -162,12 +164,14 @@ class TrafficLightDetector:
         self.combinedCamera = FusionCamera(role_name=role_name, visible_tags={SegmentationTag.TrafficLight})
         self.combinedCamera.set_on_image_listener(self.__on_new_image_data)
 
-    def _activation_toggled(self, activate: bool):
+        rospy.loginfo("[traffic light detector] initialization successful")
+
+    def _activation_toggled(self, activate: Bool):
         self.detection_activated = activate.data
         if activate.data:
-            rospy.loginfo("[traffic light detector] Detection activated", logger_name=self.logger_name)
+            rospy.loginfo_throttle(10, "[traffic light detector] Detection activated")
         else:
-            rospy.loginfo("[traffic light detector] Detection deactivated", logger_name=self.logger_name)
+            rospy.loginfo_throttle(10, "[traffic light detector] Detection deactivated")
 
     def __extract_label(self, image) -> Tuple[Labels, float]:
         """
@@ -358,15 +362,18 @@ class TrafficLightDetector:
 
 
 if __name__ == "__main__":
-
-    node = TrafficLightDetector()
-    debug = True
+    try:
+        node = TrafficLightDetector()
+    except RuntimeError:
+        rospy.logerr("[traffic light detector] Unable to use gpu (out of memory). Fallback to CPU...")
+        node = TrafficLightDetector(use_gpu=False)
+    debug = False
     # Show case code:
     if debug:
         from RGBCamera import RGBCamera
         from perception_util import show_image
 
-        detected_r = None
+        detected_r: Optional[list] = None
         time = None
 
         def store_image(image, _):

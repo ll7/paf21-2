@@ -98,6 +98,7 @@ arguments:
 --npcs/-n
 --low-quality/-lq
 --manual-control/-mc
+--no-rules/-nr (rules enabled by default)
 TownXX
 
 Allowed towns are Town01, Town02, Town03, Town04, Town05, Town06, Town07 and Town10HD"
@@ -109,6 +110,7 @@ BUILD_ROS=0
 NPCS=0
 CARLA_ARGS=""
 TOWN_ARGS="town:=Town03"
+RULES_ARGS="rules_enabled:=true"
 for VAR in "$@"; do
   if [ "$VAR" = "-h" ]; then
     exit
@@ -121,6 +123,12 @@ for VAR in "$@"; do
   fi
   if [ "$VAR" = "-scr" ]; then
     CARLA_SKIP=1
+  fi
+  if [ "$VAR" = "--no-rules" ]; then
+    RULES_ARGS="rules_enabled:=false"
+  fi
+  if [ "$VAR" = "-nr" ]; then
+    RULES_ARGS="rules_enabled:=false"
   fi
   if [ "$VAR" = "--manual-control" ]; then
     ros_launch_args="$ros_launch_args manual_control:=true"
@@ -175,7 +183,7 @@ fi
 eval "$(cat ~/.bashrc | tail -n +10)"
 close_ros 2>/dev/null
 echo "starting main launcher..."
-start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $TOWN_ARGS $ros_launch_args" "$main_launch_script"
+start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $TOWN_ARGS $RULES_ARGS $ros_launch_args" "$main_launch_script"
 reduce_ros_log_noise
 if ((NPCS)); then
   echo "spawning npcs..."

@@ -2,9 +2,6 @@
 import time
 
 from commonroad.scenario.lanelet import LaneletNetwork
-from commonroad.scenario.traffic_sign import (
-    TrafficLightState,
-)
 
 import rospy
 import numpy as np
@@ -16,6 +13,7 @@ from paf_messages.msg import (
     PafLaneletRoute,
     PafTopDownViewPointSet,
     PafSpeedMsg,
+    PafDetectedTrafficLights,
 )
 from classes.MapManager import MapManager
 from classes.GlobalPath import GlobalPath
@@ -50,12 +48,15 @@ class LocalPlanner:
         self._global_path = GlobalPath()
         self._local_path = LocalPath(self._global_path)
         self._local_path_idx, self._distance_to_local_path = -1, 0
-        self._sparse_local_path_idx = -1
+        # self._sparse_local_path_idx = -1
+        self._current_global_location = (0, 0)
         self._from_section, self._to_section = -1, -1
-        self._reacting_target_speed = []
-        self._reacting_target_index = 0
 
-        self._traffic_light_color = TrafficLightState.GREEN  # or None # todo fill this
+        self._traffic_light_color = None
+        self._ignore_sign = None
+        self._last_sign = None
+        self._traffic_light_detector_enabled = False
+
         self._last_local_reroute = rospy.get_time()
         self._speed_msg = PafSpeedMsg()
 
@@ -66,6 +67,13 @@ class LocalPlanner:
             "/paf/paf_global_planner/routing_response", PafLaneletRoute, self._process_global_path, queue_size=1
         )
         rospy.Subscriber("/paf/paf_local_planner/rules_enabled", Bool, self._change_rules, queue_size=1)
+        rospy.Subscriber(
+            "/paf/paf_perception/detected_traffic_lights",
+            PafDetectedTrafficLights,
+            self._process_traffic_lights,
+            queue_size=1,
+        )
+
         self._emergency_break_pub = rospy.Publisher(f"/local_planner/{role_name}/emergency_break", Bool, queue_size=1)
         self._last_replan_request_loc = time.perf_counter()
         self._last_replan_request_glob = time.perf_counter()
@@ -85,6 +93,9 @@ class LocalPlanner:
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
         self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", PafSpeedMsg, queue_size=1)
+        self._traffic_light_detector_toggle_pub = rospy.Publisher(
+            "/paf/paf_local_planner/activate_traffic_light_detection", Bool, queue_size=1
+        )
 
     def _change_rules(self, msg: Bool):
         rospy.set_param("rules_enabled", msg.data)
@@ -92,6 +103,8 @@ class LocalPlanner:
             return
         self.rules_enabled = msg.data
         self._scenario = MapManager.get_current_scenario()
+        if not self.rules_enabled:
+            self._traffic_light_detector_toggle_pub.publish(Bool(False))
         SpeedCalculator.set_limits(self.rules_enabled)
         rospy.logwarn(
             f"[local planner] Rules are now {'en' if self.rules_enabled else 'dis'}abled! "
@@ -101,6 +114,7 @@ class LocalPlanner:
     def _process_global_path(self, msg: PafLaneletRoute):
         if self._global_path is None or self._global_path.route.distance != msg.distance:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
+            self._reset_detected_signs()
             self._emergency_break_pub.publish(Bool(False))
             self._global_path = GlobalPath(msg=msg)
             self._local_path = LocalPath(self._global_path, self.rules_enabled)
@@ -118,12 +132,13 @@ class LocalPlanner:
         if len(self._global_path) == 0 or len(self._local_path) == 0:
             rospy.loginfo_throttle(5, "[local planner] publishing empty path.")
             self._publish_local_path_msg(send_empty=True)
-
         if len(self._global_path) == 0:
             rospy.logwarn_throttle(5, "[local planner] no route, end of route handling activated")
+            self._reset_detected_signs()
             self._end_of_route_handling()
         elif self._planner_at_end_of_global_path():
             rospy.logwarn_throttle(5, "[local planner] end of route reached, end of route handling activated")
+            self._reset_detected_signs()
             self._global_path = GlobalPath()
             self._local_path = LocalPath(self._global_path)
             self._emergency_break_pub.publish(Bool(True))
@@ -147,19 +162,59 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
             self._publish_local_path_msg()
 
-        # if self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
-        #     a, b = self._local_path_idx, self._local_path_idx + 100
-        #     speed = self._local_path.message.target_speed[a:b:4]
-        #     rospy.loginfo_throttle(
-        #         .5, f"[local planner] current target speeds: " f"{[float(f'{(sp * 3.6):.2f}') for sp in speed]}"
-        #     )
-        self._local_path.set_alternate_speed_next_sign(self._sparse_local_path_idx, self._local_path_idx, False)
+        self._check_for_signs_on_path()
+        # if self._last_sign is not None:
+        #     self._ignore_sign = self._last_sign
 
-    def _is_waiting_for_clear_event(self):
-        pass  # todo implement this
+    def _reset_detected_signs(self):
+        self._last_sign = self._ignore_sign = None
 
-    def _handle_clear_event(self):
-        return
+    def _check_for_signs_on_path(self):
+        if not self.rules_enabled:
+            return
+
+        self._last_sign, found_ignored_sign = self._local_path.set_alternate_speed_next_sign(
+            self._local_path_idx, self._ignore_sign
+        )
+        if self._traffic_light_color == "green" and self._last_sign is not None:
+            self._ignore_sign = self._last_sign
+        if self._last_sign is not None and not self._traffic_light_detector_enabled:
+            self._traffic_light_detector_enabled = True
+            self._traffic_light_detector_toggle_pub.publish(Bool(True))
+            rospy.loginfo_throttle(1, "[local planner] enabling traffic light detection")
+        # elif not found_ignored_sign and self._last_sign is None and self._traffic_light_detector_enabled:
+        #     self._traffic_light_detector_enabled = False
+        #     self._traffic_light_detector_toggle_pub.publish(Bool(False))
+        #     rospy.loginfo_throttle(1, "[local planner] disabling traffic light detection")
+
+        msg_info = []
+        for i, sign_list in enumerate(self._local_path.traffic_signals):
+            for x in sign_list:
+                msg_info.append(f"{x.type} in {(i * LocalPath.DENSE_POINT_DISTANCE):.1f}m")
+        rospy.loginfo_throttle(
+            10, f"[local planner] signs on path: {', '.join(msg_info) if len(msg_info) > 0 else 'None'}"
+        )
+
+    def _process_traffic_lights(self, msg: PafDetectedTrafficLights):
+        if not self._traffic_light_detector_enabled:
+            return
+        if len(msg.states) == 0:
+            self._traffic_light_color = None
+
+        max_distance = 100
+        section, current_lane = self._current_global_location
+        number_of_lanes = len(self._global_path.route.sections[section].points)
+        zipped = list(zip(msg.states, msg.distances, msg.positions))
+        zipped = [(a, b, c) for a, b, c in zipped if b < max_distance]
+        number_of_signs = len(zipped)
+        sort_by_x = sorted(zipped, key=lambda x: x[2].x, reverse=True)
+        closest_to_car = int(np.clip(current_lane, 0, len(sort_by_x)))
+        self._traffic_light_color = msg.states[closest_to_car]
+        rospy.logwarn_throttle(
+            5,
+            f"[local planner] detected lights: {[x for x,_,_ in sort_by_x]} "
+            f"(lanes: {number_of_lanes}, lights: {number_of_signs})",
+        )
 
     def _replan_local_path(self, ignore_prev=False):
         t = time.perf_counter()
@@ -168,19 +223,20 @@ class LocalPlanner:
             return
 
         self._last_replan_request_loc = t
+        self._reset_detected_signs()
         msg, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
             self._current_pose.position, self._current_speed, ignore_previous=ignore_prev, min_section=self._to_section
         )
 
-    def _allowed_from_stop(self):
-        return True or self._can_continue_on_path(None)  # todo
-
-    def _can_continue_on_path(self, signal_type):
-        if signal_type is None:
-            return True
-        if signal_type == "LIGHT":
-            return self._traffic_light_color == TrafficLightState.GREEN
-        return True  # todo joining lanes / lane change free ??
+    # def _allowed_from_stop(self):
+    #     return True or self._can_continue_on_path(None)  # todo
+    #
+    # def _can_continue_on_path(self, signal_type):
+    #     if signal_type is None:
+    #         return True
+    #     if signal_type == "LIGHT":
+    #         return self._traffic_light_color == TrafficLightState.GREEN
+    #     return True  # todo joining lanes / lane change free ??
 
     def _is_stopped(self):
         margin = 0.5
@@ -228,9 +284,10 @@ class LocalPlanner:
             self._local_path_idx, self._distance_to_local_path = closest_index_of_point_list(
                 self._local_path.message.points, self._current_pose.position
             )
-            self._sparse_local_path_idx, _ = closest_index_of_point_list(
-                self._local_path.sparse_local_path, self._current_pose.position
-            )
+            # self._sparse_local_path_idx, _ = closest_index_of_point_list(
+            #     self._local_path.sparse_local_path, self._current_pose.position
+            # )
+            self._current_global_location = self._global_path.get_section_and_lane_indices(self._current_pose.position)
 
     def _publish_speed_msg(self):
         if 0 <= self._local_path_idx < len(self._local_path.message.target_speed):

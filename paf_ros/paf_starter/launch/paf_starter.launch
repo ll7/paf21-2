@@ -8,6 +8,8 @@
   <!-- Paf args -->
   <arg name='manual_control' default='false'/>
   <arg name='validation' default='true'/>
+  <arg name='rules_enabled' default='true'/>
+  <param name="rules_enabled" value="$(arg rules_enabled)"/>
 
   <!-- Ego vehicle -->
   <arg name='role_name' default='ego_vehicle'/>
@@ -76,7 +78,9 @@
 
   <!--  Perception  -->
   <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
-  <include file="$(find paf_perception)/launch/traffic_light_detector.launch"/>
+  <group if="$(arg rules_enabled)">
+    <include file="$(find paf_perception)/launch/traffic_light_detector.launch"/>
+  </group>
 
   <!--  Local Planning  -->
   <include file="$(find paf_planning)/launch/paf_local_planner.launch"/>

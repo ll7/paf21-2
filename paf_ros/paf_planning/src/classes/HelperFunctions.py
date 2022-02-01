@@ -103,6 +103,7 @@ def expand_sparse_list(
     points_target: List[Point2D],
     fill_value: Any = None,
     indices_new: List[int] = None,
+    accuracy: int = 4,
 ) -> Tuple[List[Any], List[int]]:
     """
     Expands a sparse list by either filling up the gaps with fill values
@@ -112,20 +113,25 @@ def expand_sparse_list(
     :param points_target: dense list of points with final length
     :param fill_value: optional filler value (previous value if not specified)
     :param indices_new: indices of sparse list in returned list
+    :param accuracy: accuracy (speed) of index search (take every nth entry, 4=1m with ds=0.25 in LocalPath class)
     :return: dense list, indices_new
     """
     if len(sparse_list) < len(points_current):
         raise ValueError(f"length of sparse list {len(sparse_list)} < " f"current points {len(points_current)}")
     if indices_new is None:
         indices_new = []
-        factor = int(len(points_target) / len(points_current)) + 2
+        factor = (int(len(points_target) / len(points_current)) + 2) * 4
         last_target_idx = 0
         for i, pt in enumerate(points_current):
+            if fill_value is not None and sparse_list[i] == fill_value:
+                indices_new += [0] if len(indices_new) == 0 else [indices_new[-1] + 1]
+                continue
             ind = (i + 1) * factor
-            last_target_idx = closest_index_of_point_list(points_target[last_target_idx:ind], pt)[0] + last_target_idx
+            idx_found, _ = closest_index_of_point_list(points_target[last_target_idx:ind], pt, accuracy)
+            last_target_idx = idx_found + last_target_idx
             indices_new += [last_target_idx]
 
-    out = [fill_value for _ in points_target]
+    out = [fill_value for _ in points_target]  # None or custom placeholder
 
     for v, idx in zip(sparse_list, indices_new):
         idx = idx + 5

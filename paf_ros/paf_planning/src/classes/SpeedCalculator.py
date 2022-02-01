@@ -1,9 +1,9 @@
 import copy
-from typing import List, Optional, Tuple
+from typing import List
 import numpy as np
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
-from paf_messages.msg import PafTrafficSignal, Point2D
+from paf_messages.msg import Point2D
 from .HelperFunctions import dist
 from .MapManager import MapManager
 
@@ -211,29 +211,6 @@ class SpeedCalculator:
 
         speed = np.clip(speed, 0, 999)
         return speed
-
-    def get_next_traffic_signal_deceleration(
-        self, traffic_signals: List[List[PafTrafficSignal]], from_index: int = 0, skip_first_hit=False
-    ) -> Tuple[Optional[np.ndarray], float, int]:
-        chosen_sign = None
-        for sparse_index, traffic_signal_list in enumerate(traffic_signals[from_index:]):
-            if len(traffic_signal_list) > 0:
-
-                if skip_first_hit:
-                    skip_first_hit = False
-                    continue
-                for traffic_signal in traffic_signal_list:
-                    if traffic_signal.type in self.MUST_STOP_EVENTS:
-                        chosen_sign = traffic_signal
-                        break
-                    elif traffic_signal.type in self.CAN_STOP_EVENT:
-                        chosen_sign = traffic_signal
-                    else:
-                        pass  # skip other event types
-                if chosen_sign is not None:
-                    arr, breaking_distance = self.get_event_deceleration(target_speed=0.0, buffer_m=0)
-                    return arr, breaking_distance, sparse_index
-        return None, 0, 0
 
     def get_event_deceleration(self, target_speed: float = 0, buffer_m: float = 0, step=None):
         if step is None:

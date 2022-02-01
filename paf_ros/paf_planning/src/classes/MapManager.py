@@ -82,8 +82,8 @@ class MapManager:
 
         # # uncomment for custom path debugging
         # if "Town" in town:
-        #     return MapManager.point_to_pose((148.4, -241), -90), [
-        #         Point2D(193.8,-220),
+        #     return MapManager.point_to_pose((188.7, 205.1), 90), [
+        #         Point2D(115, 202),
         #     ]
 
         if town == "Town01":
@@ -208,7 +208,7 @@ class MapManager:
         plt.show()
 
     @staticmethod
-    def visualize_lp_and_gp(local_path_obj, cur_pt: Point2D):
+    def visualize_lp_and_gp(local_path_obj, cur_pt: Point2D, xmin=None, xmax=None, ymin=None, ymax=None):
         """
         Visualize local and global path with matplotlib (for debugging planners)
         :param local_path_obj: LocalPath object
@@ -240,6 +240,15 @@ class MapManager:
 
         x_min, y_min = np.min(np.array([minima1, minima2]), axis=1)
         x_max, y_max = np.max(np.array([minima3, minima4]), axis=1)
+
+        if xmin is not None:
+            x_min = xmin
+        if ymin is not None:
+            y_min = ymin
+        if xmax is not None:
+            x_max = xmax
+        if ymax is not None:
+            y_max = ymax
 
         plt.xlim([x_min - 10, x_max + 10])
         plt.ylim([y_min - 10, y_max + 10])
