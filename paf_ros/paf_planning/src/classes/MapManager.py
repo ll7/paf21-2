@@ -83,8 +83,8 @@ class MapManager:
 
         # uncomment for custom path debugging
         # if "Town" in town:
-        #     return MapManager.point_to_pose((188.7, 205.1), 90), [
-        #         Point2D(115, 202),
+        #     return MapManager.point_to_pose((-23, -134), -90), [
+        #         Point2D(122, 201.6),
         #     ]
 
         if town == "Town01":
@@ -101,8 +101,7 @@ class MapManager:
             ]
         elif town == "Town03":
             return MapManager.point_to_pose((-6, -159), 180), [
-                Point2D(-23, -134),
-                # Point2D(68, -61),
+                Point2D(-49, -134),
                 Point2D(122, 201.6),
                 Point2D(-7, 43.5),
                 Point2D(8.8, 84),
@@ -242,6 +241,7 @@ class MapManager:
         pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
         pts_loc_1 = local_path_obj.sparse_local_path
         sign_positions = [x.point for x in local_path_obj.get_all_traffic_signals()]
+        local_path_obj.set_alternate_speed_next_sign(0)
 
         xy1, minima1 = pts_to_x_y(pts_gl_1)
         xy2, minima2 = pts_to_x_y(pts_gl_2)
@@ -253,10 +253,8 @@ class MapManager:
         plt.scatter(*xy2, label="Global Path (target)", s=1)
         plt.scatter(*xy1, label="Global Path (other)", s=1)
         # plt.plot(*xy3, label="Local Path (sparse)")
-        plt.scatter(*xy4, label="Local Path (dense)", s=1)
-        plt.scatter(*xy5, label="Traffic Signals (GP)", s=20)
-        if len(xy6[0]) > 0:
-            plt.scatter(*xy6, label="Local Path (debug pts)", s=6)
+        plt.plot(*xy4, label="Local Path (dense)")
+        plt.scatter(*xy5, label="Traffic Signals (GP)", s=10)
 
         pts = []
         for i, (signal, index, distance, match) in enumerate(local_path_obj.get_signal_indices()):
@@ -277,10 +275,12 @@ class MapManager:
             plt.annotate(f"{index}:{name}@{distance}m", (match.x, match.y))
 
         xy7, minima7 = pts_to_x_y(pts)
-        plt.scatter(*xy7, label="Traffic Signals (LP)", s=20)
+        plt.scatter(*xy7, label="Traffic Signals (LP)", s=10)
+        if len(xy6[0]) > 0:
+            plt.scatter(*xy6, label="Local Path (debug pts)", s=6)
 
-        _, _, x_max, y_max = np.max([minima1, minima2, minima3, minima4, minima5, minima6, minima7], axis=0)
-        x_min, y_min, _, _ = np.min([minima1, minima2, minima3, minima4, minima5, minima6, minima7], axis=0)
+        _, _, x_max, y_max = np.max([minima3, minima4, minima6, minima7], axis=0)
+        x_min, y_min, _, _ = np.min([minima3, minima4, minima6, minima7], axis=0)
 
         if xmin is not None:
             x_min = xmin

@@ -1,7 +1,10 @@
 #!/usr/bin/env python
+import copy
 import time
+from collections import deque
 
 from commonroad.scenario.lanelet import LaneletNetwork
+from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 import rospy
 import numpy as np
@@ -36,6 +39,7 @@ class LocalPlanner:
 
     def __init__(self):
 
+        self._cleared_signs = deque(maxlen=2)
         rospy.init_node("local_path_node", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
         rospy.logwarn(f"[local planner] Rules are {'en' if self.rules_enabled else 'dis'}abled!")
@@ -53,7 +57,6 @@ class LocalPlanner:
         self._from_section, self._to_section = -1, -1
 
         self._traffic_light_color = None
-        self._ignore_sign = None
         self._last_sign = None
         self._traffic_light_detector_enabled = True
 
@@ -115,13 +118,15 @@ class LocalPlanner:
         if self._global_path is None or self._global_path.route.distance != msg.distance:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
             self._reset_detected_signs()
-            self._emergency_break_pub.publish(Bool(False))
             self._global_path = GlobalPath(msg=msg)
             self._local_path = LocalPath(self._global_path, self.rules_enabled)
             self._set_local_path_idx()
             path, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
                 self._current_pose.position, self._current_speed, ignore_previous=True
             )
+            self._set_local_path_idx()
+            self._local_path.set_alternate_speed_next_sign(self._local_path_idx)
+            self._emergency_break_pub.publish(Bool(False))
 
     def _publish_local_path_msg(self, send_empty=False):
         self._local_path.publish(send_empty=send_empty)
@@ -151,9 +156,20 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
             self._publish_local_path_msg()
-        # elif self._is_stopped() and self._local_path_idx < len(self._local_path) and len(self._local_path) > 0:
-        #     rospy.logwarn_throttle(5, "[local planner] car is waiting for event (red light / stop / yield)")
-        #     self._handle_clear_event()  # todo change this handler
+        elif (
+            self._last_sign is not None
+            and self._is_stopped()
+            and self._local_path_idx < len(self._local_path)
+            and len(self._local_path) > 0
+        ):
+            try:
+                sig_type = TrafficSignIDGermany(self._last_sign).name
+            except ValueError:
+                sig_type = None if self._last_sign is None else self._last_sign.type
+            rospy.logwarn_throttle(
+                5, f"[local planner] car is waiting for event {sig_type} " f"(light color={self._traffic_light_color})"
+            )
+            self._handle_stop_event()  # todo change this handler
         elif self._planner_at_end_of_local_path():
             rospy.loginfo_throttle(5, "[local planner] local planner is replanning (end of local path)")
             self._replan_local_path()
@@ -162,20 +178,67 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
             self._publish_local_path_msg()
 
+        cur = None if self._last_sign is None else self._last_sign.type
+        ign = None if len(self._cleared_signs) == 0 else self._cleared_signs[-1].type
+        rospy.loginfo_throttle(5, f"[local planner] signs last={cur}, ign={ign}")
         self._check_for_signs_on_path()
         # if self._last_sign is not None:
         #     self._ignore_sign = self._last_sign
 
-    def _reset_detected_signs(self):
-        self._last_sign = self._ignore_sign = None
+    def _add_cleared_signal(self, signal):
+        if signal is None:
+            return False
+        rospy.logerr(f"cleared signal {signal.type} forever.")
+        if len(self._cleared_signs) == 0 or (
+            len(self._cleared_signs) > 0 and not LocalPath.signs_equal(self._cleared_signs[-1], signal)
+        ):
+            self._local_path.reset_alternate_speed()
+            self._cleared_signs.append(signal)
+            self._last_sign = None
+            return True
+        return False
+
+    def _handle_stop_event(self):
+        if self._last_sign is None:
+            return
+        if (
+            self._last_sign.type == TrafficSignIDGermany.STOP.value
+            and dist(self._last_sign.point, self._current_pose.position) < 5
+        ):
+            rospy.loginfo_throttle(3, "[local planner] waiting for path to clear (stop sign)")
+            rospy.sleep(3)
+            rospy.logerr_throttle(5, "[local planner] assuming path is clear (stop sign)")
+            self._reset_detected_signs(and_publish=True)
+
+    def _reset_detected_signs(self, and_publish=False):
+
+        if self._last_sign is None:
+            return
+        to_clear = copy.copy(self._last_sign)
+        rospy.logerr_throttle(3, f"clearing next sign... {to_clear.type}")
+        self._local_path.reset_alternate_speed()
+        if dist(self._current_pose.position, to_clear.point) > 5:
+            return  # only add to ignored list when very close
+        if self._add_cleared_signal(to_clear) and and_publish:
+            self._local_path.publish()
+            rospy.logwarn("publishing after clearing path")
 
     def _check_for_signs_on_path(self):
         if not self.rules_enabled:
             return
 
         self._last_sign, found_ignored_sign = self._local_path.set_alternate_speed_next_sign(
-            self._local_path_idx, self._ignore_sign
+            self._local_path_idx,
+            self._cleared_signs[-1] if len(self._cleared_signs) > 0 else None,
+            self._traffic_light_color,
         )
+        if self._last_sign is not None and self._last_sign.type == "LIGHT" and self._traffic_light_color == "green":
+            rospy.logwarn_throttle(1, "[local planner] resuming from red light")
+            self._reset_detected_signs(and_publish=True)
+
+        # if last_sign is not None:
+        #     self._last_sign = last_sign
+        # rospy.logerr_throttle(2, f"last sign: {self._last_sign} {found_ignored_sign}")
         # if self._last_sign is not None and not self._traffic_light_detector_enabled:
         #     self._traffic_light_detector_enabled = True
         #     self._traffic_light_detector_toggle_pub.publish(Bool(True))
@@ -186,12 +249,10 @@ class LocalPlanner:
         #     rospy.loginfo_throttle(1, "[local planner] disabling traffic light detection")
 
         msg_info = []
-        for i, sign_list in enumerate(self._local_path.traffic_signals):
-            for x in sign_list:
-                msg_info.append(f"{x.type} in {(i * LocalPath.DENSE_POINT_DISTANCE):.1f}m")
-        rospy.loginfo_throttle(
-            10, f"[local planner] signs on path: {', '.join(msg_info) if len(msg_info) > 0 else 'None'}"
-        )
+        for i, (sign, idx, distance, match) in enumerate(self._local_path.traffic_signals):
+            p_dist = dist(self._current_pose.position, sign.point)
+            msg_info.append(f"{sign.type} ({p_dist:.1f}m)")
+        rospy.loginfo_throttle(10, f"[local planner] signs on path: [{', '.join(msg_info)}]")
 
     def _process_traffic_lights(self, msg: PafDetectedTrafficLights):
         if not self._traffic_light_detector_enabled:
@@ -203,7 +264,8 @@ class LocalPlanner:
             return
         if len(msg.states) == 0:
             self._traffic_light_color = None
-            rospy.logwarn_throttle(5, "[local planner] traffic light detection sent an empty message")
+            if self._is_stopped() and self._last_sign is not None and self._last_sign.type == "LIGHT":
+                rospy.logerr_throttle(5, "[local planner] traffic light detection sent an empty message")
             return
 
         def filter_msgs():
@@ -222,18 +284,15 @@ class LocalPlanner:
         if len(msg.states) == 0:
             msg2 = msg
         if len(msg2.states) == 0:
+            self._traffic_light_color = None
             return
         x_list = [np.abs(p.x - 0.5) for p in msg2.positions]
         index_center = np.argmin(x_list)
 
-        self._traffic_light_color = msg2.states[index_center]
-        rospy.logwarn_throttle(
-            1, f"[local planner] traffic sign state is " f"{self._traffic_light_color}. detected: {msg2.states}"
-        )
+        self._traffic_light_color: str = msg2.states[index_center]
+        rospy.loginfo_throttle(1, f"[local planner] {self._traffic_light_color.upper()} {msg2.states}")
         if self._traffic_light_color == "green":
-            self._ignore_sign = self._last_sign
-            self._local_path.reset_alternate_speed()
-            self._local_path.publish()
+            self._reset_detected_signs(and_publish=True)
 
     def _replan_local_path(self, ignore_prev=False):
         t = time.perf_counter()
@@ -242,20 +301,11 @@ class LocalPlanner:
             return
 
         self._last_replan_request_loc = t
-        self._reset_detected_signs()
         msg, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
             self._current_pose.position, self._current_speed, ignore_previous=ignore_prev, min_section=self._to_section
         )
-
-    # def _allowed_from_stop(self):
-    #     return True or self._can_continue_on_path(None)  # todo
-    #
-    # def _can_continue_on_path(self, signal_type):
-    #     if signal_type is None:
-    #         return True
-    #     if signal_type == "LIGHT":
-    #         return self._traffic_light_color == TrafficLightState.GREEN
-    #     return True  # todo joining lanes / lane change free ??
+        self._set_local_path_idx()
+        self._local_path.set_alternate_speed_next_sign(self._local_path_idx)
 
     def _is_stopped(self):
         margin = 0.5

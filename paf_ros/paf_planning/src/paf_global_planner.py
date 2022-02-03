@@ -277,8 +277,10 @@ class GlobalPlanner:
     def _choose_route(routes: List[Route]):
         if len(routes) == 0:
             return None
-        idx = np.argmin([x.path_length[-1] for x in routes])
+        lengths = [x.path_length[-1] for x in routes]
+        idx = np.argmin(lengths)
         route = routes[idx]
+        rospy.logwarn(f"[global planner] found {len(routes)} routes with lengths {[round(x) for x in lengths]}")
         return route
 
     @staticmethod

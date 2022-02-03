@@ -40,7 +40,7 @@ class GlobalPath:
         self._graph = None
         self.route = None
         self.sections_visited = 0
-        self.signals_on_path = []
+        self.signals_on_path = msg.signals
         self._lanelet_network = lanelet_network
         self.lanelet_ids = lanelet_ids
 
@@ -440,7 +440,7 @@ class GlobalPath:
             [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
         )
         anchors.append((0, i, i))
-        print(blobs)
+        # print(blobs)
         return list(zip(blobs, anchors))
 
     def get_paf_lanelet_matrix(
@@ -662,7 +662,7 @@ class GlobalPath:
             rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
         except rospy.exceptions.ROSException:
             pass
-
+        msg.signals = self.signals_on_path
         self.route = msg
         return msg
 
