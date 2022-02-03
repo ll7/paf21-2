@@ -8,6 +8,7 @@ from .HelperFunctions import dist, closest_index_of_point_list, expand_sparse_li
 
 import numpy as np
 
+from .MapManager import MapManager
 from .SpeedCalculator import SpeedCalculator
 from .Spline import (
     calc_bezier_curve,
@@ -184,6 +185,8 @@ class LocalPath:
             return None, found_ignored_sign
 
         self.set_alternate_speed()
+        offset = round(-10 / LocalPath.DENSE_POINT_DISTANCE) if not MapManager.light_is_opposite_stop_point() else 0
+        index_dense = max(0, index_dense + offset)
         n = round(1 / LocalPath.DENSE_POINT_DISTANCE)
         i1 = max(index_dense - 1, 0)
         self.alternate_speeds[i1 : index_dense + 2] = 0

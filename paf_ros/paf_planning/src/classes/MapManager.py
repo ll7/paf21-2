@@ -74,6 +74,10 @@ class MapManager:
         return initial_pose
 
     @staticmethod
+    def light_is_opposite_stop_point():
+        return MapManager.get_map() not in ["Town02"]
+
+    @staticmethod
     def get_demo_route() -> Tuple[Optional[PoseWithCovarianceStamped], Optional[List[Point2D]]]:
         """
         Get Standard Loop route on request
@@ -101,7 +105,7 @@ class MapManager:
             ]
         elif town == "Town03":
             return MapManager.point_to_pose((-6, -159), 180), [
-                Point2D(-49, -134),
+                Point2D(-49, -135),
                 Point2D(122, 201.6),
                 Point2D(-7, 43.5),
                 Point2D(8.8, 84),
