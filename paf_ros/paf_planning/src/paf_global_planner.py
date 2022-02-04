@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import time
 from collections import deque
 
 from commonroad_route_planner.route import Route
@@ -16,7 +15,7 @@ from commonroad.scenario.scenario import Scenario
 from commonroad.scenario.trajectory import State
 from commonroad_route_planner.route_planner import RoutePlanner
 
-from geometry_msgs.msg import Pose, PoseWithCovarianceStamped, Twist
+from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from paf_messages.msg import (
     PafLaneletRoute,
@@ -29,7 +28,9 @@ from classes.HelperFunctions import dist, find_closest_lanelet, find_lanelet_yaw
 from classes.GlobalPath import GlobalPath
 from classes.MapManager import MapManager
 from classes.SpeedCalculator import SpeedCalculator
-from std_msgs.msg import Empty, Bool
+from paf_messages.srv import PafRoutingService, PafRoutingServiceResponse
+from std_msgs.msg import Bool, Empty as Empty_msg
+from std_srvs.srv import Empty as Empty_srv
 from tf.transformations import euler_from_quaternion
 
 
@@ -54,24 +55,22 @@ class GlobalPlanner:
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider_single)
-        rospy.Subscriber(
-            "/paf/paf_local_planner/routing_request_waypoints", PafLocalPath, self._routing_provider_waypoints()
-        )
-        rospy.Subscriber("/paf/paf_local_planner/routing_request_random", Empty, self._routing_provider_random)
-        rospy.Subscriber(
-            "/paf/paf_local_planner/routing_request_standard_loop", Empty, self._routing_provider_standard_loop
-        )
-        rospy.Subscriber("/paf/paf_starter/teleport", Pose, self._teleport)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
-        rospy.Subscriber("/paf/paf_local_planner/reroute", Empty, self._reroute_provider)
         rospy.Subscriber("/paf/paf_local_planner/rules_enabled", Bool, self._change_rules, queue_size=1)
 
+        rospy.Service("/paf/paf_local_planner/reroute", PafRoutingService, self._reroute_provider)
+        rospy.Service(
+            "/paf/paf_local_planner/routing_request_standard_loop",
+            PafRoutingService,
+            self._routing_provider_standard_loop,
+        )
+        rospy.Service("/paf/paf_local_planner/routing_request_random", PafRoutingService, self._routing_provider_random)
+
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
-        self._teleport_pub = rospy.Publisher(f"/carla/{role_name}/initialpose", PoseWithCovarianceStamped, queue_size=1)
         self._target_on_map_pub = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
-        self._start_score_pub = rospy.Publisher("/paf/paf_validation/score/start", Empty, queue_size=1)
+        self._start_score_pub = rospy.Publisher("/paf/paf_validation/score/start", Empty_msg, queue_size=1)
 
     def _change_rules(self, msg: Bool):
         rospy.set_param("rules_enabled", msg.data)
@@ -82,9 +81,9 @@ class GlobalPlanner:
             f"Speed limits will change after starting a new route."
         )
 
-    def _reroute_provider(self, _: Empty = None):
+    def _reroute_provider(self, _: Empty_srv = None):
         rospy.logwarn("[global planner] rerouting...")
-        self._routing_provider_waypoints(reroute=True)
+        return self._routing_provider_waypoints(reroute=True)
 
     def _any_target_anywhere(self, p_home) -> np.ndarray:
         # return np.array([229., -100.])
@@ -102,18 +101,16 @@ class GlobalPlanner:
         return lanelet_p
 
     def _find_closest_position_on_lanelet_network(self) -> Tuple[np.ndarray, float]:
-        lanelet_id = find_closest_lanelet(
-            self._scenario.lanelet_network, Point2D(self._position[0], self._position[1])
-        )[0]
+        pos = self._position[0], self._position[1]
+        lanelet_id = find_closest_lanelet(self._scenario.lanelet_network, Point2D(*pos))[0]
         lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
-        idx = np.argmin([dist(a, self._position) for a in lanelet.center_vertices])
+        idx = np.argmin([dist(a, pos) for a in lanelet.center_vertices])
         if idx == len(lanelet.center_vertices) - 1:
             idx -= 1
         position = lanelet.center_vertices[idx]
         return position, self._yaw
 
-    def _routing_provider_standard_loop(self, _: Empty):
-        t0 = time.perf_counter()
+    def _routing_provider_standard_loop(self, _: Empty_srv):
         initial_pose, waypoints = self._standard_loop
         if waypoints is None:
             self._routing_provider_random()
@@ -129,21 +126,15 @@ class GlobalPlanner:
                 initial_pose
             )
             rospy.sleep(3)
-        success = self._routing_provider_waypoints(msg)
-        t0 = np.round(time.perf_counter() - t0, 2)
-        if success:
-            rospy.loginfo_throttle(10, f"[global planner] success planning standard loop ({t0}s)")
-        else:
-            rospy.logerr_throttle(10, f"[global planner] failed planning standard loop ({t0}s)")
+        return self._routing_provider_waypoints(msg)
 
-    def _routing_provider_random(self, _: Empty = None):
-        t0 = time.perf_counter()
+    def _routing_provider_random(self, _: Empty_srv = None):
         self._last_route = None
         try:
             position, yaw = self._find_closest_position_on_lanelet_network()
         except IndexError:
             rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
-            return
+            return PafRoutingServiceResponse()
 
         targets = [position]
         for i in range(1):
@@ -152,17 +143,17 @@ class GlobalPlanner:
                 targets.append(target)
         msg = PafLocalPath()
         msg.points = [Point2D(t[0], t[1]) for t in targets[1:]]
-        self._routing_provider_waypoints(msg, position, yaw)
-
-        t0 = np.round(time.perf_counter() - t0, 2)
-        rospy.loginfo_throttle(10, f"[global planner] success ({t0}s)")
+        return self._routing_provider_waypoints(msg, position, yaw)
 
     def _routing_provider_single(self, msg: PafRoutingRequest = None, position=None, yaw=None):
         msgs = PafLocalPath()
         msgs.points = [Point2D(msg.target[0], msg.target[1])]
-        self._routing_provider_waypoints(msgs, position, yaw)
+        self._routing_pub.publish(self._routing_provider_waypoints(msgs, position, yaw))
 
     def _routing_provider_waypoints(self, msgs: PafLocalPath = None, position=None, yaw=None, reroute=False):
+        def failure():
+            return PafRoutingServiceResponse()
+
         if msgs is None:
             msgs = PafLocalPath()
             msgs.points = list(self._waypoints)
@@ -176,22 +167,20 @@ class GlobalPlanner:
                 position, yaw = self._find_closest_position_on_lanelet_network()
             except IndexError:
                 rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
-                return False
+                return failure()
         if len(self._waypoints) == 0:
             if reroute:
                 rospy.logwarn_throttle(1, "[global planner] waypoints are empty, rerouting to random location...")
                 return self._routing_provider_random()
             else:
                 rospy.loginfo_throttle(1, "[global planner] route planning waiting for route input...")
-                return False
+                return failure()
         rospy.loginfo_throttle(
             1, f"[global planner] waypoints in queue: " f"{[(int(p.x), int(p.y)) for p in self._waypoints]}"
         )
         draw_msg = PafTopDownViewPointSet()
         draw_msg.label = "planning_target"
         draw_msg.color = 153, 0, 153
-
-        self._routing_pub.publish(PafLaneletRoute())
 
         if reroute:
             target = self._rerouting_target
@@ -206,23 +195,15 @@ class GlobalPlanner:
                 f"[global planner] routing from {list(position)} to {[target.x, target.y]} failed",
             )
             self._waypoints.appendleft(target)
-            return False
+            return failure()
 
         lanelet_ids = route.list_ids_lanelets
         route_paf = GlobalPath(self._scenario.lanelet_network, lanelet_ids, target).as_msg()
         self._lanelet_ids_route = lanelet_ids
         self._last_route = route_paf
-        self._routing_pub.publish(route_paf)
         self._target_on_map_pub.publish(draw_msg)
-
-        self._start_score_pub.publish(Empty())
-        return True
-
-    def _teleport(self, msg: Pose):
-        msg_out = PoseWithCovarianceStamped()
-        msg_out.header.stamp = rospy.Time.now()
-        msg_out.pose = msg
-        self._teleport_pub.publish(msg_out)
+        self._start_score_pub.publish(Empty_msg())
+        return route_paf
 
     def _odometry_provider(self, odometry: Odometry):
         pose = odometry.pose.pose

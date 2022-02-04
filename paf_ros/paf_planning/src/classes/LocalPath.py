@@ -26,6 +26,8 @@ class LocalPath:
     STRAIGHT_TO_TARGET_DIST = 10
     END_OF_ROUTE_SPEED = 5
     SPLINE_IN_CURVE_RADIUS = 15
+    OFFSET_LIGHTS_EU_M = 10  # stopping points x meters before traffic light
+    CLEARING_SIGN_DIST = 5
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None, plan_maximum_distance=False):
         self._local_path_signals = []  # this stores lane change signals
@@ -151,10 +153,12 @@ class LocalPath:
     def reset_alternate_speed(self):
         self.alternate_speeds = None
 
-    def set_alternate_speed(self, index_start_dense: int = 0, speed: Union[np.ndarray, List[float]] = None):
+    def set_alternate_speed(
+        self, index_start_dense: int = 0, speed: Union[np.ndarray, List[float]] = None, reset=False
+    ):
         if len(self) is None:
             return
-        if self.alternate_speeds is None:
+        if reset or self.alternate_speeds is None:
             self.alternate_speeds = np.ones_like(self.message.target_speed) * SpeedCalculator.MAX_SPEED
         if speed is None or len(speed) == 0:
             return
@@ -183,17 +187,27 @@ class LocalPath:
         if chosen_sign is None:
             return None, found_ignored_sign
 
-        self.set_alternate_speed()
-        offset = round(-10 / LocalPath.DENSE_POINT_DISTANCE) if not MapManager.light_is_opposite_stop_point() else 0
+        offset = (
+            round(-LocalPath.OFFSET_LIGHTS_EU_M / LocalPath.DENSE_POINT_DISTANCE)
+            if not MapManager.light_is_opposite_stop_point()
+            else 0
+        )
         index_dense = max(0, index_dense + offset)
         n = round(1 / LocalPath.DENSE_POINT_DISTANCE)
         i1 = max(index_dense - 1, 0)
-        self.alternate_speeds[i1 : index_dense + 2] = 0
-        self.alternate_speeds[max(i1 - n, 0) : index_dense - 1] = 2
-        self.alternate_speeds[index_dense + 2 :] = -2
 
-        self.alternate_speeds = list(np.clip(self.message.target_speed, 0, self.alternate_speeds))
-        self.alternate_speeds = self.speed_calc.add_linear_deceleration(self.alternate_speeds)
+        self.set_alternate_speed()
+
+        try:
+            self.alternate_speeds[i1 : index_dense + 2] = 0
+            self.alternate_speeds[max(i1 - n, 0) : index_dense - 1] = 2
+            self.alternate_speeds[index_dense + 2 :] = -2
+            self.alternate_speeds = list(np.clip(self.message.target_speed, 0, self.alternate_speeds))
+            self.alternate_speeds = self.speed_calc.add_linear_deceleration(self.alternate_speeds)
+        except (ValueError, TypeError):
+            self.alternate_speeds = None
+            return None, None
+
         self.debug_pts += self.message.points[i1 : index_dense + 2]
         self._draw_path_pts(self.debug_pts, "lanechnge", (200, 24, 0))
 
@@ -341,10 +355,9 @@ class LocalPath:
         if not send_empty:
             if self.alternate_speeds is not None:
                 msg.target_speed = self.alternate_speeds
-                rospy.logwarn_throttle(5, "[local planner] pub alt speed")
+                rospy.loginfo_throttle(5, "[local planner] publishing alternative speed")
             else:
                 msg.target_speed = self.message.target_speed
-                rospy.logwarn_throttle(5, "[local planner] pub orig speed")
             msg.points = self.message.points
             if len(msg.points) == 0:
                 return
