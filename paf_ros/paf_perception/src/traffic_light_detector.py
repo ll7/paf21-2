@@ -96,7 +96,6 @@ class TrafficLightDetector:
         :param use_gpu: whether the classification model should be loaded to the gpu
         """
 
-        rospy.init_node("traffic_light_detector", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         self.traffic_light_publisher: rospy.Publisher = rospy.Publisher(
@@ -365,13 +364,41 @@ class TrafficLightDetector:
         rospy.spin()
 
 
+def dummy_detector():
+    try:
+        publisher: rospy.Publisher = rospy.Publisher(
+            "/paf/paf_perception/detected_traffic_lights", PafDetectedTrafficLights, queue_size=1
+        )
+        rate = rospy.Rate(1 / 5)  # 20s Interval
+        i = 0
+        while not rospy.is_shutdown():
+            sig = ["green", "red"][i]
+            rospy.logwarn(f"[traffic light detector] sending dummy signal: '{sig}'")
+            msg = PafDetectedTrafficLights()
+            msg.states = [sig]
+            msg.positions = [Point2D(0.5, 0.5)]
+            msg.distances = [20.0]
+            publisher.publish(msg)
+            i += 1
+            i %= 2
+            rate.sleep()
+    except rospy.ROSInterruptException:
+        pass
+
+
 if __name__ == "__main__":
+    rospy.init_node("traffic_light_detector", anonymous=True)
+
+    if rospy.get_param("~dummy"):
+        dummy_detector()
+        exit()
+
     try:
         node = TrafficLightDetector()
     except RuntimeError:
         rospy.logerr("[traffic light detector] Unable to use gpu (out of memory). Fallback to CPU...")
         node = TrafficLightDetector(use_gpu=False)
-    debug = False
+    debug = True
     # Show case code:
     if debug:
         from RGBCamera import RGBCamera

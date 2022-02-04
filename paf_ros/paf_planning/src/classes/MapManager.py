@@ -75,7 +75,10 @@ class MapManager:
 
     @staticmethod
     def light_is_opposite_stop_point():
-        return MapManager.get_map() not in ["Town02"]
+        try:
+            return MapManager.get_map() not in ["Town02"]
+        except ConnectionRefusedError:
+            return True
 
     @staticmethod
     def get_demo_route() -> Tuple[Optional[PoseWithCovarianceStamped], Optional[List[Point2D]]]:
@@ -244,7 +247,7 @@ class MapManager:
 
         pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
         pts_loc_1 = local_path_obj.sparse_local_path
-        sign_positions = [x.point for x in local_path_obj.get_all_traffic_signals()]
+        sign_positions = [x.point for x in local_path_obj.traffic_signals]
         local_path_obj.set_alternate_speed_next_sign(0)
 
         xy1, minima1 = pts_to_x_y(pts_gl_1)

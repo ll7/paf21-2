@@ -1,3 +1,5 @@
 <launch>
-  <node pkg="paf_perception" type="traffic_light_detector.py" name="traffic_light_detector" output="screen" />
+  <node pkg="paf_perception" type="traffic_light_detector.py" name="traffic_light_detector" output="screen">
+    <param name="dummy" value="false"/> <!-- true = green / red changing every 5 seconds / false = detect for real -->
+  </node>
 </launch>

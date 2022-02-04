@@ -268,12 +268,18 @@ class LocalPlanner:
                 rospy.logerr_throttle(5, "[local planner] traffic light detection sent an empty message")
             return
 
+        def traffic_light_limits():
+            if MapManager.light_is_opposite_stop_point():
+                return 0.25, 0.75, 50
+            return 0.25, 1, 20
+
         def filter_msgs():
+            limit_l, limit_r, limit_dist = traffic_light_limits()
             new_msg = PafDetectedTrafficLights()
             for state, distance, position in zip(msg.states, msg.distances, msg.positions):
-                if distance > 50:
+                if distance > limit_dist:
                     continue
-                if position.x < 0.25 or position.x > 0.75:
+                if position.x < limit_l or position.x > limit_r:
                     continue
                 new_msg.states.append(state)
                 new_msg.distances.append(distance)
@@ -285,6 +291,7 @@ class LocalPlanner:
             msg2 = msg
         if len(msg2.states) == 0:
             self._traffic_light_color = None
+            rospy.loginfo_throttle(1, "[local planner] N/A []")
             return
         x_list = [np.abs(p.x - 0.5) for p in msg2.positions]
         index_center = np.argmin(x_list)

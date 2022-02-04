@@ -74,10 +74,8 @@ class LocalPath:
         continued_times = 0
         out = []
         for p in self.get_all_traffic_signals():
-            if len(out) > 0 and continued_times > 5:
+            if continued_times > 5:
                 break
-            if len(out) > 0 and dist(p.point, self.message.points[0]) > 100:
-                continue
             idx0, distance = closest_index_of_point_list(self.message.points[last_idx:], p.point, accuracy)
             idx = idx0 + last_idx
             match = self.message.points[idx]
@@ -95,24 +93,27 @@ class LocalPath:
         out = list(sorted(out, key=lambda x: x[1]))
         if len(out) < 2:
             return out
-
         out2 = [out[0]]
         for x1, x2 in zip(out, out[1:]):
-            if x1[0].type != x2[0].type:
-                out2.append(x2)
-                continue
             delta = x2[1] - x1[1]
             if delta > accuracy:
                 out2.append(x2)
+            elif x1[0].type != x2[0].type:
+                if x1[0].type == "LIGHT":
+                    continue
+                elif x2[0].type == "LIGHT":
+                    out2[-1] = x2
+                    continue
+                elif x1[0].type in SpeedCalculator.MUST_STOP_EVENTS:
+                    continue
+                elif x2[0].type in SpeedCalculator.MUST_STOP_EVENTS:
+                    out2[-1] = x2
+                    continue
+                else:
+                    continue
             elif return_negative:
                 p, _, distance, match = x2
                 out.append((p, -1, distance, match))
-
-        if len(self.global_path.signals_on_path) == 0:
-            rospy.logerr("no signals on global path!!")
-        # else:
-        #     rospy.logerr_throttle(3, f"found {len(self.global_path.signals_on_path)} signals on gp: "
-        #                              f"{[[x[0].type, x[1]] for x in out]}")
         return out2
 
     @staticmethod
@@ -129,7 +130,7 @@ class LocalPath:
         sign_group = "NONE"
         found_ignored = False
 
-        for i, (traffic_signal, idx_dense, distance, match) in enumerate(self.get_signal_indices()):
+        for i, (traffic_signal, idx_dense, distance, match) in enumerate(self.traffic_signals):
             if idx_dense < from_index:
                 continue
             if to_index is not None and idx_dense > to_index:
@@ -172,9 +173,7 @@ class LocalPath:
         index_dense, chosen_sign, sign_group, found_ignored_sign = self.get_next_traffic_signal(
             current_dense_index, ignore_sign
         )
-        t1 = None if chosen_sign is None else chosen_sign.type
-        t2 = None if ignore_sign is None else ignore_sign.type
-        rospy.logerr_throttle(2, f"found sign is {t1} / ignored {t2} / " f"{current_dense_index}->{index_dense}")
+
         if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_sign_color == "green":
             return chosen_sign, found_ignored_sign
 
