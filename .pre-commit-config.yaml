@@ -41,10 +41,6 @@ repos:
     hooks:
       - id: interrogate
         args: [ -vv, -I, -i, -m, -M, -n, -C, --fail-under=80, -e, CRDesigner_Modified_Files/]
-  - repo: https://github.com/timothycrosley/isort
-    rev: 5.7.0
-    hooks:
-      - id: isort
   - repo: local
     hooks:
       - id: build

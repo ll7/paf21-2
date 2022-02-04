@@ -1,4 +1,4 @@
-from enum import Enum, EnumMeta
+from enum import Enum
 
 import numpy
 import numpy as np
@@ -60,13 +60,16 @@ class SegmentationCamera:
     The segmentation camera interface that allows us to  access the segmentation camera
     """
 
-    def __init__(self, role_name: str = "ego_vehicle", id: str = "front",queue_size=None):
+    def __init__(self, role_name: str = "ego_vehicle", id: str = "front", queue_size=None):
 
         self.image = None
         self.bridge = CvBridge()
         self.__subscriber = rospy.Subscriber(
-            "/carla/{}/camera/semantic_segmentation/{}/image_segmentation".format(role_name, id), Image,
-            self.__update_image,queue_size=queue_size)
+            "/carla/{}/camera/semantic_segmentation/{}/image_segmentation".format(role_name, id),
+            Image,
+            self.__update_image,
+            queue_size=queue_size,
+        )
 
         self.__listener = None
 
@@ -76,10 +79,10 @@ class SegmentationCamera:
         :param image_msg: the message
         :return: None
         """
-        self.image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8')
+        self.image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding="rgb8")
 
-        if self.__listener != None:
-            self.__listener(self.image,image_msg.header.stamp)
+        if self.__listener is not None:
+            self.__listener(self.image, image_msg.header.stamp)
 
     def get_image(self):
         """
@@ -88,13 +91,13 @@ class SegmentationCamera:
         """
         return self.image
 
-    def set_on_image_listener(self, func:Callable[[numpy.ndarray,Time],None]):
+    def set_on_image_listener(self, func: Callable[[numpy.ndarray, Time], None]):
         """
         Set function to be called with the segmentation image as parameter
         :param func: the function
         :return: None
         """
-        self.__listener = func;
+        self.__listener = func
 
     @classmethod
     def filter_for_tags(cls, image: np.ndarray, tags: Set[Tag]) -> np.ndarray:
@@ -106,7 +109,7 @@ class SegmentationCamera:
         """
         masks = []
         for tag in tags:
-            color = tag.color;
+            color = tag.color
             red_mask = image[:, :, 0] == color[0]
             green_mask = image[:, :, 1] == color[1]
             blue_mask = image[:, :, 2] == color[2]
@@ -121,20 +124,25 @@ class SegmentationCamera:
 if __name__ == "__main__":
     rospy.init_node("SegmentationTest")
 
-
-    def show_image(image,_):
+    def show_image(image, _):
         (H, W) = image.shape[:2]
         max_width = 800
         new_width = int(max_width)
         new_height = int(H * max_width / W)
-        image = cv2.resize(image, (new_width,new_height,), interpolation=cv2.INTER_AREA)
+        image = cv2.resize(
+            image,
+            (
+                new_width,
+                new_height,
+            ),
+            interpolation=cv2.INTER_AREA,
+        )
         image = SegmentationCamera.filter_for_tags(image, {Tag.RoadLine})
-        image = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         bw_image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
         # show the output image
         cv2.imshow("Segmentation", bw_image)
         cv2.waitKey(1)
-
 
     cam = SegmentationCamera(id="street")
 
