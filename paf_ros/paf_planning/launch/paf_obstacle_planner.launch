@@ -1,0 +1,3 @@
+<launch>
+  <node pkg="paf_planning" type="paf_obstacle_planner.py" name="paf_obstacle_planner" output="screen" />
+</launch>

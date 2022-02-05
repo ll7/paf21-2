@@ -244,8 +244,8 @@ def get_angle_between_vectors(
     if hasattr(v2, "y"):
         v2 = v2.x, v2.y
 
-    v1 = np.ndarray(v1)
-    v2 = np.ndarray(v2)
+    v1 = np.array(v1)
+    v2 = np.array(v2)
 
     if not is_normed:
         v1 = v1 / dist(v1, (0, 0))
