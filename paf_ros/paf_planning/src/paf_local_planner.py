@@ -106,9 +106,8 @@ class LocalPlanner:
             call_service = rospy.ServiceProxy(service_name, PafRoutingService)
             response = call_service()
             self._process_global_path(response.route)
-            return response.route
-        except rospy.ServiceException:
-            rospy.logerr_throttle(1, f"service call failed: {service_name}")
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
+            rospy.logerr_throttle(1, f"[local planner] {e}")
 
     def _change_rules(self, msg: Bool):
         rospy.set_param("rules_enabled", msg.data)
@@ -135,8 +134,10 @@ class LocalPlanner:
                 self._current_pose.position, self._current_speed, ignore_previous=True
             )
             self._set_local_path_idx()
-            self._local_path.set_alternate_speed_next_sign(self._local_path_idx)
+            if self.rules_enabled:
+                self._local_path.set_alternate_speed_next_sign(self._local_path_idx)
             self._emergency_break_pub.publish(Bool(False))
+            self._publish_local_path_msg()
 
     def _publish_local_path_msg(self, send_empty=False):
         self._local_path.publish(send_empty=send_empty)
@@ -165,7 +166,6 @@ class LocalPlanner:
         elif not self._on_local_path():
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
-            self._publish_local_path_msg()
         elif (
             self._last_sign is not None
             and self._is_stopped()
@@ -183,7 +183,6 @@ class LocalPlanner:
         elif self._planner_at_end_of_local_path():
             rospy.loginfo_throttle(5, "[local planner] local planner is replanning (end of local path)")
             self._replan_local_path()
-            self._publish_local_path_msg()
         else:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
             self._publish_local_path_msg()
@@ -196,7 +195,7 @@ class LocalPlanner:
         #     self._ignore_sign = self._last_sign
 
     def _add_cleared_signal(self, signal):
-        if signal is None:
+        if signal is None or not self.rules_enabled:
             return False
         if len(self._cleared_signs) == 0 or (
             len(self._cleared_signs) > 0 and not LocalPath.signs_equal(self._cleared_signs[-1], signal)
@@ -221,7 +220,7 @@ class LocalPlanner:
 
     def _reset_detected_signs(self, and_publish=False):
 
-        if self._last_sign is None:
+        if self._last_sign is None or not self.rules_enabled:
             return
         to_clear = copy.copy(self._last_sign)
         rospy.logerr_throttle(3, f"clearing next sign... {to_clear.type}")
@@ -241,8 +240,12 @@ class LocalPlanner:
             self._cleared_signs[-1] if len(self._cleared_signs) > 0 else None,
             self._traffic_light_color,
         )
-        if self._last_sign is not None and self._last_sign.type == "LIGHT" and self._traffic_light_color == "green":
-            rospy.logwarn_throttle(1, "[local planner] resuming from red light")
+        if (
+            self._last_sign is not None
+            and self._last_sign.type == "LIGHT"
+            and self._traffic_light_color in ["green", "yellow"]
+        ):
+            rospy.logwarn_throttle(1, f"[local planner] resuming from red light #{self._traffic_light_color}")
             self._reset_detected_signs(and_publish=True)
 
         msg_info = []
@@ -295,8 +298,11 @@ class LocalPlanner:
 
         self._traffic_light_color: str = msg2.states[index_center]
         rospy.loginfo_throttle(1, f"[local planner] {self._traffic_light_color.upper()} {msg2.states}")
-        if self._traffic_light_color == "green":
+        if self._traffic_light_color in ["green", "yellow"]:
+            rospy.loginfo_throttle(1, f"[local planner] clearing now #{self._traffic_light_color.upper()}")
             self._reset_detected_signs(and_publish=True)
+        else:
+            rospy.loginfo_throttle(1, f"[local planner] keeping #{self._traffic_light_color.upper()}")
 
     def _replan_local_path(self, ignore_prev=False):
         t = time.perf_counter()
@@ -309,7 +315,10 @@ class LocalPlanner:
             self._current_pose.position, self._current_speed, ignore_previous=ignore_prev, min_section=self._to_section
         )
         self._set_local_path_idx()
-        self._local_path.set_alternate_speed_next_sign(self._local_path_idx)
+        if self.rules_enabled:
+            self._local_path.set_alternate_speed_next_sign(self._local_path_idx)
+
+        self._publish_local_path_msg()
 
     def _is_stopped(self):
         margin = 0.5

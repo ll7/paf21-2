@@ -178,7 +178,7 @@ class LocalPath:
             current_dense_index, ignore_sign
         )
 
-        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_sign_color == "green":
+        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_sign_color in ["green", "yellow"]:
             return chosen_sign, found_ignored_sign
 
         if found_ignored_sign:

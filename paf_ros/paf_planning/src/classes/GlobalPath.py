@@ -1,4 +1,6 @@
+import warnings
 from collections import deque
+from warnings import catch_warnings
 
 import numpy as np
 from typing import List, Tuple, Union, Optional, Dict
@@ -381,67 +383,69 @@ class GlobalPath:
         Matches neighbouring lanes (self._adjacent_lanelets) to successors and calculates lane offsets for sections
         :return: list of tuples ( lanelets , anchors )
         """
+        with catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
 
-        def match_lane(_l_id, successors):
-            for _i, successor in enumerate(successors):
-                p0 = lanelets[_l_id].center_vertices[-1]
-                p1 = lanelets[successor].center_vertices[0]
-                if dist(p0, p1) < 0.5:  # check if last and first point are close
-                    return _i, successor
-            return None, None
+            def match_lane(_l_id, successors):
+                for _i, successor in enumerate(successors):
+                    p0 = lanelets[_l_id].center_vertices[-1]
+                    p1 = lanelets[successor].center_vertices[0]
+                    if dist(p0, p1) < 0.5:  # check if last and first point are close
+                        return _i, successor
+                return None, None
 
-        def sort_blob(blob):
-            _li = [self._lanelet_network.find_lanelet_by_id(_id) for _id in blob]
-            _lanelets = deque(_li[1:])
-            _out = deque(_li[:1])
-            iae = 0
-            for _let in _lanelets:
-                if _let in _out:
+            def sort_blob(blob):
+                _li = [self._lanelet_network.find_lanelet_by_id(_id) for _id in blob]
+                _lanelets = deque(_li[1:])
+                _out = deque(_li[:1])
+                iae = 0
+                for _let in _lanelets:
+                    if _let in _out:
+                        continue
+                    for _let2 in _out:
+                        iae += 1
+                        if _let2.adj_left == _let.lanelet_id:
+                            _out.appendleft(_let)
+                            break
+                        if _let2.adj_right == _let.lanelet_id:
+                            _out.append(_let)
+                            break
+
+                return [_let.lanelet_id for _let in _out], _li
+
+            blobs = []
+            anchors = []
+            lanelets = {}
+            for a, b, c in self._adjacent_lanelets:
+                li = b + [a] + c
+                if len(blobs) > 0 and a in blobs[-1]:
                     continue
-                for _let2 in _out:
-                    iae += 1
-                    if _let2.adj_left == _let.lanelet_id:
-                        _out.appendleft(_let)
-                        break
-                    if _let2.adj_right == _let.lanelet_id:
-                        _out.append(_let)
-                        break
+                li, __lanelets = sort_blob(li)
+                for __let in __lanelets:
+                    lanelets[__let.lanelet_id] = __let
+                blobs.append(li)
 
-            return [_let.lanelet_id for _let in _out], _li
+            for blob0, blob1 in zip(blobs, blobs[1:]):
+                anchor_l = 99  # leftmost lane to continue on
+                anchor_r = -1  # rightmost lane to continue on
+                shift_l = 99  # merging lanes from next segment on the left
+                for i, l_id in enumerate(blob0):
+                    successor_idx, successor_id = match_lane(l_id, blob1)
+                    if successor_idx is None:
+                        continue
+                    anchor_l = min(i, anchor_l)
+                    anchor_r = max(i, anchor_r)
+                    shift_l = min(successor_idx, shift_l)
+                if shift_l != 0 and len(blob0) == len(blob1) and anchor_l == 0 and anchor_r == len(blob1) - 1:
+                    shift_l = 0
+                anchors.append((shift_l, anchor_l, anchor_r))
 
-        blobs = []
-        anchors = []
-        lanelets = {}
-        for a, b, c in self._adjacent_lanelets:
-            li = b + [a] + c
-            if len(blobs) > 0 and a in blobs[-1]:
-                continue
-            li, __lanelets = sort_blob(li)
-            for __let in __lanelets:
-                lanelets[__let.lanelet_id] = __let
-            blobs.append(li)
-
-        for blob0, blob1 in zip(blobs, blobs[1:]):
-            anchor_l = 99  # leftmost lane to continue on
-            anchor_r = -1  # rightmost lane to continue on
-            shift_l = 99  # merging lanes from next segment on the left
-            for i, l_id in enumerate(blob0):
-                successor_idx, successor_id = match_lane(l_id, blob1)
-                if successor_idx is None:
-                    continue
-                anchor_l = min(i, anchor_l)
-                anchor_r = max(i, anchor_r)
-                shift_l = min(successor_idx, shift_l)
-            if shift_l != 0 and len(blob0) == len(blob1) and anchor_l == 0 and anchor_r == len(blob1) - 1:
-                shift_l = 0
-            anchors.append((shift_l, anchor_l, anchor_r))
-
-        i, _ = closest_index_of_point_list(
-            [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
-        )
-        anchors.append((0, i, i))
-        # print(blobs)
-        return list(zip(blobs, anchors))
+            i, _ = closest_index_of_point_list(
+                [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
+            )
+            anchors.append((0, i, i))
+            # print(blobs)
+            return list(zip(blobs, anchors))
 
     def get_paf_lanelet_matrix(
         self, groups: List[Tuple[List[int], Tuple[int, int, int]]]

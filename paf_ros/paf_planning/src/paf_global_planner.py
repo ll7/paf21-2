@@ -113,8 +113,7 @@ class GlobalPlanner:
     def _routing_provider_standard_loop(self, _: Empty_srv):
         initial_pose, waypoints = self._standard_loop
         if waypoints is None:
-            self._routing_provider_random()
-            return
+            return self._routing_provider_random()
 
         msg = None
         if len(self._waypoints) == 0:
@@ -143,6 +142,7 @@ class GlobalPlanner:
                 targets.append(target)
         msg = PafLocalPath()
         msg.points = [Point2D(t[0], t[1]) for t in targets[1:]]
+
         return self._routing_provider_waypoints(msg, position, yaw)
 
     def _routing_provider_single(self, msg: PafRoutingRequest = None, position=None, yaw=None):
@@ -152,6 +152,7 @@ class GlobalPlanner:
 
     def _routing_provider_waypoints(self, msgs: PafLocalPath = None, position=None, yaw=None, reroute=False):
         def failure():
+            rospy.logerr_throttle(1, "[global planner] routing failed")
             return PafRoutingServiceResponse()
 
         if msgs is None:

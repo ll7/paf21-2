@@ -364,23 +364,66 @@ class TrafficLightDetector:
         rospy.spin()
 
 
+def debug_screen():
+    from RGBCamera import RGBCamera
+    from perception_util import show_image
+
+    def store_image(image, _):
+        global detected_r, time
+
+        H, W = image.shape[:2]
+
+        if detected_r is not None:
+            # print("Detected Elements: " + str(len(detected_r)))
+            for element in detected_r:
+                # extract the bounding box coordinates
+                (x, y) = (int(element.x * W), int(element.y * H))
+                (w, h) = (int(element.w * W), int(element.h * H))
+                # draw a bounding box rectangle and label on the image
+                color_map = {
+                    Labels.TrafficLightRed: (255, 0, 0),
+                    Labels.TrafficLightGreen: (0, 255, 0),
+                    Labels.TrafficLightYellow: (255, 255, 0),
+                    Labels.TrafficLightUnknown: (0, 0, 0),
+                }
+                color = color_map.get(element.label, (0, 0, 0))
+                cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+                text = "{}-{:.1f}m: {:.4f}".format(element.label.label_text, element.distance, element.confidence)
+                cv2.putText(image, text, (x - 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+
+            # print(f"Age {(rospy.Time.now()-time).to_sec()}s")
+        show_image("Traffic light detection", image)
+        # print(f"took: {np.average(times)}ms")
+
+    def on_detected(time_in, detected_list):
+        global detected_r, time
+        detected_r = detected_list
+        time = time_in
+
+    cam = RGBCamera()
+
+    cam.set_on_image_listener(store_image)
+
+    node.set_on_detection_listener(on_detected)
+
+
 def dummy_detector():
     try:
+        dummy_i = 0
         publisher: rospy.Publisher = rospy.Publisher(
             "/paf/paf_perception/detected_traffic_lights", PafDetectedTrafficLights, queue_size=1
         )
         rate = rospy.Rate(1 / 5)  # 20s Interval
-        i = 0
         while not rospy.is_shutdown():
-            sig = ["green", "red"][i]
+            sig = ["green", "red"][dummy_i]
             rospy.logwarn(f"[traffic light detector] sending dummy signal: '{sig}'")
             msg = PafDetectedTrafficLights()
             msg.states = [sig]
             msg.positions = [Point2D(0.5, 0.5)]
             msg.distances = [20.0]
             publisher.publish(msg)
-            i += 1
-            i %= 2
+            dummy_i += 1
+            dummy_i %= 2
             rate.sleep()
     except rospy.ROSInterruptException:
         pass
@@ -389,6 +432,8 @@ def dummy_detector():
 if __name__ == "__main__":
     rospy.init_node("traffic_light_detector", anonymous=True)
 
+    detected_r: Optional[list] = None
+    time = None
     if rospy.get_param("~dummy"):
         dummy_detector()
         exit()
@@ -398,51 +443,6 @@ if __name__ == "__main__":
     except RuntimeError:
         rospy.logerr("[traffic light detector] Unable to use gpu (out of memory). Fallback to CPU...")
         node = TrafficLightDetector(use_gpu=False)
-    debug = True
-    # Show case code:
-    if debug:
-        from RGBCamera import RGBCamera
-        from perception_util import show_image
-
-        detected_r: Optional[list] = None
-        time = None
-
-        def store_image(image, _):
-            global detected_r, time
-
-            H, W = image.shape[:2]
-
-            if detected_r is not None:
-                # print("Detected Elements: " + str(len(detected_r)))
-                for element in detected_r:
-                    # extract the bounding box coordinates
-                    (x, y) = (int(element.x * W), int(element.y * H))
-                    (w, h) = (int(element.w * W), int(element.h * H))
-                    # draw a bounding box rectangle and label on the image
-                    color_map = {
-                        Labels.TrafficLightRed: (255, 0, 0),
-                        Labels.TrafficLightGreen: (0, 255, 0),
-                        Labels.TrafficLightYellow: (255, 255, 0),
-                        Labels.TrafficLightUnknown: (0, 0, 0),
-                    }
-                    color = color_map.get(element.label, (0, 0, 0))
-                    cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
-                    text = "{}-{:.1f}m: {:.4f}".format(element.label.label_text, element.distance, element.confidence)
-                    cv2.putText(image, text, (x - 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-
-                # print(f"Age {(rospy.Time.now()-time).to_sec()}s")
-            show_image("Traffic light detection", image)
-            # print(f"took: {np.average(times)}ms")
-
-        def on_detected(time_in, detected_list):
-            global detected_r, time
-            detected_r = detected_list
-            time = time_in
-
-        cam = RGBCamera()
-
-        cam.set_on_image_listener(store_image)
-
-        node.set_on_detection_listener(on_detected)
-
+    if rospy.get_param("~debug"):
+        debug_screen()
     node.start()

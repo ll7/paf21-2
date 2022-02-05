@@ -35,11 +35,11 @@ repos:
         args:
           - "--max-line-length=120"
           - "--ignore=W291,W503,W504,E203"
-  - repo: https://github.com/econchick/interrogate
-    rev: 1.4.0
-    hooks:
-      - id: interrogate
-        args: [ -vv, -I, -i, -m, -M, -n, -C, -S, -P, --fail-under=80]
+#  - repo: https://github.com/econchick/interrogate
+#    rev: 1.4.0
+#    hooks:
+#      - id: interrogate
+#        args: [ -vv, -I, -i, -m, -M, -n, -C, -S, -P, --fail-under=80]
   - repo: local
     hooks:
       - id: build
