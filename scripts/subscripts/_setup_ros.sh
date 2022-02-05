@@ -13,6 +13,6 @@ else
   echo "source /opt/ros/noetic/setup.bash" >>~/.bashrc
 fi
 source ~/.bashrc
-sudo apt install -y python3-rosdep python3-rosinstall python3-rosinstall-generator python3-wstool build-essential
+sudo apt install -y python3-rosdep python3-rosinstall python3-rosinstall-generator python3-wstool build-essential ros-noetic-cv-bridge ros-noetic-move-base ros-noetic-teb-local-planner ros-noetic-lanelet2
 sudo rosdep init
 rosdep update
