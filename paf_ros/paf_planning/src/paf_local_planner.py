@@ -12,7 +12,6 @@ import numpy as np
 from geometry_msgs.msg import Pose
 from nav_msgs.msg import Odometry
 from paf_messages.msg import (
-    PafLocalPath,
     PafLaneletRoute,
     PafTopDownViewPointSet,
     PafSpeedMsg,
@@ -81,11 +80,6 @@ class LocalPlanner:
         self._emergency_break_pub = rospy.Publisher(f"/local_planner/{role_name}/emergency_break", Bool, queue_size=1)
         self._last_replan_request_loc = time.perf_counter()
         self._last_replan_request_glob = time.perf_counter()
-        # create and start the publisher for the local path
-        # self._local_plan_publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
-        self._reacting_path_publisher = rospy.Publisher(
-            "/paf/paf_local_planner/reacting_speed", PafLocalPath, queue_size=1
-        )
         self._srv_global_reroute = "/paf/paf_local_planner/reroute"
         self._srv_global_random = "/paf/paf_local_planner/routing_request_random"
         self._srv_global_standard_loop = "/paf/paf_local_planner/routing_request_standard_loop"
@@ -191,6 +185,7 @@ class LocalPlanner:
         ign = None if len(self._cleared_signs) == 0 else self._cleared_signs[-1].type
         rospy.loginfo_throttle(5, f"[local planner] signs last={cur}, ign={ign}")
         self._check_for_signs_on_path()
+        self._publish_local_path_msg()
         # if self._last_sign is not None:
         #     self._ignore_sign = self._last_sign
 
@@ -287,9 +282,7 @@ class LocalPlanner:
             return new_msg
 
         msg2 = filter_msgs()
-        if len(msg.states) == 0:
-            msg2 = msg
-        if len(msg2.states) == 0:
+        if len(msg.states) == 0 or len(msg2.states) == 0:
             self._traffic_light_color = None
             rospy.loginfo_throttle(1, "[local planner] N/A []")
             return
@@ -362,14 +355,13 @@ class LocalPlanner:
     def _set_local_path_idx(self):
         if len(self._local_path) == 0:
             self._local_path_idx = -1
+            self._local_path.current_index = 0
         else:
             self._local_path_idx, self._distance_to_local_path = closest_index_of_point_list(
                 self._local_path.message.points, self._current_pose.position
             )
-            # self._sparse_local_path_idx, _ = closest_index_of_point_list(
-            #     self._local_path.sparse_local_path, self._current_pose.position
-            # )
             self._current_global_location = self._global_path.get_section_and_lane_indices(self._current_pose.position)
+            self._local_path.current_index = self._local_path_idx
 
     def _publish_speed_msg(self):
         if 0 <= self._local_path_idx < len(self._local_path.message.target_speed):

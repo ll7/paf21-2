@@ -50,7 +50,8 @@ class VehicleController:
         self._is_unstucking: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
-        self._obstacle_follow_min_distance: float = 4.0
+        self._obstacle_follow_min_distance: float = 2.0
+        self._obstacle_follow_target_distance: float = 15
 
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
@@ -109,7 +110,7 @@ class VehicleController:
         )
 
         self.obstacle_subscriber: rospy.Subscriber = rospy.Subscriber(
-            "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
+            "/paf/paf_obstacle_planner/following_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
         )
 
     def __run_step(self):
@@ -339,10 +340,14 @@ class VehicleController:
         """
         if not obstacle_follow_info.no_target:
             if obstacle_follow_info.distance <= self._obstacle_follow_min_distance:
-                rospy.loginfo("AHH OBSTACLE")
-                self._obstacle_follow_speed = obstacle_follow_info.speed
+                rospy.loginfo_throttle(
+                    3, f"[Actor] stopping for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
+                )
+                self._obstacle_follow_speed = 0
+            elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
+                rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
+                self._obstacle_follow_speed = obstacle_follow_info.speed * 0.9
         else:
-            rospy.loginfo("Puhhh no  OBSTACLE")
             self._obstacle_follow_speed = float("inf")
 
     def run(self):

@@ -39,8 +39,15 @@ def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray]) -> List[Poi
     :return: list of points
     """
     out = []
-    for x, y in xy_list:
-        out.append(Point2D(x, y))
+    for pt in xy_list:
+        try:
+            x, y = pt
+            pt = Point2D(x, y)
+        except TypeError:
+            pass
+        if type(pt) is not Point2D:
+            raise TypeError(f"unable to parse type {type(pt)} to Point2D")
+        out.append(pt)
     return out
 
 

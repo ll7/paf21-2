@@ -44,6 +44,7 @@ class LocalPath:
         self.speed_calc = SpeedCalculator(self.DENSE_POINT_DISTANCE)
         self.plan_maximum_distance = plan_maximum_distance
         self.debug_pts = []  # this stores points to draw / display
+        self.current_index = 0
 
     def current_indices(self, position: Point2D) -> Tuple[int, int]:
         """
@@ -352,6 +353,7 @@ class LocalPath:
         msg = PafLocalPath()
         msg.target_speed = []
         msg.points = []
+        msg.current_index = self.current_index
         if not send_empty:
             if self.alternate_speeds is not None:
                 msg.target_speed = self.alternate_speeds
