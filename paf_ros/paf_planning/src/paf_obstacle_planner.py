@@ -52,7 +52,7 @@ class ObstaclePlanner:
         return
 
     def process_vehicle(self, msg: PafObstacle):
-        _, _, pts = self.trace_obstacle_with_lanelet_network(msg)
+        _, pts = self.trace_obstacle_with_lanelet_network(msg)
         if pts is None:
             return
         self.debug_pts_veh += xy_to_pts(pts)
@@ -65,10 +65,10 @@ class ObstaclePlanner:
         angle_diff = get_angle_between_vectors(p2 - p1, velocity_vector)
         return lanelet, idx_start, angle_diff
 
-    def trace_obstacle_with_lanelet_network(self, msg: PafObstacle, trace_seconds=3, unknown_trace_length=2):
+    def trace_obstacle_with_lanelet_network(self, msg: PafObstacle, trace_seconds=2, unknown_trace_length=2):
         chosen_lanelet, idx_start = self.obstacle_lanelet(msg)
         if idx_start < 0:
-            return None
+            return None, None
         trace_meters = trace_seconds * msg.speed if msg.speed_known else unknown_trace_length
         return self.trace_lanelet(chosen_lanelet, trace_meters, idx_start, accuracy_m=1.25, offset_backwards_m=2)
 
@@ -80,10 +80,9 @@ class ObstaclePlanner:
         accuracy_m: float,
         offset_backwards_m: float,
     ):
-        forward_trace = self.__trace_lanelet(start_lanelet, forwards_m, start_index, accuracy_m, True)
-        backward_trace = self.__trace_lanelet(start_lanelet, offset_backwards_m, start_index, accuracy_m, False)
-        combined = forward_trace[2] + backward_trace[2]
-        return forward_trace, backward_trace, combined
+        _, _, forward_trace = self.__trace_lanelet(start_lanelet, forwards_m, start_index, accuracy_m, True)
+        _, _, backward_trace = self.__trace_lanelet(start_lanelet, offset_backwards_m, start_index, accuracy_m, False)
+        return forward_trace, backward_trace
 
     def __trace_lanelet(
         self,
@@ -120,7 +119,7 @@ class ObstaclePlanner:
             else:
                 successors = start_lanelet.predecessor
             for successor in successors:
-                _points, _other_traces, _all_points = self.trace_lanelet(
+                _points, _other_traces, _all_points = self.__trace_lanelet(
                     successor, remaining, 0, accuracy_m, trace_forward
                 )
                 other_traces.append((_points, _other_traces))
