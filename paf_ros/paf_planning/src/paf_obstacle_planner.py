@@ -52,10 +52,10 @@ class ObstaclePlanner:
         return
 
     def process_vehicle(self, msg: PafObstacle):
-        _, pts = self.trace_obstacle_with_lanelet_network(msg)
-        if pts is None:
+        forward, backward = self.trace_obstacle_with_lanelet_network(msg)
+        if forward is None:
             return
-        self.debug_pts_veh += xy_to_pts(pts)
+        self.debug_pts_veh += xy_to_pts(forward + backward)
 
     def angle_difference(self, lanelet_id, velocity_vector, ref_pt):
         lanelet = self.network.find_lanelet_by_id(lanelet_id)
@@ -70,7 +70,7 @@ class ObstaclePlanner:
         if idx_start < 0:
             return None, None
         trace_meters = trace_seconds * msg.speed if msg.speed_known else unknown_trace_length
-        return self.trace_lanelet(chosen_lanelet, trace_meters, idx_start, accuracy_m=1.25, offset_backwards_m=2)
+        return self.trace_lanelet(chosen_lanelet, trace_meters, idx_start, accuracy_m=1, offset_backwards_m=1)
 
     def trace_lanelet(
         self,
