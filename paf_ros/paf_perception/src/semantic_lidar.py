@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from time import perf_counter
+from typing import Tuple, Optional
 
 import sensor_msgs.point_cloud2 as pc2
 import numpy as np
@@ -19,6 +19,9 @@ class SemanticLidarNode(object):
     SENSOR_X_OFFSET = -0.3  # x value of lidar1 in paf_perception/sensors.json
     SKIP_NORMALIZING_BOUND_DIST = False
     LOG_FPS_SECS = 60
+    FORGET_OBSTACLE_TIME = 5
+    KEEP_OBSTACLE_ALIVE_TIME = 1
+    MOVING_AVERAGE_SPEED_FRAMES = 15
 
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
@@ -34,10 +37,9 @@ class SemanticLidarNode(object):
         self.xy_position = None
         self.z_orientation = None
         self.sin, self.cos = None, None
-        self.frame_time_lidar = perf_counter()
-        self.frame_time_odo = perf_counter()
 
         self.previous_obstacles = {}
+        self.previous_obstacles_info = {}
         self.previous_time = rospy.Time.now().to_time()
 
     @staticmethod
@@ -47,7 +49,7 @@ class SemanticLidarNode(object):
         :param position: x,y coordinates of the map
         :return: speed value in m/s
         """
-        max_ai_speed = 150 / 3.6  # in m/s todo: use lanelet speed limit instead
+        max_ai_speed = 50 / 3.6  # in m/s todo: use lanelet speed limit instead
         return max_ai_speed
 
     def _process_odometry(self, msg: Odometry):
@@ -55,7 +57,6 @@ class SemanticLidarNode(object):
         Odometry topic callback
         :param msg:
         """
-        t0 = rospy.Time.now().to_time()
         self.xy_position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
         current_pose = msg.pose.pose
         quaternion = (
@@ -69,14 +70,6 @@ class SemanticLidarNode(object):
         # rotation of result in opposite direction to get world coords
         self.cos = np.cos(-self.z_orientation)
         self.sin = np.sin(-self.z_orientation)
-        time = rospy.Time.now().to_time()
-        delta = time - t0
-        if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={np.round(1 / delta,2)}")
-        delta = time - self.frame_time_odo
-        if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current odo fps={np.round(1 / delta,2)}")
-        self.frame_time_odo = time
 
     def _transform_to_relative_world_pos(self, leftwards: float, backwards: float) -> tuple:
         """
@@ -97,19 +90,10 @@ class SemanticLidarNode(object):
         """
         if self.xy_position is None:
             return
-        t0 = rospy.Time.now().to_time()
         points = pc2.read_points(msg, skip_nans=True)
         sorted_points = self._process_lidar_points_by_tag_and_idx(points)
         pois_by_tag = self._process_sorted_points(sorted_points)
         self._publish_object_information(pois_by_tag)
-        time = rospy.Time.now().to_time()
-        delta = time - t0
-        if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max lidar fps={np.round(1 / delta,2)}")
-        delta = time - self.frame_time_lidar
-        if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={np.round(1 / delta,2)}")
-        self.frame_time_lidar = time
 
     def _process_sorted_points(self, sorted_points: dict) -> dict:
         """
@@ -128,30 +112,50 @@ class SemanticLidarNode(object):
             if tag not in poi_by_tag:
                 poi_by_tag[tag] = []
             for i, pts in enumerate(pts_and_tag["pts"]):
-                poi = self._calculate_bounds(pts)
+                bound_1, bound_2, closest = self._calculate_bounds(pts)
 
                 obj_id_string = f"{tag}-{obj_idx}-{i}"
                 obj_id_int = self._create_int_id(tag, obj_idx)
 
-                velocity = self._get_obj_speed(previous_obstacles, poi, obj_id_string, obj_idx, current_time)
-                if velocity is None and len(previous_obstacles) > 0:
+                speed, velocity_vector = self._get_obj_speed(
+                    previous_obstacles, (bound_1, bound_2, closest), obj_id_string, obj_idx, current_time
+                )
+                if speed is None and len(previous_obstacles) > 0:
                     pass
 
-                # error in velocity calculation
-                if velocity is not None:
-                    speed = velocity[0]
-                    velocity_vector = velocity[1]
-                else:
-                    speed = 0
-                    velocity_vector = np.zeros(2)
+                distance = self._dist(closest, self.xy_position)
 
-                distance = self._dist(poi[2], self.xy_position)
-                poi.append(distance)
-                poi.append(speed)
-                poi.append(velocity_vector)
-                poi.append(obj_id_int)
-                poi_by_tag[tag].append(poi)
-                self.previous_obstacles[obj_id_string] = poi
+                self.previous_obstacles[obj_id_string] = bound_1, bound_2, closest
+                if obj_id_string not in self.previous_obstacles_info:
+                    self.previous_obstacles_info[obj_id_string] = {}
+                    self.previous_obstacles_info[obj_id_string]["speeds"] = []
+                    self.previous_obstacles_info[obj_id_string]["points"] = []
+                    self.previous_obstacles_info[obj_id_string]["tag"] = tag
+                self.previous_obstacles_info[obj_id_string]["time"] = current_time
+
+                if speed is not None:
+                    self.previous_obstacles_info[obj_id_string]["speeds"].append(speed)
+                    self.previous_obstacles_info[obj_id_string]["points"].append(closest)
+                n = self.MOVING_AVERAGE_SPEED_FRAMES
+                prev_speeds = self.previous_obstacles_info[obj_id_string]["speeds"][-n:]
+                vectors = self.previous_obstacles_info[obj_id_string]["points"][-n:]
+                if len(prev_speeds) == n:
+                    speed = np.average(prev_speeds)
+                    velocity_vector = np.array(vectors[-1]) - np.array(vectors[0])
+                    velocity_vector = velocity_vector / np.linalg.norm(velocity_vector) * speed
+                else:
+                    speed = None
+                poi_by_tag[tag].append((bound_1, bound_2, closest, distance, speed, velocity_vector, obj_id_int))
+                self.previous_obstacles_info[obj_id_string]["obs"] = poi_by_tag[tag][-1]
+
+            for key, value in previous_obstacles.items():
+                if tag != self.previous_obstacles_info[key]["tag"] or key in self.previous_obstacles:
+                    continue
+                if current_time - self.previous_obstacles_info[key]["time"] > self.FORGET_OBSTACLE_TIME:
+                    continue
+                if current_time - self.previous_obstacles_info[key]["time"] < self.KEEP_OBSTACLE_ALIVE_TIME:
+                    poi_by_tag[tag].append(self.previous_obstacles_info[key]["obs"])
+                self.previous_obstacles[key] = value
 
         self.previous_time = current_time
         return poi_by_tag
@@ -168,7 +172,7 @@ class SemanticLidarNode(object):
         obj_id_int = obj_idx * 10 + tag_int
         return obj_id_int
 
-    def _calculate_bounds(self, pts) -> list:
+    def _calculate_bounds(self, pts) -> tuple:
         """calculate bound1, bound2, closest_point in (x,y,d)-coordinates of an object by given points
         Args: points
         Returns:
@@ -197,41 +201,44 @@ class SemanticLidarNode(object):
         # add vehicle position to change to global coordinates
         poi = [p + self.xy_position for p in poi]
 
-        return poi
+        bound_1, bound_2, closest = poi
+        return bound_1, bound_2, closest
 
     def _get_obj_speed(
-        self, previous_obstacles: dict, obstacle_bounds: list, obj_id: str, obj_idx: int, current_time: float
-    ):
-        def speed_calc(xy):
+        self, previous_obstacles: dict, obstacle_bounds: tuple, obj_id: str, obj_idx: int, current_time: float
+    ) -> Tuple[float, list]:
+        def speed_calc(xy) -> Tuple[Optional[float], list]:
             if xy is None:
-                return None
+                return None, [0.0, 0.0]
             time_delta = current_time - self.previous_time
-            distance_delta = self._dist(cur_closest, xy)
+            distance_delta = self._dist(ref_point, xy)
 
             if time_delta > 0:
-                speed = distance_delta / time_delta
-                if speed != 0.0:
-                    velocity_vector = self.normalize(cur_closest - prev_closest)
+                _speed = distance_delta / time_delta
+                _velocity_vector = self.normalize(ref_point - prev_ref_point)
+                if _speed <= self._get_max_ai_speed(xy):
+                    return _speed, _velocity_vector
+            return None, [0.0, 0.0]
 
-                velocity_vector = self.normalize(cur_closest - prev_closest)
+        def get_ref_point(bounds):
+            return np.average([bounds[0], bounds[2]], axis=0)
 
-                return [speed, velocity_vector] if speed <= self._get_max_ai_speed(xy) else None
-
-        cur_closest = obstacle_bounds[2]
+        ref_point = get_ref_point(obstacle_bounds)
         if obj_idx != 0 and obj_id in previous_obstacles:
-            prev_closest = previous_obstacles[obj_id][2]
-            velocity = speed_calc(prev_closest)
-            if velocity is not None:
-                return velocity
+            prev_ref_point = get_ref_point(previous_obstacles[obj_id])
+            speed, velocity_vector = speed_calc(prev_ref_point)
+            if speed is not None:
+                return speed, velocity_vector
 
         min_point, min_dist = None, None
         for poi in previous_obstacles.values():
-            prev_closest = poi[2]
-            dist = self._dist(cur_closest, prev_closest)
+            prev_ref_point = get_ref_point(poi)
+            dist = self._dist(ref_point, prev_ref_point)
             if min_point is None or dist < min_dist:
-                min_point, min_dist = prev_closest, dist
+                min_point, min_dist = prev_ref_point, dist
+        speed, velocity_vector = speed_calc(min_point)
 
-        return speed_calc(min_point)
+        return speed, velocity_vector
 
     def _process_lidar_points_by_tag_and_idx(self, points: list) -> dict:
         """
@@ -283,13 +290,12 @@ class SemanticLidarNode(object):
                 obstacle.closest = tuple(closest)
                 obstacle.distance = distance
                 obstacle.speed_known = speed is not None
-                if obstacle.speed_known:
+                if speed is not None:
                     obstacle.speed = speed
                     obstacle.velocity_vector = velocity_vector
                 obstacle.id = id
 
                 obstacles.obstacles.append(obstacle)
-
             self._obstacle_publisher.publish(obstacles)
 
     @staticmethod

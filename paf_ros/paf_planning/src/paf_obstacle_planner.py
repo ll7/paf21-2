@@ -28,9 +28,9 @@ class ObstaclePlanner:
 
     def _process_obstacles(self, msg: PafObstacleList):
 
-        rospy.loginfo_throttle(
-            0.5, f"[obstacle planner] processing {len(msg.obstacles)} obstacles of type '{msg.type}'"
-        )
+        # rospy.loginfo_throttle(
+        #     0.5, f"[obstacle planner] processing {len(msg.obstacles)} obstacles of type '{msg.type}'"
+        # )
 
         if msg.type == "Pedestrians":
             process_fun = self.process_pedestrian
@@ -52,12 +52,10 @@ class ObstaclePlanner:
         return
 
     def process_vehicle(self, msg: PafObstacle):
-        chosen_lanelet, idx_start = self.obstacle_lanelet(msg)
-        if idx_start < 0:
+        _, _, pts = self.trace_obstacle_with_lanelet_network(msg)
+        if pts is None:
             return
-        trace_meters = 5
-        pts = self.trace_lanelet(chosen_lanelet, trace_meters, idx_start, accuracy_m=1, offset_backwards_m=10)
-        self.debug_pts_veh += xy_to_pts(pts)  # [chosen_lanelet.center_vertices[idx_start]])
+        self.debug_pts_veh += xy_to_pts(pts)
 
     def angle_difference(self, lanelet_id, velocity_vector, ref_pt):
         lanelet = self.network.find_lanelet_by_id(lanelet_id)
@@ -67,32 +65,67 @@ class ObstaclePlanner:
         angle_diff = get_angle_between_vectors(p2 - p1, velocity_vector)
         return lanelet, idx_start, angle_diff
 
+    def trace_obstacle_with_lanelet_network(self, msg: PafObstacle, trace_seconds=3, unknown_trace_length=2):
+        chosen_lanelet, idx_start = self.obstacle_lanelet(msg)
+        if idx_start < 0:
+            return None
+        trace_meters = trace_seconds * msg.speed if msg.speed_known else unknown_trace_length
+        return self.trace_lanelet(chosen_lanelet, trace_meters, idx_start, accuracy_m=1.25, offset_backwards_m=2)
+
     def trace_lanelet(
+        self,
+        start_lanelet: Union[int, Lanelet],
+        forwards_m: float,
+        start_index: int,
+        accuracy_m: float,
+        offset_backwards_m: float,
+    ):
+        forward_trace = self.__trace_lanelet(start_lanelet, forwards_m, start_index, accuracy_m, True)
+        backward_trace = self.__trace_lanelet(start_lanelet, offset_backwards_m, start_index, accuracy_m, False)
+        combined = forward_trace[2] + backward_trace[2]
+        return forward_trace, backward_trace, combined
+
+    def __trace_lanelet(
         self,
         start_lanelet: Union[int, Lanelet],
         meters: float,
         start_index: int,
-        accuracy_m: float = 1,
-        offset_backwards_m: float = 0,
+        accuracy_m: float,
+        trace_forward: bool,
     ):
         if type(start_lanelet) is int:
             start_lanelet = self.network.find_lanelet_by_id(start_lanelet)
-        # dbp = .125
-        points = []  # list(start_lanelet.center_vertices[start_index:start_index + int(meters / dbp)])
+        points = []
+        all_points = []
+        other_traces = []
         current_distance = 0  # len(points) / dbp
+        accuracy = round(accuracy_m / 0.125)
         start_index = max(0, start_index)
-        vertices = start_lanelet.center_vertices[start_index:][:: round(accuracy_m / 0.125)]
+        if trace_forward:
+            vertices = start_lanelet.center_vertices[start_index:][::accuracy]
+        elif start_index == 0:
+            vertices = start_lanelet.center_vertices[::accuracy][::-1]
+        else:
+            vertices = start_lanelet.center_vertices[: start_index + 1][::accuracy][::-1]
         for p1, p2 in zip(vertices, vertices[1:]):
             if current_distance >= meters:
                 break
             points.append(p2)
             current_distance += dist(p1, p2)
+        all_points += points
         if current_distance < meters:
             remaining = meters - current_distance
-            successors = start_lanelet.successor
+            if trace_forward:
+                successors = start_lanelet.successor
+            else:
+                successors = start_lanelet.predecessor
             for successor in successors:
-                points += self.trace_lanelet(successor, remaining, 0)
-        return points
+                _points, _other_traces, _all_points = self.trace_lanelet(
+                    successor, remaining, 0, accuracy_m, trace_forward
+                )
+                other_traces.append((_points, _other_traces))
+                all_points += _all_points
+        return points, other_traces, all_points
 
     def obstacle_lanelet(self, msg: PafObstacle):
         pts = [np.array(pt, dtype=float) for pt in [msg.closest]]  # , msg.bound_1, msg.bound_2]]
