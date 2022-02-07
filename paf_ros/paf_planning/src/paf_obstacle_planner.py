@@ -40,7 +40,7 @@ class ObstaclePlanner:
         self.debug_pts_ped = []
         self.debug_pts_veh = []
         self.vehicle_traces = []
-        self.biker_traces = []
+        self.biker_and_peds_on_road_traces = []
         self._last_local_path = PafLocalPath()
         self._position = Point2D(0, 0)
         # rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_updated, queue_size=1)
@@ -55,7 +55,7 @@ class ObstaclePlanner:
 
         if msg.type == "Pedestrians":
             process_fun = self.process_pedestrian
-            self.biker_traces = []
+            self.biker_and_peds_on_road_traces = []
             self.debug_pts_ped = []
         elif msg.type == "Vehicles":
             process_fun = self.process_vehicle
@@ -70,15 +70,13 @@ class ObstaclePlanner:
         # self._draw_path_pts(self.debug_pts_ped if msg.type == "Pedestrians" else self.debug_pts_veh, msg.type, color)
 
     def process_pedestrian(self, msg: PafObstacle):
-        ...
-        # forward, backward = self.trace_obstacle_with_lanelet_network(msg)
-        # if forward is None:
-        #     return
-        if self.pedestrian_is_vehicle(msg):
-            self.biker_traces.append((msg, *self.trace_obstacle_with_lanelet_network(msg)))
-        # self.vehicle_traces.append((msg, forward, backward))
+        forward, backward = self.trace_obstacle_with_lanelet_network(msg)
+        if forward is None:  # not on lanelet network (pedestrians) -> ignore
+            return
+        if self.pedestrian_on_lanelet(msg):
+            self.biker_and_peds_on_road_traces.append((msg, forward, backward))
 
-    def pedestrian_is_vehicle(self, ped: PafObstacle):
+    def pedestrian_on_lanelet(self, ped: PafObstacle):
         idx, distance = closest_index_of_point_list(self._last_local_path.points, ped.closest)
         if distance <= self.ON_LANELET_DISTANCE:
             return True
@@ -110,8 +108,11 @@ class ObstaclePlanner:
         # start_idx -= 5
         start_idx = max(0, start_idx)
         obstacle: PafObstacle
-        for obstacle, forward_trace, backward_trace in self.vehicle_traces + self.biker_traces:
-            ref_pt = forward_trace[0]
+        for obstacle, forward_trace, backward_trace in self.vehicle_traces + self.biker_and_peds_on_road_traces:
+            if forward_trace is None:
+                ref_pt = obstacle.closest
+            else:
+                ref_pt = forward_trace[0]
             idx, distance_to_path = closest_index_of_point_list(msg.points[start_idx : start_idx + 500], ref_pt, acc)
             if idx == -1 or idx in path_indices:
                 # rospy.loginfo_throttle(.33, f"continue1 {idx} {idx in path_indices}")
