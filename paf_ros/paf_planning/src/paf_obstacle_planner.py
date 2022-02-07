@@ -46,8 +46,6 @@ class ObstaclePlanner:
         )
 
         self.follow_trace_points = True
-        self.debug_pts_ped = []
-        self.debug_pts_veh = []
         self.vehicle_traces = []
         self.biker_and_peds_on_road_traces = []
         self._last_local_path = PafLocalPath()
@@ -60,10 +58,8 @@ class ObstaclePlanner:
         if msg.type == "Pedestrians":
             process_fun = self.process_pedestrian
             self.biker_and_peds_on_road_traces = []
-            self.debug_pts_ped = []
         elif msg.type == "Vehicles":
             process_fun = self.process_vehicle
-            self.debug_pts_veh = []
             self.vehicle_traces = []
         else:
             raise TypeError(f"unknown obstacle type: {msg.type}")
@@ -89,7 +85,6 @@ class ObstaclePlanner:
         forward, backward, current_lanelet = self.trace_obstacle_with_lanelet_network(msg)
         if forward is None:
             return
-        self.debug_pts_veh += xy_to_pts(forward + backward)
         self.vehicle_traces.append((msg, forward, backward, current_lanelet))
 
     def angle_difference(self, lanelet_id, velocity_vector, ref_pt):

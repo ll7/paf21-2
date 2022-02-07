@@ -28,6 +28,7 @@ class LocalPath:
     SPLINE_IN_CURVE_RADIUS = 15
     OFFSET_LIGHTS_EU_M = 10  # stopping points x meters before traffic light
     CLEARING_SIGN_DIST = 5
+    RESUME_COURSE_COLORS = ["green", "yellow"]
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None, plan_maximum_distance=False):
         self._local_path_signals = []  # this stores lane change signals
@@ -179,7 +180,7 @@ class LocalPath:
             current_dense_index, ignore_sign
         )
 
-        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_sign_color in ["green", "yellow"]:
+        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_sign_color in self.RESUME_COURSE_COLORS:
             return chosen_sign, found_ignored_sign
 
         if found_ignored_sign:

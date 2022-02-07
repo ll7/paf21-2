@@ -209,8 +209,7 @@ class LocalPlanner:
             and dist(self._last_sign.point, self._current_pose.position) < 5
         ):
             rospy.loginfo_throttle(3, "[local planner] waiting for path to clear (stop sign)")
-            rospy.sleep(3)
-            rospy.logerr_throttle(5, "[local planner] assuming path is clear (stop sign)")
+            rospy.sleep(0.5)
             self._reset_detected_signs(and_publish=True)
 
     def _reset_detected_signs(self, and_publish=False):
@@ -218,7 +217,6 @@ class LocalPlanner:
         if self._last_sign is None or not self.rules_enabled:
             return
         to_clear = copy.copy(self._last_sign)
-        rospy.logerr_throttle(3, f"clearing next sign... {to_clear.type}")
         self._local_path.reset_alternate_speed()
         if dist(self._current_pose.position, to_clear.point) <= LocalPath.CLEARING_SIGN_DIST:
             self._add_cleared_signal(to_clear)  # only add to ignored list when very close
@@ -238,9 +236,9 @@ class LocalPlanner:
         if (
             self._last_sign is not None
             and self._last_sign.type == "LIGHT"
-            and self._traffic_light_color in ["green", "yellow"]
+            and self._traffic_light_color in LocalPath.RESUME_COURSE_COLORS
         ):
-            rospy.logwarn_throttle(1, f"[local planner] resuming from red light #{self._traffic_light_color}")
+            rospy.logwarn_throttle(1, f"[local planner] resuming from red light (color={self._traffic_light_color})")
             self._reset_detected_signs(and_publish=True)
 
         msg_info = []
@@ -291,8 +289,8 @@ class LocalPlanner:
 
         self._traffic_light_color: str = msg2.states[index_center]
         rospy.loginfo_throttle(1, f"[local planner] {self._traffic_light_color.upper()} {msg2.states}")
-        if self._traffic_light_color in ["green", "yellow"]:
-            rospy.loginfo_throttle(1, f"[local planner] clearing now #{self._traffic_light_color.upper()}")
+        if self._traffic_light_color in LocalPath.RESUME_COURSE_COLORS:
+            rospy.loginfo_throttle(1, f"[local planner] clearing traffic light {self._traffic_light_color.upper()}")
             self._reset_detected_signs(and_publish=True)
         else:
             rospy.loginfo_throttle(1, f"[local planner] keeping #{self._traffic_light_color.upper()}")
