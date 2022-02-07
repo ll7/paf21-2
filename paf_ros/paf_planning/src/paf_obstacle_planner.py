@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Union, Optional, Any
 from commonroad.geometry.shape import Circle
 from commonroad.scenario.lanelet import Lanelet
 
@@ -17,6 +17,7 @@ from paf_messages.msg import (
 from classes.HelperFunctions import closest_index_of_point_list, xy_to_pts, get_angle_between_vectors, dist
 import numpy as np
 
+from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 
 
@@ -24,35 +25,38 @@ class ObstaclePlanner:
     rules_enabled = MapManager.get_rules_enabled()
     network = MapManager.get_current_scenario().lanelet_network
     ON_LANELET_DISTANCE = 2
+    SHOW_TRACE_PTS = True
+    SHOW_FOLLOW_PTS = True
 
     def __init__(self):
         rospy.init_node("obstacle_planner_node", anonymous=True)
-        # role_name = rospy.get_param("~role_name", "ego_vehicle")
+        role_name = rospy.get_param("~role_name", "ego_vehicle")
         rospy.logwarn(f"[obstacle planner] Rules are {'en' if self.rules_enabled else 'dis'}abled!")
         rospy.Subscriber("/paf/paf_perception/obstacles", PafObstacleList, self._process_obstacles, queue_size=1)
         rospy.Subscriber("/paf/paf_local_planner/path", PafLocalPath, self._process_local_path, queue_size=1)
-        role_name = rospy.get_param("~role_name", "ego_vehicle")
+        rospy.Subscriber(
+            "/paf/paf_local_planner/follow_trace_points", Bool, self._process_follow_trace_points, queue_size=1
+        )
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_updated, queue_size=1)
         self._follow_info_pub = rospy.Publisher(
             "/paf/paf_obstacle_planner/following_info", PafObstacleFollowInfo, queue_size=1
         )
+        self._obstacle_traces_pub = rospy.Publisher(
+            "/paf/paf_obstacle_planner/obstacle_traces", PafObstacleFollowInfo, queue_size=1
+        )
 
+        self.follow_trace_points = True
         self.debug_pts_ped = []
         self.debug_pts_veh = []
         self.vehicle_traces = []
         self.biker_and_peds_on_road_traces = []
         self._last_local_path = PafLocalPath()
         self._position = Point2D(0, 0)
-        # rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_updated, queue_size=1)
-        # self._current_speed, self._current_pitch, self._current_yaw = 0, 0, 0
-        # self._current_pose = Pose()
+
+    def _process_follow_trace_points(self, msg: Bool):
+        self.follow_trace_points = msg.data
 
     def _process_obstacles(self, msg: PafObstacleList):
-
-        # rospy.loginfo_throttle(
-        #     0.5, f"[obstacle planner] processing {len(msg.obstacles)} obstacles of type '{msg.type}'"
-        # )
-
         if msg.type == "Pedestrians":
             process_fun = self.process_pedestrian
             self.biker_and_peds_on_road_traces = []
@@ -67,7 +71,6 @@ class ObstaclePlanner:
         o: PafObstacle
         for o in msg.obstacles:
             process_fun(o)
-        # self._draw_path_pts(self.debug_pts_ped if msg.type == "Pedestrians" else self.debug_pts_veh, msg.type, color)
 
     def process_pedestrian(self, msg: PafObstacle):
         forward, backward, current_lanelet = self.trace_obstacle_with_lanelet_network(msg)
@@ -99,17 +102,30 @@ class ObstaclePlanner:
 
     def _process_local_path(self, msg: PafLocalPath):
         self._last_local_path = msg
-
+        vehicle_follow_info = self.get_follow_info()
+        info_pts = []
         local_path_index, distance_to_lanelet_network = closest_index_of_point_list(msg.points, self._position)
-        if distance_to_lanelet_network > 2.5:
-            info = self.get_follow_info()
-        else:
-            info = self._calculate_follow_vehicle_with_path(msg.points, local_path_index)
-        self._follow_info_pub.publish(info)
+        if distance_to_lanelet_network <= 2.5:
+            vehicle_follow_info, info_pts = self._calculate_follow_vehicle_with_path(msg.points, local_path_index)
+        if self.follow_trace_points:
+            points = self.get_relevant_trace_points(msg.points, local_path_index)
+            trace_follow_info, info2_pts = self._calculate_follow_vehicle_with_trace_points(
+                points, msg.points, local_path_index
+            )
+            if trace_follow_info is not None and (
+                trace_follow_info.distance < vehicle_follow_info.distance or vehicle_follow_info.no_target
+            ):
+                vehicle_follow_info = trace_follow_info
+                rospy.loginfo_throttle(
+                    3, f"[obstacle planner] following trace point d={trace_follow_info.distance:.1f} pt={info2_pts[0]}"
+                )
+                info_pts = info2_pts
+        rospy.loginfo_throttle(5, f"[obstacle planner] following={not vehicle_follow_info.no_target}")
+        if self.SHOW_FOLLOW_PTS:
+            self._draw_path_pts(xy_to_pts(info_pts), "relevant_obs_pts")
+        self._follow_info_pub.publish(vehicle_follow_info)
 
-        self.get_relevant_traces(msg.points, local_path_index)
-
-    def get_relevant_traces(self, path: List[Point2D], path_idx: int):
+    def get_relevant_trace_points(self, path: List[Point2D], path_idx: int):
         def n_predecessors(_lanelet: Lanelet, n):
             if _lanelet is None:
                 return []
@@ -124,12 +140,13 @@ class ObstaclePlanner:
             return recursive_search
 
         lanelet, _ = self.obstacle_lanelet(pos=self._position)
-
-        debug_pts = []
+        path2 = []
+        trace_pts = []
         for pred in n_predecessors(lanelet, 3):
-            path += xy_to_pts(self.network.find_lanelet_by_id(pred).center_vertices)
+            path2 += xy_to_pts(self.network.find_lanelet_by_id(pred).center_vertices)
+            path2 += path
         for _, forward, backward, _ in self.vehicle_traces + self.biker_and_peds_on_road_traces:
-            _, distance = closest_index_of_point_list(path[path_idx : path_idx + 500], forward[0], 10)
+            _, distance = closest_index_of_point_list(path2[path_idx : path_idx + 500], forward[0], 10)
             if distance <= self.ON_LANELET_DISTANCE:
                 continue  # following vehicles not relevant to tracing
 
@@ -139,10 +156,35 @@ class ObstaclePlanner:
                 if dist(self._position, pt) < d or dist(self._position, backward[0]) < d:
                     break
                 to_add.append(pt)
-            debug_pts += to_add  # + backward
-        self._draw_path_pts(xy_to_pts(debug_pts), "relevant_trace_pts", (255, 51, 204))
+            trace_pts += to_add  # + backward
+        if self.SHOW_TRACE_PTS:
+            self._draw_path_pts(xy_to_pts(trace_pts), "relevant_trace_pts", (255, 51, 204))
+        return trace_pts
 
-    def _calculate_follow_vehicle_with_path(self, path_pts, ego_vehicle_index) -> PafObstacleFollowInfo:
+    def _calculate_follow_vehicle_with_trace_points(self, trace_pts, path_pts, local_path_index):
+        msgs = []
+        distances = []
+        local_path_index += 4
+        pts = []
+        for pt in trace_pts:
+            idx, distance = closest_index_of_point_list(path_pts[local_path_index:], pt, 10)
+            if idx >= 0 and distance < self.ON_LANELET_DISTANCE:
+                msg = PafObstacleFollowInfo()
+                msg.speed = 0
+                msg.distance = dist(pt, self._position)
+                msg.no_target = False
+                msgs.append(msg)
+                distances.append(msg.distance)
+                pts.append(pt)
+        if len(msgs) == 0:
+            return None, []
+
+        idx = np.argmin(distances)
+        return msgs[idx], [pts[idx]]
+
+    def _calculate_follow_vehicle_with_path(
+        self, path_pts, ego_vehicle_index
+    ) -> Tuple[PafObstacleFollowInfo, List[Any]]:
         acc = 10
         max_distance = self.ON_LANELET_DISTANCE
         obs_on_path = []
@@ -174,10 +216,9 @@ class ObstaclePlanner:
             i = np.argmin(path_indices)
             obs = obs_on_path[i]
             info = self.get_follow_info(obs)
-            debug_pts = xy_to_pts(debug_pts[2 * i : 2 * (i + 1)])
-        self._draw_path_pts(debug_pts, "relevant_obs_pts")
+            debug_pts = debug_pts[2 * i : 2 * (i + 1)]
 
-        return info
+        return info, debug_pts
 
     def _odometry_updated(self, odometry: Odometry):
         """Odometry Update Callback"""

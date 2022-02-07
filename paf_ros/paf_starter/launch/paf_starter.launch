@@ -85,6 +85,7 @@
 
   <!--  Local Planning  -->
   <include file="$(find paf_planning)/launch/paf_local_planner.launch"/>
+  <include file="$(find paf_planning)/launch/paf_obstacle_planner.launch"/>
 
   <!--  Global Planning  -->
   <include file="$(find paf_planning)/launch/paf_global_planner.launch"/>
