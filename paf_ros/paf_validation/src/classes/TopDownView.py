@@ -87,7 +87,7 @@ class TopDownView(BirdViewProducer):
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
         self.path_width_px = 4
-        self.pt_width_px = 1
+        self.pt_width_px = 4
         self.line_width_px = 4
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
         self.line_sets: Dict[str, PafTopDownViewPointSet] = {}
@@ -314,7 +314,7 @@ class TopDownView(BirdViewProducer):
             for point in obs:
                 pixel = self.masks_generator.location_to_pixel(point)
                 corner_pixels.append([pixel.x, pixel.y])
-            mask = cv2.circle(mask, tuple(corner_pixels[-1]), 4, COLOR_ON, -1)
+            mask = cv2.circle(mask, tuple(corner_pixels[-1]), 2, COLOR_ON, -1)
             mask = cv2.polylines(mask, [np.array(corner_pixels).reshape((-1, 1, 2))], True, COLOR_ON, 1)
         return mask
 
