@@ -50,7 +50,7 @@ class VehicleController:
         self._is_unstucking: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
-        self._obstacle_follow_min_distance: float = 4.0
+        self._obstacle_follow_min_distance: float = 5
         self._obstacle_follow_target_distance: float = 15
 
         # TODO remove this (handled by the local planner)
