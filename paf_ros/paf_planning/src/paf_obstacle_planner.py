@@ -174,8 +174,8 @@ class ObstaclePlanner:
         relevant_path = path_pts[local_path_index::10]
         for i, pt in enumerate(relevant_path):
             indices, distances = k_closest_indices_of_point_in_list(2, trace_pts, pt)
-            if i < len(relevant_path) - 2:
-                pt = relevant_path[i + 2]
+            if i > 4:
+                pt = relevant_path[i - 4]
             for idx, distance in zip(indices, distances):
                 trace_pt = trace_pts[idx]
                 # angle = self._angle_rel_to_ego_yaw(trace_pt)
@@ -225,7 +225,7 @@ class ObstaclePlanner:
             if distance_to_obstacle < 1:
                 continue
             if distance_to_path > self.ON_LANELET_DISTANCE and distance_to_obstacle > self.ON_LANELET_DISTANCE:
-                if distance_to_path > 2 * self.ON_LANELET_DISTANCE:
+                if distance_to_path > 1.5 * self.ON_LANELET_DISTANCE:
                     continue  # too far away from path
                 path_lanelets = self.network.find_lanelet_by_shape(
                     Circle(self.ON_LANELET_DISTANCE * 0.75, np.array([path_pt.x, path_pt.y], dtype=float))
@@ -235,6 +235,11 @@ class ObstaclePlanner:
                     continue  # is parallel lane
                 if not self._pt_within_angle_range(ref_pt):
                     continue  # not within view cone of ego vehicle (distance limit still applies)
+                rospy.logwarn_throttle(
+                    4,
+                    f"[obstacle info] including vehicle distance_to_path={distance_to_path} "
+                    f"num_lanelets={len(path_lanelets)}, within_angle=False",
+                )
                 # else: is lane change (on_path_dist = 2 * on_lanelet_dist)
             debug_pts += [ref_pt, path_pt]
             obs_on_path.append(obstacle)

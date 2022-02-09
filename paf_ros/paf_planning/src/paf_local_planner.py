@@ -209,7 +209,6 @@ class LocalPlanner:
             and dist(self._last_sign.point, self._current_pose.position) < 5
         ):
             rospy.loginfo_throttle(3, "[local planner] waiting for path to clear (stop sign)")
-            rospy.sleep(0.5)
             self._reset_detected_signs(and_publish=True)
 
     def _reset_detected_signs(self, and_publish=False):
