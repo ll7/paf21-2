@@ -95,9 +95,13 @@ def k_closest_indices_of_point_in_list(
     :param acc: search only every nth point (nth=acc)
     :return: list of indices, list of distance to points
     """
+    if len(pts_list) <= k:
+        k = len(pts_list) - 1
+
     if len(pts_list) == 0:
         return [], []
-    distances = [dist((p.x, p.y), target_pt) for p in pts_list[::acc]]
+
+    distances = [dist(p, target_pt) for p in pts_list[::acc]]
     if len(distances) == 0:
         return [len(pts_list) - 1], [1e-10]
     idx = np.argpartition(distances, k)[:k]
@@ -252,7 +256,7 @@ def get_angle_between_vectors(
         v2 = v2.x, v2.y
 
     v1 = np.array(v1)
-    v2 = np.array(v2)
+    v2 = None if v2 is None else np.array(v2)
 
     if not is_normed:
         v1 = v1 / dist(v1, (0, 0))
@@ -260,5 +264,6 @@ def get_angle_between_vectors(
             v2 = v2 / dist(v2, (0, 0))
     if v2 is None:
         v2 = [0, 1]
-    yaw = np.arccos(np.dot(v2, v1)) + np.pi / 2
+    yaw = np.arccos(np.dot(v2, v1))
+    yaw += np.pi / 2
     return yaw

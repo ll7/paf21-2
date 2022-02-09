@@ -346,7 +346,7 @@ class VehicleController:
                 self._obstacle_follow_speed = 0
             elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
                 rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
-                self._obstacle_follow_speed = max(5, obstacle_follow_info.speed * 0.9)
+                self._obstacle_follow_speed = max(10, obstacle_follow_info.speed * 0.9)
         else:
             self._obstacle_follow_speed = float("inf")
 
