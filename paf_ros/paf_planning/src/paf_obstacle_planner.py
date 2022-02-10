@@ -51,7 +51,9 @@ class ObstaclePlanner:
             "/paf/paf_obstacle_planner/obstacle_traces", PafObstacleFollowInfo, queue_size=1
         )
 
-        self.follow_trace_points = True
+        self.follow_trace_points = True  # self.rules_enabled
+        self.ignore_peds = not self.rules_enabled
+
         self.vehicle_traces = []
         self.biker_and_peds_on_road_traces = []
         self._last_local_path = PafLocalPath()
@@ -78,7 +80,7 @@ class ObstaclePlanner:
         forward, backward, current_lanelet = self.trace_obstacle_with_lanelet_network(msg)
         if forward is None:  # not on lanelet network (pedestrians) -> ignore
             return
-        if self.pedestrian_on_lanelet(msg):
+        if not self.ignore_peds and self.pedestrian_on_lanelet(msg):
             self.biker_and_peds_on_road_traces.append((msg, forward, backward, current_lanelet))
 
     def pedestrian_on_lanelet(self, ped: PafObstacle):
@@ -164,6 +166,7 @@ class ObstaclePlanner:
             trace_pts += to_add  # + backward
         if self.SHOW_TRACE_PTS:
             self._draw_path_pts(xy_to_pts(trace_pts), "relevant_trace_pts", (255, 51, 204))
+
         return trace_pts
 
     def _calculate_follow_vehicle_with_trace_points(self, trace_pts, path_pts, local_path_index):
@@ -171,11 +174,11 @@ class ObstaclePlanner:
         distances = []
         local_path_index += 4
         pts = []
-        relevant_path = path_pts[local_path_index::10]
+        relevant_path = path_pts[local_path_index:]
         for i, pt in enumerate(relevant_path):
-            indices, distances = k_closest_indices_of_point_in_list(2, trace_pts, pt)
-            if i > 4:
-                pt = relevant_path[i - 4]
+            indices, distances = k_closest_indices_of_point_in_list(2, trace_pts, pt, 10)
+            i += local_path_index
+            pt = path_pts[max(i - 20, 0)]
             for idx, distance in zip(indices, distances):
                 trace_pt = trace_pts[idx]
                 # angle = self._angle_rel_to_ego_yaw(trace_pt)
@@ -343,6 +346,31 @@ class ObstaclePlanner:
                 other_traces.append((_points, _other_traces))
                 all_points += _all_points
         return points, other_traces, all_points
+
+    # def obstacle_on_lanelets_circular(self, msg: PafObstacle = None, pos: Point2D = None, radius: float = 2.) -> List[
+    #     tuple]:
+    #     if pos is not None:
+    #         pts = [np.array([pos.x, pos.y], dtype=float)]
+    #     else:
+    #         pts = [np.array(pt, dtype=float) for pt in [msg.closest, msg.bound_1, msg.bound_2]]
+    #     lanelet_indices = []
+    #     for pt in pts:
+    #         lanelet_indices += self.network.find_lanelet_by_shape(Circle(radius, pt))
+    #
+    #     trace_circular = []
+    #     for let in lanelet_indices:
+    #         lanelet = self.network.find_lanelet_by_id(let)
+    #         _indices = []
+    #         for pt in pts:
+    #             _dist = dist(self._position, pt)
+    #             if _dist <= 30 or _dist > 200:
+    #                 continue
+    #             trace_circular.append(tuple(pt))
+    #             for ref_pt in lanelet.center_vertices[::10]:
+    #                 if dist(ref_pt, pt) > radius:
+    #                     continue
+    #                 trace_circular.append(tuple(ref_pt))
+    #     return trace_circular
 
     def obstacle_lanelet(self, msg: PafObstacle = None, pos: Point2D = None) -> Tuple[Optional[Lanelet], int]:
         if pos is not None:

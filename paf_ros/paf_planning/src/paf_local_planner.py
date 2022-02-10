@@ -112,6 +112,7 @@ class LocalPlanner:
         if not self.rules_enabled:
             self._traffic_light_detector_toggle_pub.publish(Bool(False))
         SpeedCalculator.set_limits(self.rules_enabled)
+        self._routing_service_call(self._srv_global_reroute)
         rospy.logwarn(
             f"[local planner] Rules are now {'en' if self.rules_enabled else 'dis'}abled! "
             f"Speed limits will change after starting a new route."

@@ -247,7 +247,7 @@ class MapManager:
 
         pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
         pts_loc_1 = local_path_obj.sparse_local_path
-        sign_positions = [x.point for x in local_path_obj.traffic_signals]
+        sign_positions = [x[0].point for x in local_path_obj.traffic_signals]
         local_path_obj.set_alternate_speed_next_sign(0)
 
         xy1, minima1 = pts_to_x_y(pts_gl_1)

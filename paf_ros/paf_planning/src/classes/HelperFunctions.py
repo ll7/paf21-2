@@ -43,10 +43,10 @@ def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray]) -> List[Poi
         try:
             x, y = pt
             pt = Point2D(x, y)
-        except TypeError:
+        except (TypeError, ValueError):
             pass
         if type(pt) is not Point2D:
-            raise TypeError(f"unable to parse type {type(pt)} to Point2D")
+            raise TypeError(f"unable to parse type {type(pt)} to Point2D ({pt}, {xy_list})")
         out.append(pt)
     return out
 
@@ -83,7 +83,7 @@ def closest_index_of_point_list(
 
 def k_closest_indices_of_point_in_list(
     k: int,
-    pts_list: Union[List[Point2D], List[Tuple[float, float]]],
+    _pts_list: Union[List[Point2D], List[Tuple[float, float]]],
     target_pt: Union[Point2D, Tuple[float, float]],
     acc: int = 1,
 ) -> Tuple[List[int], List[float]]:
@@ -95,16 +95,19 @@ def k_closest_indices_of_point_in_list(
     :param acc: search only every nth point (nth=acc)
     :return: list of indices, list of distance to points
     """
+    pts_list = _pts_list[::acc]
+
     if len(pts_list) <= k:
         k = len(pts_list) - 1
 
-    if len(pts_list) == 0:
+    if len(pts_list) <= 0:
         return [], []
 
-    distances = [dist(p, target_pt) for p in pts_list[::acc]]
+    distances = [dist(p, target_pt) for p in pts_list]
     if len(distances) == 0:
         return [len(pts_list) - 1], [1e-10]
-    idx = np.argpartition(distances, k)[:k]
+    idx = np.argpartition(distances, k)
+    idx = idx[:k]
     return idx * acc, [distances[i] for i in idx]
 
 
