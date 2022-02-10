@@ -387,7 +387,7 @@ class ObstaclePlanner:
             pass
 
     def start(self):
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(3)
         while not rospy.is_shutdown():
             if self._last_local_path is None:
                 continue

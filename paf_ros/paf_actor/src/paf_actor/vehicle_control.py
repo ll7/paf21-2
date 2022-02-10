@@ -202,9 +202,11 @@ class VehicleController:
         return control
 
     def __check_wrong_way(self):
+        return False
         return np.abs(self._lat_controller.heading_error) > np.pi * 0.66
 
     def __check_stuck(self):
+        return False
         stuck = self._current_speed < self._stuck_value_threshold < self._target_speed
         if not self._emergency_mode and stuck:
             if self._stuck_start_time == 0.0:
@@ -351,7 +353,7 @@ class VehicleController:
                 self._obstacle_follow_speed = 0
             elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
                 rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
-                self._obstacle_follow_speed = max(7, obstacle_follow_info.speed * 0.9)
+                self._obstacle_follow_speed = max(7, obstacle_follow_info.speed * 0.99)
         else:
             self._obstacle_follow_speed = float("inf")
 
