@@ -44,7 +44,8 @@ class LocalPath:
         self._sparse_local_path_speeds = []
         self._sparse_traffic_signals = []
         self.sparse_local_path = []
-        self._lane_change_indices = []
+        self._lane_change_end_indices = []
+        self._lane_change_start_indices = []
         self.traffic_signals = []
         self.global_path = global_path
         self.message = PafLocalPath()
@@ -78,19 +79,19 @@ class LocalPath:
         """
         return self.global_path.get_section_and_lane_indices(position)
 
-    def _next_lanechange_index(self, from_index: int = 0) -> int:
+    def _next_lanechange_index(self, from_index: int = 0) -> Tuple[int, int]:
         """
         Get index of next lane change in sparse_local_path
         :param from_index: search from index
         :return: index
         """
         max_idx = len(self.sparse_local_path) - 1
-        for idx in self._lane_change_indices:
+        for st, idx in zip(self._lane_change_start_indices, self._lane_change_end_indices):
             if idx > max_idx:
-                return max_idx
+                return max_idx, max_idx
             if idx >= from_index:
-                return idx
-        return from_index
+                return st, idx
+        return from_index, from_index
 
     def get_all_traffic_signals(self) -> List[PafTrafficSignal]:
         return [x for x in self.global_path.signals_on_path + self._local_path_signals]
@@ -391,6 +392,39 @@ class LocalPath:
         publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         publisher.publish(msg)
 
+    def _get_previous_local_path(self, sparse_idx, current_speed, num_points_previous_plan=5):
+        distance_planned = 0
+        current_idx = sparse_idx
+        sparse_idx = max(0, sparse_idx - num_points_previous_plan)
+        last_lanechange_start, last_lanechange_end = self._next_lanechange_index(current_idx)
+        last_lanechange_start -= 10
+        end_index = last_lanechange_end + 1  # end of next lanechange
+
+        currently_changing = (last_lanechange_start < current_idx < last_lanechange_end) or sparse_idx == 0
+
+        _end_section, _end_lane = self.global_path.get_section_and_lane_indices(self.sparse_local_path[end_index - 1])
+        if current_speed < 30 / 3.6 and currently_changing:
+            _end_section, _ = self.global_path.get_section_and_lane_indices(self.sparse_local_path[current_idx])
+            sparse_idx = current_idx
+            sparse_local_path = []
+            sparse_local_path_speeds = []
+            rospy.logerr("reset1")
+        elif not currently_changing:
+            _end_section, _end_lane = self.global_path.get_section_and_lane_indices(self.sparse_local_path[current_idx])
+            sparse_idx = current_idx
+            sparse_local_path = []
+            sparse_local_path_speeds = []
+            rospy.logerr("reset2")
+        else:
+            sparse_local_path = self.sparse_local_path[sparse_idx:end_index]
+            sparse_local_path_speeds = self._sparse_local_path_speeds[sparse_idx:end_index]
+            for p1, p2 in zip(
+                self.sparse_local_path[current_idx:end_index], self.sparse_local_path[current_idx + 1 : end_index]
+            ):
+                distance_planned += dist(p1, p2)
+            rospy.logerr("no reset")
+        return distance_planned, sparse_idx, sparse_local_path, sparse_local_path_speeds, _end_section, _end_lane
+
     def calculate_new_local_path(
         self,
         from_position: Point2D,
@@ -426,7 +460,6 @@ class LocalPath:
 
         lane_change_secs = self.LANE_CHANGE_SECS
         buffer = 5
-        num_points_previous_plan = 10
 
         target_distance = max([self.TRANSMIT_FRONT_MIN_M, self.TRANSMIT_FRONT_SEC * current_speed])
         distance_planned = 0
@@ -439,17 +472,17 @@ class LocalPath:
         end_of_route = False
 
         if prev_idx > 0:
-            current_idx = prev_idx
-            prev_idx = max(0, prev_idx - num_points_previous_plan)
-            end_index = self._next_lanechange_index(current_idx) + 1
-            sparse_local_path = self.sparse_local_path[prev_idx:end_index]
-            sparse_local_path_speeds = self._sparse_local_path_speeds[prev_idx:end_index]
-            section_from, current_lane = self.global_path.get_section_and_lane_indices(sparse_local_path[-1])
-            offset2 = current_idx + 1
-            for p1, p2 in zip(self.sparse_local_path[current_idx:end_index], self.sparse_local_path[offset2:end_index]):
-                distance_planned += dist(p1, p2)
+            (
+                distance_planned,
+                prev_idx,
+                sparse_local_path,
+                sparse_local_path_speeds,
+                section_from,
+                current_lane,
+            ) = self._get_previous_local_path(prev_idx, current_speed)
 
-        self._lane_change_indices = []
+        self._lane_change_end_indices = []
+        self._lane_change_start_indices = []
         if prev_idx < 0 or section_from < 0:
             section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
             if section_from > 0:
@@ -642,11 +675,12 @@ class LocalPath:
                 sig1.point = sparse_local_path[-1]
                 # rospy.logerr(f"changing lanes: {current_lane}->{future_lane} ({distance_changed:.1f}m)")
                 current_lane = future_lane
+                self._lane_change_start_indices.append(len(sparse_local_path) - 1)
                 for pt, sp, sgn in zip(pts, speeds, signs):
                     sparse_local_path.append(pt)
                     sparse_local_path_speeds.append(sp)
                 distance_planned += distance_changed
-                self._lane_change_indices.append(len(sparse_local_path) - 1)
+                self._lane_change_end_indices.append(len(sparse_local_path) - 1)
 
                 sig2.point = sparse_local_path[-1]
                 self._local_path_signals += [sig1, sig2]
@@ -823,18 +857,31 @@ class LocalPath:
                 return 10000
             return _info.distance
 
-        straight_free = get_distance(straight)
-        right_free = 0
-        left_free = 0
+        straight_free = int(straight is not None)
+        left_free = int(left is not None)
+        right_free = int(right is not None)
 
-        if straight_free < 1000:
+        if straight_free + left_free + right_free > 1:
+            straight_free = get_distance(straight)
+            if straight_free > 1000:
+                return "straight"
             left_free = get_distance(left)
             right_free = get_distance(right)
 
-        _sum = left_free + right_free + straight_free
-        # rospy.logerr_throttle(1, f"[local planner] free change: {left_free}/{straight_free}/{right_free}")
+        # # straight_free = int(straight_free > 0)  # debug
+        # right_free = 0
+        # left_free = 0
+        #
+        # if straight_free < 1000:
+        #     left_free = get_distance(left)
+        #     right_free = get_distance(right)
 
-        if _sum is None:
+        _sum = left_free + right_free + straight_free
+        rospy.logerr_throttle(
+            1, f"[local planner] lane free distance for change: " f"{left_free}/{straight_free}/{right_free}"
+        )
+
+        if _sum == 0:
             raise ValueError("no free lane found!")
 
         probabilities = left_free / _sum, straight_free / _sum, right_free / _sum

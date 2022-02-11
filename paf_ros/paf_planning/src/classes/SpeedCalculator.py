@@ -33,7 +33,7 @@ class SpeedCalculator:
         SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if rules_enabled else 250 / 3.6
         SpeedCalculator.MAX_SPEED = 95 / 3.6 if rules_enabled else 95 / 3.6
         SpeedCalculator.MIN_SPEED = 25 / 3.6 if rules_enabled else 25 / 3.6
-        SpeedCalculator.CURVE_FACTOR = 2 if rules_enabled else 2.5  # higher value = more drifting
+        SpeedCalculator.CURVE_FACTOR = 2 if rules_enabled else 2  # higher value = more drifting
         SpeedCalculator.MAX_DECELERATION = 20 if rules_enabled else 20
         # m/s^2, higher value = later and harder braking
 

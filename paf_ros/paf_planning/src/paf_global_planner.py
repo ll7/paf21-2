@@ -6,7 +6,7 @@ from commonroad_route_planner.route import Route
 import rospy
 import numpy as np
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from commonroad.common.util import Interval, AngleInterval
 from commonroad.geometry.shape import Circle
 from commonroad.planning.goal import GoalRegion
@@ -85,7 +85,7 @@ class GlobalPlanner:
         rospy.logwarn("[global planner] rerouting...")
         return self._routing_provider_waypoints(reroute=True)
 
-    def _any_target_anywhere(self, p_home) -> np.ndarray:
+    def _any_target_anywhere(self, p_home) -> Optional[np.ndarray]:
         # return np.array([229., -100.])
         lanelets = self._scenario.lanelet_network.lanelets
         lanelet_p = None

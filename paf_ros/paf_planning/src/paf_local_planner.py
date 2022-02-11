@@ -32,7 +32,7 @@ class LocalPlanner:
 
     UPDATE_HZ = 10
     REPLAN_THROTTLE_SEC_GLOBAL = 5
-    REPLAN_THROTTLE_SEC_LOCAL = 1
+    REPLAN_THROTTLE_SEC_LOCAL = 3
     END_OF_ROUTE_REACHED_DIST = 2
 
     rules_enabled = MapManager.get_rules_enabled()
@@ -118,7 +118,7 @@ class LocalPlanner:
             f"Speed limits will change after starting a new route."
         )
 
-    def _process_global_path(self, msg: PafLaneletRoute):
+    def _process_global_path(self, msg: PafLaneletRoute, ignore_prev=True):
         if self._global_path is None or self._global_path.route.distance != msg.distance:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
             self._reset_detected_signs()
@@ -126,7 +126,7 @@ class LocalPlanner:
             self._local_path = LocalPath(self._global_path, self.rules_enabled)
             self._set_local_path_idx()
             path, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
-                self._current_pose.position, self._current_speed, ignore_previous=True
+                self._current_pose.position, self._current_speed, ignore_previous=ignore_prev
             )
             self._set_local_path_idx()
             if self.rules_enabled:
@@ -157,7 +157,7 @@ class LocalPlanner:
         elif not self._on_global_path():
             rospy.logwarn_throttle(5, "[local planner] not on global path, requesting new route")
             self._publish_local_path_msg(send_empty=True)
-            self._send_global_path_request()
+            self._send_global_reroute_request()
         elif not self._on_local_path():
             rospy.loginfo_throttle(5, "[local planner] not on local path, replanning")
             self._replan_local_path()
@@ -174,7 +174,7 @@ class LocalPlanner:
             rospy.logwarn_throttle(
                 5, f"[local planner] car is waiting for event {sig_type} " f"(light color={self._traffic_light_color})"
             )
-            self._handle_stop_event()  # todo change this handler
+            self._handle_stop_event()
         elif self._planner_at_end_of_local_path():
             rospy.loginfo_throttle(5, "[local planner] local planner is replanning (end of local path)")
             self._replan_local_path()
@@ -187,6 +187,14 @@ class LocalPlanner:
         rospy.loginfo_throttle(5, f"[local planner] signs last={cur}, ign={ign}")
         self._check_for_signs_on_path()
         self._publish_local_path_msg()
+
+        if (
+            self._current_speed < 25 / 3.6 and self._local_path_idx < len(self._local_path) - 150
+        ):  # todo fix: acting does not like very short paths
+            rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally and globally")
+            self._replan_local_path()
+            # self._send_global_reroute_request()
+
         # if self._last_sign is not None:
         #     self._ignore_sign = self._last_sign
 
@@ -375,7 +383,7 @@ class LocalPlanner:
             >= 0
         )
 
-    def _send_global_path_request(self):
+    def _send_global_reroute_request(self):
         t = time.perf_counter()
         delta_t = t - self._last_replan_request_glob
         if self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:

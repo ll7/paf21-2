@@ -267,6 +267,7 @@ def get_angle_between_vectors(
             v2 = v2 / dist(v2, (0, 0))
     if v2 is None:
         v2 = [0, 1]
-    yaw = np.arccos(np.dot(v2, v1))
-    yaw += np.pi / 2
+    dot = np.dot(v2, v1)
+    det = v1[0] * v2[1] - v2[0] * v1[1]
+    yaw = np.arctan2(dot, det)
     return yaw

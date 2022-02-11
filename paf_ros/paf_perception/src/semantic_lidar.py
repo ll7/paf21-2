@@ -193,9 +193,9 @@ class SemanticLidarNode(object):
             bound_1 = np.array(bound_1[:2])
         else:
             # shorten bound vectors to len(closest)
-            d_min = pts[a_min_d][-1]
-            bound_1 = np.array(bound_1[:2]) / bound_1[2] * d_min
-            bound_2 = np.array(bound_2[:2]) / bound_2[2] * d_min
+            # d_min = pts[a_min_d][-1]
+            bound_1 = np.array(bound_1[:2])  # / bound_1[2] * d_min
+            bound_2 = np.array(bound_2[:2])  # / bound_2[2] * d_min
 
         poi = [bound_1, bound_2, closest]
         # add vehicle position to change to global coordinates
