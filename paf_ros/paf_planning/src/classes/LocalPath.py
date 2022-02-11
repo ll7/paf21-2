@@ -10,7 +10,7 @@ from paf_messages.msg import (
     PafTrafficSignal,
     PafObstacleFollowInfo,
 )
-from paf_messages.srv import PafLaneInfoService
+from paf_messages.srv import PafLaneInfoService, PafLaneInfoServiceResponse
 from .GlobalPath import GlobalPath
 from .HelperFunctions import dist, closest_index_of_point_list, expand_sparse_list, pts_to_xy
 
@@ -64,8 +64,9 @@ class LocalPath:
         try:
             rospy.wait_for_service(service_name, timeout=rospy.Duration(10))
             call_service = rospy.ServiceProxy(service_name, PafLaneInfoService)
-            return call_service(send)
-        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
+            response: PafLaneInfoServiceResponse = call_service(send)
+            return response.follow_info
+        except Exception as e:
             rospy.logerr_throttle(1, f"[local planner] {e}")
             return None
 
@@ -795,8 +796,8 @@ class LocalPath:
         """
         LocalPath._draw_path_pts(points, lbl, color, "/paf/paf_validation/draw_map_lines")
 
-    @staticmethod
     def _choose_lane(
+        self,
         left: Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
         straight: Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
         right: Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]],
@@ -809,18 +810,34 @@ class LocalPath:
         :return: keyword "left", "straight" or "right"
         """
         if left is None and straight is None and right is None:
-            raise ValueError
+            raise ValueError("all lanes are marked as unavailable!")
 
-        left_percent = int(left is not None) * 1000
-        right_percent = int(right is not None) * 1000
-        straight_percent = int(straight is not None) * 1
+        def get_distance(_in: Optional[Tuple[List[Point2D], List[float], List[PafTrafficSignal]]]) -> float:
+            if _in is None:
+                return 0
+            pts, speed, signs = _in
+            _info = self._lane_info_service_call(pts)
+            if _info is None:
+                return 0
+            if _info.no_target:
+                return 10000
+            return _info.distance
 
-        # l_pts, l_speed, l_signs = left
-        # s_pts, s_speed, s_signs = straight
-        # r_pts, r_speed, r_signs = right
+        straight_free = get_distance(straight)
+        right_free = 0
+        left_free = 0
 
-        _sum = left_percent + right_percent + straight_percent
-        probabilities = left_percent / _sum, straight_percent / _sum, right_percent / _sum
+        if straight_free < 1000:
+            left_free = get_distance(left)
+            right_free = get_distance(right)
+
+        _sum = left_free + right_free + straight_free
+        # rospy.logerr_throttle(1, f"[local planner] free change: {left_free}/{straight_free}/{right_free}")
+
+        if _sum is None:
+            raise ValueError("no free lane found!")
+
+        probabilities = left_free / _sum, straight_free / _sum, right_free / _sum
         choice = np.random.choice(["left", "straight", "right"], p=probabilities)
 
         return choice

@@ -23,7 +23,11 @@ from classes.HelperFunctions import (
 )
 import numpy as np
 
-from paf_messages.srv import PafLaneInfoService
+from paf_messages.srv import (
+    PafLaneInfoService,
+    PafLaneInfoServiceRequest,
+    PafLaneInfoServiceResponse,
+)
 from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 
@@ -48,9 +52,6 @@ class ObstaclePlanner:
         self._follow_info_pub = rospy.Publisher(
             "/paf/paf_obstacle_planner/following_info", PafObstacleFollowInfo, queue_size=1
         )
-        self._obstacle_traces_pub = rospy.Publisher(
-            "/paf/paf_obstacle_planner/obstacle_traces", PafObstacleFollowInfo, queue_size=1
-        )
 
         rospy.Service("/paf/paf_obstacle_planner/lane_info_service", PafLaneInfoService, self._lane_info_service_called)
 
@@ -62,9 +63,11 @@ class ObstaclePlanner:
         self._last_local_path = PafLocalPath()
         self._position = Point2D(0, 0)
 
-    def _lane_info_service_called(self, msg: PafLocalPath):
-        info, _ = self._get_local_path_follow_info(msg)
-        return info
+    def _lane_info_service_called(self, msg: PafLaneInfoServiceRequest):
+        info, _, _ = self._get_local_path_follow_info(msg.path_to_check)
+        resp = PafLaneInfoServiceResponse()
+        resp.follow_info = info
+        return resp
 
     def _process_follow_trace_points(self, msg: Bool):
         self.follow_trace_points = msg.data
@@ -127,10 +130,10 @@ class ObstaclePlanner:
                 vehicle_follow_info = trace_follow_info
                 info_pts = info2_pts
 
-        return vehicle_follow_info, info_pts
+        return vehicle_follow_info, local_path_index, info_pts
 
     def _process_local_path(self, msg: PafLocalPath):
-        vehicle_follow_info, info_pts = self._get_local_path_follow_info(msg, max_dist_to_lane=2.5)
+        vehicle_follow_info, local_path_index, info_pts = self._get_local_path_follow_info(msg, max_dist_to_lane=2.5)
         rospy.loginfo_throttle(
             5,
             f"[obstacle planner] following={not vehicle_follow_info.no_target} v={vehicle_follow_info.speed} "
@@ -424,13 +427,9 @@ class ObstaclePlanner:
         except rospy.exceptions.ROSException:
             pass
 
-    def start(self):
-        rate = rospy.Rate(3)
-        while not rospy.is_shutdown():
-            if self._last_local_path is None:
-                continue
-            self._process_local_path(self._last_local_path)
-            rate.sleep()
+    @staticmethod
+    def start():
+        rospy.spin()
 
 
 if __name__ == "__main__":
