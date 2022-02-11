@@ -23,6 +23,7 @@ from classes.HelperFunctions import (
 )
 import numpy as np
 
+from paf_messages.srv import PafLaneInfoService
 from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 
@@ -51,6 +52,8 @@ class ObstaclePlanner:
             "/paf/paf_obstacle_planner/obstacle_traces", PafObstacleFollowInfo, queue_size=1
         )
 
+        rospy.Service("/paf/paf_obstacle_planner/lane_info_service", PafLaneInfoService, self._lane_info_service_called)
+
         self.follow_trace_points = True  # self.rules_enabled
         self.ignore_peds = not self.rules_enabled
 
@@ -58,6 +61,10 @@ class ObstaclePlanner:
         self.biker_and_peds_on_road_traces = []
         self._last_local_path = PafLocalPath()
         self._position = Point2D(0, 0)
+
+    def _lane_info_service_called(self, msg: PafLocalPath):
+        info, _ = self._get_local_path_follow_info(msg)
+        return info
 
     def _process_follow_trace_points(self, msg: Bool):
         self.follow_trace_points = msg.data
@@ -103,12 +110,11 @@ class ObstaclePlanner:
         angle_diff = get_angle_between_vectors(p2 - p1, velocity_vector)
         return lanelet, idx_start, angle_diff
 
-    def _process_local_path(self, msg: PafLocalPath):
-        self._last_local_path = msg
+    def _get_local_path_follow_info(self, msg: PafLocalPath, max_dist_to_lane=None):
         vehicle_follow_info = self.get_follow_info()
         info_pts = []
         local_path_index, distance_to_lanelet_network = closest_index_of_point_list(msg.points, self._position)
-        if distance_to_lanelet_network <= 2.5:
+        if max_dist_to_lane is None or distance_to_lanelet_network <= max_dist_to_lane:
             vehicle_follow_info, info_pts = self._calculate_follow_vehicle_with_path(msg.points, local_path_index)
         if self.follow_trace_points:
             points = self.get_relevant_trace_points(msg.points, local_path_index)
@@ -118,9 +124,13 @@ class ObstaclePlanner:
             if trace_follow_info is not None and (
                 trace_follow_info.distance < vehicle_follow_info.distance or vehicle_follow_info.no_target
             ):
-                rospy.loginfo_throttle(5, "[obstacle planner] following trace")
                 vehicle_follow_info = trace_follow_info
                 info_pts = info2_pts
+
+        return vehicle_follow_info, info_pts
+
+    def _process_local_path(self, msg: PafLocalPath):
+        vehicle_follow_info, info_pts = self._get_local_path_follow_info(msg, max_dist_to_lane=2.5)
         rospy.loginfo_throttle(
             5,
             f"[obstacle planner] following={not vehicle_follow_info.no_target} v={vehicle_follow_info.speed} "

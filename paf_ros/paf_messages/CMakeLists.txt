@@ -34,6 +34,7 @@ add_service_files(
   DIRECTORY srv
   FILES
   PafRoutingService.srv
+  PafLaneInfoService.srv
 )
 
 generate_messages(

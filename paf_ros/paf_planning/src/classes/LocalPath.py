@@ -2,7 +2,15 @@ from time import perf_counter
 from typing import List, Tuple, Optional, Union
 
 import rospy
-from paf_messages.msg import PafLocalPath, Point2D, PafRouteSection, PafTopDownViewPointSet, PafTrafficSignal
+from paf_messages.msg import (
+    PafLocalPath,
+    Point2D,
+    PafRouteSection,
+    PafTopDownViewPointSet,
+    PafTrafficSignal,
+    PafObstacleFollowInfo,
+)
+from paf_messages.srv import PafLaneInfoService
 from .GlobalPath import GlobalPath
 from .HelperFunctions import dist, closest_index_of_point_list, expand_sparse_list, pts_to_xy
 
@@ -46,6 +54,20 @@ class LocalPath:
         self.plan_maximum_distance = plan_maximum_distance
         self.debug_pts = []  # this stores points to draw / display
         self.current_index = 0
+
+    @staticmethod
+    def _lane_info_service_call(pts: List[Point2D]) -> Optional[PafObstacleFollowInfo]:
+        service_name = "/paf/paf_obstacle_planner/lane_info_service"
+        rospy.loginfo_throttle(3, f"[local planner] requesting obstacle info for {len(pts)} points")
+        send = PafLocalPath()
+        send.points = pts
+        try:
+            rospy.wait_for_service(service_name, timeout=rospy.Duration(10))
+            call_service = rospy.ServiceProxy(service_name, PafLaneInfoService)
+            return call_service(send)
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
+            rospy.logerr_throttle(1, f"[local planner] {e}")
+            return None
 
     def current_indices(self, position: Point2D) -> Tuple[int, int]:
         """
