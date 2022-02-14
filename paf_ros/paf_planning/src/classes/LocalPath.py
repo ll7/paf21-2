@@ -891,13 +891,12 @@ class LocalPath:
                     return "straight"
             left_free = _left_free if _left_free is not None else get_distance(left)
             right_free = _right_free if _right_free is not None else get_distance(right)
-            straight_free = _straight_free if _straight_free is not None else get_distance(straight)
+            straight_free = _straight_free if _straight_free is not None else get_distance(straight) + 20
             rospy.logerr_throttle(
                 1,
                 f"[local planner] lane free distance for change: "
                 f"{left_free:.1f}/{straight_free:.1f}/{right_free:.1f}",
             )
-
         _sum = left_free + right_free + straight_free
 
         if _sum == 0:

@@ -71,7 +71,7 @@ class ObstaclePlanner:
         if dist(*msg.path_to_check.points[:2]) > 0.5:
             acc = 1
         info, _, _ = self._get_local_path_follow_info(
-            msg.path_to_check, max_dist_to_lane=None, acc=acc, check_traces=False
+            msg.path_to_check, max_dist_to_lane=None, acc=acc, check_traces=True
         )
         resp = PafLaneInfoServiceResponse()
         resp.follow_info = info
