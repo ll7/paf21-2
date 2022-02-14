@@ -14,9 +14,9 @@ add_message_files(
   FILES
   PafLocalPath.msg
   PafObstacle.msg
+  PafObstacleFollowInfo.msg
   PafObstacleList.msg
   Point2D.msg
-  PafLaneletRoute.msg
   PafRoutingRequest.msg
   PafRoutingGraphNode.msg
   PafTrafficSignal.msg
@@ -25,6 +25,9 @@ add_message_files(
   PafLogText.msg
   PafTopDownViewPointSet.msg
   PafSpeedMsg.msg
+  PafDetectedTrafficLights.msg
+  PafLaneletRoute.msg
+  PafRouteSection.msg
 )
 
 #add_service_files(

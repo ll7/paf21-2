@@ -72,10 +72,10 @@ class SemanticLidarNode(object):
         time = rospy.Time.now().to_time()
         delta = time - t0
         if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max odo fps={np.round(1 / delta,2)}")
         delta = time - self.frame_time_odo
         if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current odo fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current odo fps={np.round(1 / delta,2)}")
         self.frame_time_odo = time
 
     def _transform_to_relative_world_pos(self, leftwards: float, backwards: float) -> tuple:
@@ -105,10 +105,10 @@ class SemanticLidarNode(object):
         time = rospy.Time.now().to_time()
         delta = time - t0
         if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max lidar fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] max lidar fps={np.round(1 / delta,2)}")
         delta = time - self.frame_time_lidar
         if delta > 0:
-            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={1 / delta}")
+            rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[semantic lidar] current lidar fps={np.round(1 / delta,2)}")
         self.frame_time_lidar = time
 
     def _process_sorted_points_calculate_bounds(self, sorted_points: dict) -> dict:

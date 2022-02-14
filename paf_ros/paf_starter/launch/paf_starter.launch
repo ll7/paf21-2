@@ -76,6 +76,7 @@
 
   <!--  Perception  -->
   <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
+  <include file="$(find paf_perception)/launch/traffic_light_detector.launch"/>
 
   <!--  Local Planning  -->
   <include file="$(find paf_planning)/launch/paf_local_planner.launch"/>

@@ -12,7 +12,7 @@ from std_msgs.msg import Bool
 
 from paf_actor.pid_control import PIDLongitudinalController
 from paf_actor.stanley_control import StanleyLateralController
-from paf_messages.msg import PafLocalPath, PafLogScalar
+from paf_messages.msg import PafLocalPath, PafLogScalar, PafObstacleFollowInfo
 
 
 class VehicleController:
@@ -37,6 +37,21 @@ class VehicleController:
         self._target_speed: float = target_speed
         self._is_reverse: bool = False
         self._emergency_mode: bool = False
+
+        # timespan until the actor recognizes a stuck situation
+        self._stuck_check_time: float = 4.0
+        # speed threshold which is considered stuck
+        self._stuck_value_threshold: float = 1.0
+        self._stuck_start_time: float = 0.0  # time when the car got stuck
+        # time when the unstuck operation started (a.k.a. rear gear)
+        self._unstuck_start_time: float = 0.0
+        self._unstuck_check_time: float = 0.5  # max duration for the rear gear
+        # true while the car is driving backwards to unstuck
+        self._is_unstucking: bool = False
+
+        self._obstacle_follow_speed: float = float("inf")
+        self._obstacle_follow_min_distance: float = 4.0
+
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
 
@@ -93,7 +108,9 @@ class VehicleController:
             "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
         )
 
-        # self.__init_test_szenario()
+        self.obstacle_subscriber: rospy.Subscriber = rospy.Subscriber(
+            "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
+        )
 
     def __run_step(self):
         """
@@ -104,19 +121,49 @@ class VehicleController:
         """
         self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
 
+        # http://wiki.ros.org/rospy/Overview/Time
+        # rospy.Timer(rospy.Duration(10), self.found_obst, oneshot=False)
+
         # self.__init_test_szenario()
         try:
             steering, self._target_speed, distance = self.__calculate_steering()
             self._is_reverse = self._target_speed < 0.0
             self._target_speed = abs(self._target_speed)
 
+            if not self._is_reverse:
+                if self._target_speed > self._obstacle_follow_speed:
+                    self._target_speed = self._obstacle_follow_speed
+
             throttle: float = self.__calculate_throttle(dt, distance)
-        except RuntimeError:
+
+            rear_gear = False
+            is_left_of_path = self._lat_controller.cross_err < 0
+            is_unstucking_left = self._lat_controller.heading_error < 0
+            if is_left_of_path:
+                is_unstucking_left = not is_unstucking_left
+
+            if self._is_unstucking:
+                if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
+                    self._is_unstucking = False
+                else:
+                    rear_gear = True
+            elif self.__check_stuck() or self.__check_wrong_way():
+                rospy.logerr(f"stuck {'left' if is_unstucking_left else 'right'} " f"{self._lat_controller.cross_err}")
+                self._is_unstucking = True
+                self._unstuck_start_time = rospy.get_rostime().secs
+                rear_gear = True
+
+            if rear_gear:
+                throttle = 1
+                steering = 0.33 * -1 if is_unstucking_left else 1
+                self._is_reverse = True
+
+        except RuntimeError as e:
             throttle = -1.0
             steering = 0.0
             self._is_reverse = False
             self._target_speed = 0.0
-            rospy.loginfo_throttle(10, "[Actor] waiting for new local path")
+            rospy.logwarn_throttle(10, f"[Actor] error ({e})")
 
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
 
@@ -153,6 +200,20 @@ class VehicleController:
 
         return control
 
+    def __check_wrong_way(self):
+        return np.abs(self._lat_controller.heading_error) > np.pi * 0.66
+
+    def __check_stuck(self):
+        stuck = self._current_speed < self._stuck_value_threshold < self._target_speed
+        if not self._emergency_mode and stuck:
+            if self._stuck_start_time == 0.0:
+                self._stuck_start_time = rospy.get_rostime().secs
+                return False
+            elif rospy.get_rostime().secs - self._stuck_start_time >= self._stuck_check_time:
+                self._stuck_start_time = 0.0
+                return True
+        return False
+
     def __generate_control_message(self, throttle: float, steering: float) -> CarlaEgoVehicleControl:
         """
         Generate a control message for the CarlaEgoVehicle
@@ -179,7 +240,7 @@ class VehicleController:
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
 
-        if control.brake > 0 and self._current_speed > 5:
+        if control.brake > 0 and self._current_speed > 1:
             control.reverse = not self._is_reverse
             control.throttle = control.brake
 
@@ -204,7 +265,7 @@ class VehicleController:
         # perform pid control step with distance and speed controllers
         target_speed = self._target_speed * self._target_speed_offset
 
-        if distance >= 0.5 and self._current_speed > 10:
+        if distance >= 2 and self._current_speed > 10:
             target_speed = max(10, self._current_speed * (1 - 1e-8))
 
         lon: float = self._lon_controller.run_step(target_speed, self._current_speed, dt)
@@ -229,6 +290,7 @@ class VehicleController:
         """
         # rospy.loginfo(
         #    f"INHALT VON LOCAL_PATH with speed {local_path.target_speed}")
+        rospy.loginfo_throttle(10, f"[Actor] received new local path (len={local_path.points.__len__()})")
         self._route = local_path
 
     def __emergency_break_received(self, do_emergency_break: bool):
@@ -268,6 +330,21 @@ class VehicleController:
 
         self._current_pose = odo.pose.pose
 
+    def __handle_obstacle_msg(self, obstacle_follow_info: PafObstacleFollowInfo):
+        """
+        Handles the obstacle follow information
+
+        Args:
+            obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
+        """
+        if not obstacle_follow_info.no_target:
+            if obstacle_follow_info.distance <= self._obstacle_follow_min_distance:
+                rospy.loginfo("AHH OBSTACLE")
+                self._obstacle_follow_speed = obstacle_follow_info.speed
+        else:
+            rospy.loginfo("Puhhh no  OBSTACLE")
+            self._obstacle_follow_speed = float("inf")
+
     def run(self):
         """
         Control loop (throttle and steer)
@@ -284,6 +361,9 @@ class VehicleController:
                     r.sleep()
                 except rospy.ROSInterruptException:
                     pass
+
+    def __del__(self):
+        self.__generate_control_message(0, 0)
 
 
 def main():

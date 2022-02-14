@@ -5,7 +5,14 @@ import rospy
 from carla_birdeye_view.mask import PixelDimensions
 from time import sleep
 
-from paf_messages.msg import PafObstacleList, PafLocalPath, PafLaneletRoute, PafTopDownViewPointSet, PafSpeedMsg
+from paf_messages.msg import (
+    PafObstacleList,
+    PafLocalPath,
+    PafLaneletRoute,
+    PafTopDownViewPointSet,
+    PafSpeedMsg,
+    PafRouteSection,
+)
 from classes.TopDownView import TopDownView
 from sensor_msgs.msg import Image
 import numpy as np
@@ -60,7 +67,24 @@ class TopDownRosNode(object):
         self.producer.point_sets[msg.label] = msg
 
     def update_global_path(self, msg: PafLaneletRoute):
-        path = [[point.x, -point.y] for point in msg.points[::10]]
+        path = []
+        section: PafRouteSection
+        nan = 0
+        for section in msg.sections:
+            try:
+                point = section.points[section.target_lanes[0]]
+            except IndexError:
+                nan += 1
+                continue
+                # point = section.points[0]
+            if np.isnan(point.x):
+                nan += 1
+                continue
+            path.append([point.x, -point.y])
+        if nan > 0:
+            rospy.logerr_throttle(
+                5, f"[top down view] global path contains {nan} invalid points " f"(nan or target lanes index error)"
+            )
         self.producer.set_path(coordinate_list_global_path=path)
 
     def update_local_path(self, msg: PafLocalPath):
@@ -81,7 +105,7 @@ class TopDownRosNode(object):
             self.producer.info_text[0] = int(self.velocity())
             self.producer.info_text[3] = self.location()
             if delta > 0:
-                rospy.logwarn_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={1 / delta}")
+                rospy.loginfo_throttle(self.LOG_FPS_SECS, f"[top_down_view] fps={np.round(1 / delta, 2)}")
             self._move_spectator()
             rate.sleep()
 
@@ -100,8 +124,14 @@ class TopDownRosNode(object):
         spec_tf = self._spectator.get_transform()
         if (vehicle_tf.location.x - spec_tf.location.x) ** 2 + (
             vehicle_tf.location.y - spec_tf.location.y
-        ) ** 2 > 30 ** 2:
+        ) ** 2 > 20 ** 2:
             self._spectator.set_transform(vehicle_tf)
+
+    def __del__(self):
+        try:
+            self._spectator.set_transform(carla.Transform())
+        except Exception:
+            pass
 
 
 def main():

@@ -10,6 +10,7 @@ carla_birdeye_view (top-down-ansicht)
 pre-commit (coding conventions)
 commonroad-io (commonroad planungstools)
 tensorflow (tensorboard node)
+bezier (bezier curves for lane changes and map manager)
 ```
 ### Paketmanager ```sudo apt install <paket>```
 ```
