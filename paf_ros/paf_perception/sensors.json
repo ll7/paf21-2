@@ -142,7 +142,7 @@
       "upper_fov": 5.0,
       "lower_fov": -34.5,
       "rotation_frequency": 20,
-      "sensor_tick": 0.1
+      "sensor_tick": 0.05
     },
     {
       "type": "sensor.other.gnss",

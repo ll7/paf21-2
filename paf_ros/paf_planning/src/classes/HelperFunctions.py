@@ -39,8 +39,15 @@ def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray]) -> List[Poi
     :return: list of points
     """
     out = []
-    for x, y in xy_list:
-        out.append(Point2D(x, y))
+    for pt in xy_list:
+        try:
+            x, y = pt
+            pt = Point2D(x, y)
+        except (TypeError, ValueError):
+            pass
+        if type(pt) is not Point2D:
+            raise TypeError(f"unable to parse type {type(pt)} to Point2D ({pt}, {xy_list})")
+        out.append(pt)
     return out
 
 
@@ -76,7 +83,7 @@ def closest_index_of_point_list(
 
 def k_closest_indices_of_point_in_list(
     k: int,
-    pts_list: Union[List[Point2D], List[Tuple[float, float]]],
+    _pts_list: Union[List[Point2D], List[Tuple[float, float]]],
     target_pt: Union[Point2D, Tuple[float, float]],
     acc: int = 1,
 ) -> Tuple[List[int], List[float]]:
@@ -88,12 +95,19 @@ def k_closest_indices_of_point_in_list(
     :param acc: search only every nth point (nth=acc)
     :return: list of indices, list of distance to points
     """
-    if len(pts_list) == 0:
+    pts_list = _pts_list[::acc]
+
+    if len(pts_list) <= k:
+        k = len(pts_list) - 1
+
+    if len(pts_list) <= 0:
         return [], []
-    distances = [dist((p.x, p.y), target_pt) for p in pts_list[::acc]]
+
+    distances = [dist(p, target_pt) for p in pts_list]
     if len(distances) == 0:
         return [len(pts_list) - 1], [1e-10]
-    idx = np.argpartition(distances, k)[:k]
+    idx = np.argpartition(distances, k)
+    idx = idx[:k]
     return idx * acc, [distances[i] for i in idx]
 
 
@@ -103,6 +117,7 @@ def expand_sparse_list(
     points_target: List[Point2D],
     fill_value: Any = None,
     indices_new: List[int] = None,
+    accuracy: int = 4,
 ) -> Tuple[List[Any], List[int]]:
     """
     Expands a sparse list by either filling up the gaps with fill values
@@ -112,20 +127,25 @@ def expand_sparse_list(
     :param points_target: dense list of points with final length
     :param fill_value: optional filler value (previous value if not specified)
     :param indices_new: indices of sparse list in returned list
+    :param accuracy: accuracy (speed) of index search (take every nth entry, 4=1m with ds=0.25 in LocalPath class)
     :return: dense list, indices_new
     """
     if len(sparse_list) < len(points_current):
         raise ValueError(f"length of sparse list {len(sparse_list)} < " f"current points {len(points_current)}")
     if indices_new is None:
         indices_new = []
-        factor = int(len(points_target) / len(points_current)) + 2
+        factor = (int(len(points_target) / len(points_current)) + 2) * 4
         last_target_idx = 0
         for i, pt in enumerate(points_current):
+            if fill_value is not None and sparse_list[i] == fill_value:
+                indices_new += [0] if len(indices_new) == 0 else [indices_new[-1] + 1]
+                continue
             ind = (i + 1) * factor
-            last_target_idx = closest_index_of_point_list(points_target[last_target_idx:ind], pt)[0] + last_target_idx
+            idx_found, _ = closest_index_of_point_list(points_target[last_target_idx:ind], pt, accuracy)
+            last_target_idx = idx_found + last_target_idx
             indices_new += [last_target_idx]
 
-    out = [fill_value for _ in points_target]
+    out = [fill_value for _ in points_target]  # None or custom placeholder
 
     for v, idx in zip(sparse_list, indices_new):
         idx = idx + 5
@@ -238,8 +258,8 @@ def get_angle_between_vectors(
     if hasattr(v2, "y"):
         v2 = v2.x, v2.y
 
-    v1 = np.ndarray(v1)
-    v2 = np.ndarray(v2)
+    v1 = np.array(v1)
+    v2 = None if v2 is None else np.array(v2)
 
     if not is_normed:
         v1 = v1 / dist(v1, (0, 0))
@@ -247,5 +267,7 @@ def get_angle_between_vectors(
             v2 = v2 / dist(v2, (0, 0))
     if v2 is None:
         v2 = [0, 1]
-    yaw = np.arccos(np.dot(v2, v1)) + np.pi / 2
+    dot = np.dot(v2, v1)
+    det = v1[0] * v2[1] - v2[0] * v1[1]
+    yaw = np.arctan2(dot, det)
     return yaw

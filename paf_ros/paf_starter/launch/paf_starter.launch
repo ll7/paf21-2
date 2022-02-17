@@ -8,6 +8,9 @@
   <!-- Paf args -->
   <arg name='manual_control' default='false'/>
   <arg name='validation' default='true'/>
+  <arg name='rules_enabled' default='true'/>
+  <param name="rules_enabled" value="$(arg rules_enabled)"/>
+  <param name="validation" value="$(arg validation)"/>
 
   <!-- Ego vehicle -->
   <arg name='role_name' default='ego_vehicle'/>
@@ -68,7 +71,7 @@
 
   <!--  Run Time -->
   <group unless="$(arg validation)">
-    <!--    example else statement -->
+    <include file="$(find paf_validation)/launch/top_down_view.launch"/>
   </group>
 
   <!--  Steering  -->
@@ -76,10 +79,13 @@
 
   <!--  Perception  -->
   <include file="$(find paf_perception)/launch/semantic_lidar.launch"/>
-  <include file="$(find paf_perception)/launch/traffic_light_detector.launch"/>
+  <group if="$(arg rules_enabled)">
+    <include file="$(find paf_perception)/launch/traffic_light_detector.launch"/>
+  </group>
 
   <!--  Local Planning  -->
   <include file="$(find paf_planning)/launch/paf_local_planner.launch"/>
+  <include file="$(find paf_planning)/launch/paf_obstacle_planner.launch"/>
 
   <!--  Global Planning  -->
   <include file="$(find paf_planning)/launch/paf_global_planner.launch"/>

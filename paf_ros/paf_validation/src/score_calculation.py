@@ -16,6 +16,7 @@ class ScoreCalculationNode:
     def __init__(self):
         rospy.init_node("semantic_lidar", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
+        self._running = False
         self._start(init=True)
         rospy.Subscriber(f"/carla/{role_name}/collision", CarlaCollisionEvent, self._process_collision, queue_size=1)
         rospy.Subscriber(
@@ -46,6 +47,8 @@ class ScoreCalculationNode:
         self._score_total_pub = rospy.Publisher("/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1)
 
     def _start(self, _: Empty = None, init=False):
+        if self._running:
+            return
         rospy.logerr("[score calculation] start recording")
         self._driven_distance = 0
         self._running = not init

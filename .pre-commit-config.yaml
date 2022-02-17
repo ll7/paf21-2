@@ -1,4 +1,4 @@
-exclude: '^$'
+exclude: 'CRDesigner_Modified_Files'
 fail_fast: true
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks  # general
@@ -32,10 +32,14 @@ repos:
     rev: "4.0.1"
     hooks:
       - id: flake8
-        exclude: "CRDesigner_Modified_Files"
         args:
           - "--max-line-length=120"
           - "--ignore=W291,W503,W504,E203"
+#  - repo: https://github.com/econchick/interrogate
+#    rev: 1.4.0
+#    hooks:
+#      - id: interrogate
+#        args: [ -vv, -I, -i, -m, -M, -n, -C, -S, -P, --fail-under=80]
   - repo: local
     hooks:
       - id: build
