@@ -50,7 +50,8 @@ class VehicleController:
         self._is_unstucking: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
-        self._obstacle_follow_min_distance: float = 4.0
+        self._obstacle_follow_min_distance: float = 5
+        self._obstacle_follow_target_distance: float = 15
 
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
@@ -109,7 +110,7 @@ class VehicleController:
         )
 
         self.obstacle_subscriber: rospy.Subscriber = rospy.Subscriber(
-            "/paf/paf_perception/obstacle_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
+            "/paf/paf_obstacle_planner/following_info", PafObstacleFollowInfo, self.__handle_obstacle_msg
         )
 
     def __run_step(self):
@@ -201,9 +202,11 @@ class VehicleController:
         return control
 
     def __check_wrong_way(self):
+        return False
         return np.abs(self._lat_controller.heading_error) > np.pi * 0.66
 
     def __check_stuck(self):
+        return False
         stuck = self._current_speed < self._stuck_value_threshold < self._target_speed
         if not self._emergency_mode and stuck:
             if self._stuck_start_time == 0.0:
@@ -338,11 +341,20 @@ class VehicleController:
             obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
         """
         if not obstacle_follow_info.no_target:
-            if obstacle_follow_info.distance <= self._obstacle_follow_min_distance:
-                rospy.loginfo("AHH OBSTACLE")
-                self._obstacle_follow_speed = obstacle_follow_info.speed
+            if obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
+                rospy.loginfo_throttle(
+                    3, f"[Actor] reversing for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
+                )
+                self._obstacle_follow_speed = -5
+            elif obstacle_follow_info.distance <= self._obstacle_follow_min_distance:
+                rospy.loginfo_throttle(
+                    3, f"[Actor] stopping for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
+                )
+                self._obstacle_follow_speed = 0
+            elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
+                rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
+                self._obstacle_follow_speed = max(7, obstacle_follow_info.speed * 0.99)
         else:
-            rospy.loginfo("Puhhh no  OBSTACLE")
             self._obstacle_follow_speed = float("inf")
 
     def run(self):

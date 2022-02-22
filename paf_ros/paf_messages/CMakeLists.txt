@@ -30,9 +30,12 @@ add_message_files(
   PafRouteSection.msg
 )
 
-#add_service_files(
-#  FILES
-#)
+add_service_files(
+  DIRECTORY srv
+  FILES
+  PafRoutingService.srv
+  PafLaneInfoService.srv
+)
 
 generate_messages(
   DEPENDENCIES

@@ -3,7 +3,7 @@ from typing import List
 import numpy as np
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
-from paf_messages.msg import PafTrafficSignal, Point2D
+from paf_messages.msg import Point2D
 from .HelperFunctions import dist
 from .MapManager import MapManager
 
@@ -31,10 +31,10 @@ class SpeedCalculator:
         if rules_enabled is None:
             rules_enabled = MapManager.get_rules_enabled()
         SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if rules_enabled else 250 / 3.6
-        SpeedCalculator.MAX_SPEED = 95 / 3.6 if rules_enabled else 120 / 3.6
+        SpeedCalculator.MAX_SPEED = 95 / 3.6 if rules_enabled else 95 / 3.6
         SpeedCalculator.MIN_SPEED = 25 / 3.6 if rules_enabled else 25 / 3.6
-        SpeedCalculator.CURVE_FACTOR = 2 if rules_enabled else 2.5  # higher value = more drifting
-        SpeedCalculator.MAX_DECELERATION = 1 if rules_enabled else 1
+        SpeedCalculator.CURVE_FACTOR = 2 if rules_enabled else 2  # higher value = more drifting
+        SpeedCalculator.MAX_DECELERATION = 20 if rules_enabled else 20
         # m/s^2, higher value = later and harder braking
 
     def _get_deceleration_distance(self, v_0, v_target):
@@ -212,34 +212,13 @@ class SpeedCalculator:
         speed = np.clip(speed, 0, 999)
         return speed
 
-    def get_next_traffic_signal_deceleration(
-        self, traffic_signals: List[List[PafTrafficSignal]], from_index: int = 0, skip_first_hit=False
-    ):
-        chosen_sign = None
-        for i, traffic_signal_list in enumerate(traffic_signals[from_index:]):
-            if len(traffic_signal_list) > 0:
-                if skip_first_hit:
-                    skip_first_hit = False
-                    continue
-                for traffic_signal in traffic_signal_list:
-                    if traffic_signal in self.MUST_STOP_EVENTS:
-                        chosen_sign = traffic_signal
-                        break
-                    elif traffic_signal in self.CAN_STOP_EVENT:
-                        chosen_sign = traffic_signal
-                    else:
-                        pass  # skip other event types
-                if chosen_sign is not None:
-                    arr, ind = self._get_event_deceleration(target_speed=0, buffer_m=5, shift_m=-3)
-                    return arr, max([0, ind + i])
-        return [], 0
-
-    def _get_event_deceleration(self, target_speed=0, buffer_m=0, shift_m=0):
-        buffer_idx = int(buffer_m / self._step_size)
-        shift_idx = int(shift_m / self._step_size)
-        speed_limit, _ = self._linear_deceleration_function(target_speed)
-        speed_limit += [target_speed for _ in range(buffer_idx)]
-        return np.clip(speed_limit, target_speed, self.MAX_SPEED), shift_idx
+    def get_event_deceleration(self, target_speed: float = 0, buffer_m: float = 0, step=None):
+        if step is None:
+            step = self._step_size
+        buffer_idx = int(buffer_m / step) + 1  # add afterwards
+        speed_limit, breaking_distance = self._linear_deceleration_function(target_speed)
+        speed_limit = list(speed_limit) + [target_speed for _ in range(buffer_idx)]
+        return np.clip(speed_limit, target_speed, self.MAX_SPEED), breaking_distance
 
     def plt_init(self, add_accel=False):
         import matplotlib.pyplot as plt

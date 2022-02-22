@@ -1,4 +1,6 @@
+import warnings
 from collections import deque
+from warnings import catch_warnings
 
 import numpy as np
 from typing import List, Tuple, Union, Optional, Dict
@@ -36,12 +38,11 @@ class GlobalPath:
     ):
         SpeedCalculator.set_limits()
         self._adjacent_lanelets = None
-        self.lanelet_ids = None
         self._lanelet_network = None
         self._graph = None
         self.route = None
         self.sections_visited = 0
-        self.signal_positions = []
+        self.signals_on_path = msg.signals
         self._lanelet_network = lanelet_network
         self.lanelet_ids = lanelet_ids
 
@@ -315,9 +316,10 @@ class GlobalPath:
             idx = self._locate_obj_on_lanelet(vertices, merging_pt) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             paf_sign.value = self.MERGE_SPEED_RESET
+            paf_sign.point = Point2D(merging_pt[0], merging_pt[1])
             speed_limits += [paf_sign]
 
-            # self.signal_positions.append(Point2D(merging_pt[0], merging_pt[1]))
+            self.signals_on_path.append(paf_sign)
 
         # all traffic signs
         for sign_id in lanelet.traffic_signs:
@@ -333,12 +335,13 @@ class GlobalPath:
                 paf_sign.value = SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED
             idx = self._locate_obj_on_lanelet(vertices, tuple(sign.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
+            paf_sign.point = Point2D(sign.position[0], sign.position[1])
             if is_speed_limit:
                 speed_limits += [paf_sign]
             else:
                 traffic_signals += [paf_sign]
 
-            self.signal_positions.append(Point2D(sign.position[0], sign.position[1]))
+            self.signals_on_path.append(paf_sign)
 
         # all traffic lights
         for light_id in lanelet.traffic_lights:
@@ -356,10 +359,11 @@ class GlobalPath:
                 paf_sign.value /= paf_sign.value + red_value
             except ZeroDivisionError:
                 paf_sign.value = -33
+            paf_sign.point = Point2D(light.position[0], light.position[1])
             idx = self._locate_obj_on_lanelet(vertices, tuple(light.position)) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
             traffic_signals += [paf_sign]
-            self.signal_positions.append(Point2D(light.position[0], light.position[1]))
+            self.signals_on_path.append(paf_sign)
 
         traffic_signals = sorted(traffic_signals, key=lambda elem: elem.index)
 
@@ -379,67 +383,69 @@ class GlobalPath:
         Matches neighbouring lanes (self._adjacent_lanelets) to successors and calculates lane offsets for sections
         :return: list of tuples ( lanelets , anchors )
         """
+        with catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
 
-        def match_lane(_l_id, successors):
-            for _i, successor in enumerate(successors):
-                p0 = lanelets[_l_id].center_vertices[-1]
-                p1 = lanelets[successor].center_vertices[0]
-                if dist(p0, p1) < 0.5:  # check if last and first point are close
-                    return _i, successor
-            return None, None
+            def match_lane(_l_id, successors):
+                for _i, successor in enumerate(successors):
+                    p0 = lanelets[_l_id].center_vertices[-1]
+                    p1 = lanelets[successor].center_vertices[0]
+                    if dist(p0, p1) < 0.5:  # check if last and first point are close
+                        return _i, successor
+                return None, None
 
-        def sort_blob(blob):
-            _li = [self._lanelet_network.find_lanelet_by_id(_id) for _id in blob]
-            _lanelets = deque(_li[1:])
-            _out = deque(_li[:1])
-            iae = 0
-            for _let in _lanelets:
-                if _let in _out:
+            def sort_blob(blob):
+                _li = [self._lanelet_network.find_lanelet_by_id(_id) for _id in blob]
+                _lanelets = deque(_li[1:])
+                _out = deque(_li[:1])
+                iae = 0
+                for _let in _lanelets:
+                    if _let in _out:
+                        continue
+                    for _let2 in _out:
+                        iae += 1
+                        if _let2.adj_left == _let.lanelet_id:
+                            _out.appendleft(_let)
+                            break
+                        if _let2.adj_right == _let.lanelet_id:
+                            _out.append(_let)
+                            break
+
+                return [_let.lanelet_id for _let in _out], _li
+
+            blobs = []
+            anchors = []
+            lanelets = {}
+            for a, b, c in self._adjacent_lanelets:
+                li = b + [a] + c
+                if len(blobs) > 0 and a in blobs[-1]:
                     continue
-                for _let2 in _out:
-                    iae += 1
-                    if _let2.adj_left == _let.lanelet_id:
-                        _out.appendleft(_let)
-                        break
-                    if _let2.adj_right == _let.lanelet_id:
-                        _out.append(_let)
-                        break
+                li, __lanelets = sort_blob(li)
+                for __let in __lanelets:
+                    lanelets[__let.lanelet_id] = __let
+                blobs.append(li)
 
-            return [_let.lanelet_id for _let in _out], _li
+            for blob0, blob1 in zip(blobs, blobs[1:]):
+                anchor_l = 99  # leftmost lane to continue on
+                anchor_r = -1  # rightmost lane to continue on
+                shift_l = 99  # merging lanes from next segment on the left
+                for i, l_id in enumerate(blob0):
+                    successor_idx, successor_id = match_lane(l_id, blob1)
+                    if successor_idx is None:
+                        continue
+                    anchor_l = min(i, anchor_l)
+                    anchor_r = max(i, anchor_r)
+                    shift_l = min(successor_idx, shift_l)
+                if shift_l != 0 and len(blob0) == len(blob1) and anchor_l == 0 and anchor_r == len(blob1) - 1:
+                    shift_l = 0
+                anchors.append((shift_l, anchor_l, anchor_r))
 
-        blobs = []
-        anchors = []
-        lanelets = {}
-        for a, b, c in self._adjacent_lanelets:
-            li = b + [a] + c
-            if len(blobs) > 0 and a in blobs[-1]:
-                continue
-            li, __lanelets = sort_blob(li)
-            for __let in __lanelets:
-                lanelets[__let.lanelet_id] = __let
-            blobs.append(li)
-
-        for blob0, blob1 in zip(blobs, blobs[1:]):
-            anchor_l = 99  # leftmost lane to continue on
-            anchor_r = -1  # rightmost lane to continue on
-            shift_l = 99  # merging lanes from next segment on the left
-            for i, l_id in enumerate(blob0):
-                successor_idx, successor_id = match_lane(l_id, blob1)
-                if successor_idx is None:
-                    continue
-                anchor_l = min(i, anchor_l)
-                anchor_r = max(i, anchor_r)
-                shift_l = min(successor_idx, shift_l)
-            if shift_l != 0 and len(blob0) == len(blob1) and anchor_l == 0 and anchor_r == len(blob1) - 1:
-                shift_l = 0
-            anchors.append((shift_l, anchor_l, anchor_r))
-
-        i, _ = closest_index_of_point_list(
-            [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
-        )
-        anchors.append((0, i, i))
-        print(blobs)
-        return list(zip(blobs, anchors))
+            i, _ = closest_index_of_point_list(
+                [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
+            )
+            anchors.append((0, i, i))
+            # print(blobs)
+            return list(zip(blobs, anchors))
 
     def get_paf_lanelet_matrix(
         self, groups: List[Tuple[List[int], Tuple[int, int, int]]]
@@ -539,7 +545,7 @@ class GlobalPath:
         groups = self.get_lanelet_groups()
         matrix = self.get_paf_lanelet_matrix(groups)
         last_limits = None
-        self.signal_positions = []
+        self.signals_on_path = []
         for i, ((lanelet_id_list, (lanes_l, anchor_l, anchor_r)), (lanes, _, length)) in enumerate(zip(groups, matrix)):
             if last_limits is None:
                 last_limits = [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in lanes]
@@ -655,12 +661,12 @@ class GlobalPath:
 
             pts1 = PafTopDownViewPointSet()
             pts1.label = "signals_global"
-            pts1.points = self.signal_positions
+            pts1.points = [x.point for x in self.signals_on_path]
             pts1.color = (0, 255, 0)
             rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
         except rospy.exceptions.ROSException:
             pass
-
+        msg.signals = self.signals_on_path
         self.route = msg
         return msg
 

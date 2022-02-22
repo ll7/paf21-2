@@ -2,6 +2,7 @@ from typing import Tuple, List, Optional
 
 import numpy as np
 from commonroad.scenario.scenario import Scenario
+from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 import rospy
 from os.path import expanduser
@@ -73,6 +74,13 @@ class MapManager:
         return initial_pose
 
     @staticmethod
+    def light_is_opposite_stop_point():
+        try:
+            return MapManager.get_map() not in ["Town02"]
+        except ConnectionRefusedError:
+            return True
+
+    @staticmethod
     def get_demo_route() -> Tuple[Optional[PoseWithCovarianceStamped], Optional[List[Point2D]]]:
         """
         Get Standard Loop route on request
@@ -80,10 +88,10 @@ class MapManager:
         """
         town = MapManager.get_map()
 
-        # # uncomment for custom path debugging
+        # uncomment for custom path debugging
         # if "Town" in town:
-        #     return MapManager.point_to_pose((148.4, -241), -90), [
-        #         Point2D(193.8,-220),
+        #     return MapManager.point_to_pose((-23, -134), -90), [
+        #         Point2D(122, 201.6),
         #     ]
 
         if town == "Town01":
@@ -100,8 +108,7 @@ class MapManager:
             ]
         elif town == "Town03":
             return MapManager.point_to_pose((-6, -159), 180), [
-                Point2D(-23, -134),
-                # Point2D(68, -61),
+                Point2D(-49, -135),
                 Point2D(122, 201.6),
                 Point2D(-7, 43.5),
                 Point2D(8.8, 84),
@@ -208,15 +215,23 @@ class MapManager:
         plt.show()
 
     @staticmethod
-    def visualize_lp_and_gp(local_path_obj, cur_pt: Point2D):
+    def visualize_lp_and_gp(
+        local_path_obj, cur_pt: Point2D, xmin: float = None, xmax: float = None, ymin: float = None, ymax: float = None
+    ):
         """
         Visualize local and global path with matplotlib (for debugging planners)
+        :param xmin: Optional graph axis limit
+        :param xmax: Optional graph axis limit
+        :param ymin: Optional graph axis limit
+        :param ymax: Optional graph axis limit
         :param local_path_obj: LocalPath object
         :param cur_pt: location to start local plan on
         """
         from matplotlib import pyplot as plt
 
         def pts_to_x_y(pts):
+            if len(pts) == 0:
+                return ([], []), (99999, 99999, -99999, -99999)
             _x = [p.x for p in pts]
             _y = [p.y for p in pts]
             return (_x, _y), (np.min(_x), np.min(_y), np.max(_x), np.max(_y))
@@ -227,27 +242,63 @@ class MapManager:
         local_path_obj.global_path.as_msg()
 
         for s in local_path_obj.global_path.route.sections:
-            pts_gl_1 += s.points
+            pts_gl_1 += [p for i, p in enumerate(s.points) if i not in s.target_lanes]
             pts_gl_2 += [p for i, p in enumerate(s.points) if i in s.target_lanes]
 
         pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
         pts_loc_1 = local_path_obj.sparse_local_path
+        sign_positions = [x[0].point for x in local_path_obj.traffic_signals]
+        local_path_obj.set_alternate_speed_next_sign(0)
 
         xy1, minima1 = pts_to_x_y(pts_gl_1)
         xy2, minima2 = pts_to_x_y(pts_gl_2)
         xy3, minima3 = pts_to_x_y(pts_loc_1)
         xy4, minima4 = pts_to_x_y(pts_loc_2)
+        xy5, minima5 = pts_to_x_y(sign_positions)
+        xy6, minima6 = pts_to_x_y(local_path_obj.debug_pts)
 
-        x_min, y_min = np.min(np.array([minima1, minima2]), axis=1)
-        x_max, y_max = np.max(np.array([minima3, minima4]), axis=1)
+        plt.scatter(*xy2, label="Global Path (target)", s=1)
+        plt.scatter(*xy1, label="Global Path (other)", s=1)
+        # plt.plot(*xy3, label="Local Path (sparse)")
+        plt.plot(*xy4, label="Local Path (dense)")
+        plt.scatter(*xy5, label="Traffic Signals (GP)", s=10)
+
+        pts = []
+        for i, (signal, index, distance, match) in enumerate(local_path_obj.get_signal_indices()):
+            distance = np.round(distance, 1)
+            try:
+                name = TrafficSignIDGermany(signal.type).name
+            except ValueError:
+                name = signal.type
+            if index < 0:
+                plt.annotate(f"NOT{i}:{name}@{distance}m", (match.x, match.y))
+                plt.annotate(f"NOT{i}:{name}@{distance}m", (signal.point.x, signal.point.y))
+                continue
+            # print(
+            #     f"{name: <10}\t{distance: <10}{index: <10}"
+            #     f"{(np.round(signal.point.x, 1), np.round(signal.point.y, 1))}")
+            pts.append(match)
+            # plt.annotate(f"{index}:{name}@{distance}m", (signal.point.x, signal.point.y))
+            plt.annotate(f"{index}:{name}@{distance}m", (match.x, match.y))
+
+        xy7, minima7 = pts_to_x_y(pts)
+        plt.scatter(*xy7, label="Traffic Signals (LP)", s=10)
+        if len(xy6[0]) > 0:
+            plt.scatter(*xy6, label="Local Path (debug pts)", s=6)
+
+        _, _, x_max, y_max = np.max([minima3, minima4, minima6, minima7], axis=0)
+        x_min, y_min, _, _ = np.min([minima3, minima4, minima6, minima7], axis=0)
+
+        if xmin is not None:
+            x_min = xmin
+        if ymin is not None:
+            y_min = ymin
+        if xmax is not None:
+            x_max = xmax
+        if ymax is not None:
+            y_max = ymax
 
         plt.xlim([x_min - 10, x_max + 10])
         plt.ylim([y_min - 10, y_max + 10])
-
-        plt.scatter(*xy1, label="Global Path (all)", s=1)
-        plt.scatter(*xy2, label="Global Path (target)", s=1)
-        plt.plot(*xy3, label="Local Path (sparse)")
-        plt.plot(*xy4, label="Local Path (dense)")
-
         plt.legend()
         plt.show()
