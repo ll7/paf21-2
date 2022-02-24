@@ -175,7 +175,8 @@ class MapManager:
         if draw_route_lanelets:
             dict_param = {
                 "lanelet": {
-                    "unique_colors": False,  # colorizes center_vertices and labels of each lanelet differently
+                    # colorizes center_vertices and labels of each lanelet differently
+                    "unique_colors": False,
                     "draw_stop_line": False,
                     "stop_line_color": "#ffffff",
                     "draw_line_markings": True,
