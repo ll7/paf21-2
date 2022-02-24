@@ -76,7 +76,7 @@ class MapManager:
     @staticmethod
     def light_is_opposite_stop_point():
         try:
-            return MapManager.get_map() not in ["Town02"]
+            return MapManager.get_map() not in ["Town01", "Town02"]
         except ConnectionRefusedError:
             return True
 
