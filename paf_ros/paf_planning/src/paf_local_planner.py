@@ -230,17 +230,20 @@ class LocalPlanner:
         self._local_path.reset_alternate_speed()
         # TODO:MM
         #
+
+        if self._last_sign.type == "LIGHT":
+            clear_distance = LocalPath.CLEARING_SIGN_DIST_LIGHT
+        else:
+            clear_distance = LocalPath.CLEARING_SIGN_DIST
+
         if MapManager.light_is_opposite_stop_point():
             # american traffic light
-            if dist(self._current_pose.position, to_clear.point) <= LocalPath.CLEARING_SIGN_DIST:
+            if dist(self._current_pose.position, to_clear.point) <= clear_distance:
                 self._add_cleared_signal(to_clear)
         else:
             # european traffic light
             # experimental solution better for european style traffic lights
-            if (
-                dist(self._current_pose.position, to_clear.point) - LocalPath.OFFSET_LIGHTS_EU_M
-                <= LocalPath.CLEARING_SIGN_DIST_EU
-            ):
+            if dist(self._current_pose.position, to_clear.point) - LocalPath.OFFSET_LIGHTS_EU_M <= clear_distance:
                 # only add to ignored list when very close
                 self._add_cleared_signal(to_clear)
 

@@ -38,8 +38,8 @@ class LocalPath:
     # TODO:MM
     # war 10  # stopping points x meters before traffic light #beim test 7
     OFFSET_LIGHTS_EU_M = 9
-    CLEARING_SIGN_DIST_EU = 0
-    CLEARING_SIGN_DIST = 0  # war 5
+    CLEARING_SIGN_DIST_LIGHT = 0  # war 5
+    CLEARING_SIGN_DIST = 5
     RESUME_COURSE_COLORS = ["green", "yellow"]
     PREFER_TARGET_LANES_DIST = 200
 
