@@ -228,8 +228,6 @@ class LocalPlanner:
             return
         to_clear = copy.copy(self._last_sign)
         self._local_path.reset_alternate_speed()
-        # TODO:MM
-        #
 
         if self._last_sign.type == "LIGHT":
             clear_distance = LocalPath.CLEARING_SIGN_DIST_LIGHT

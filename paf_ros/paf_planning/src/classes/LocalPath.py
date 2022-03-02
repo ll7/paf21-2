@@ -35,8 +35,6 @@ class LocalPath:
     STRAIGHT_TO_TARGET_DIST = 10
     END_OF_ROUTE_SPEED = 5
     SPLINE_IN_CURVE_RADIUS = 15
-    # TODO:MM
-    # war 10  # stopping points x meters before traffic light #beim test 7
     OFFSET_LIGHTS_EU_M = 9
     CLEARING_SIGN_DIST_LIGHT = 0  # war 5
     CLEARING_SIGN_DIST = 5
