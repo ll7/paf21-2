@@ -1,3 +1,8 @@
 <launch>
-  <node pkg="paf_perception" type="traffic_light_detector.py" name="traffic_light_detector" output="screen" />
+  <arg name='dummy' default='false'/> <!-- true = green / red changing every 5 seconds / false = detect for real -->
+  <arg name='debug' default='true'/> <!-- debug screen with bounding box display -->
+  <node pkg="paf_perception" type="traffic_light_detector.py" name="traffic_light_detector" output="screen">
+    <param name="dummy" value="$(arg dummy)"/>
+    <param name="debug" value="$(arg debug)"/>
+  </node>
 </launch>

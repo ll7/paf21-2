@@ -15,6 +15,19 @@ cp -fr "$paf_dir/paf_ros/rosbridge_config.yaml" ~/carla-ros-bridge/ros-bridge/ca
 ln -sfn "$paf_dir/paf_ros/" ~/carla-ros-bridge/catkin_ws/src/
 ln -sfn "$paf_dir/Maps/" ~/.ros/
 
+red='\033[0;31m'
+green=$'\e[1;32m'
+yellow=$'\e[1;33m'
+blue=$'\e[1;34m'
+magenta=$'\e[1;35m'
+cyan=$'\e[1;36m'
+
+function echoc(){
+  NC='\033[0m'
+  # shellcheck disable=SC2059
+  printf "${2}${1}${NC}\n"
+}
+
 eval "$(cat ~/.bashrc | tail -n +10)" 1>/dev/null
 function carla_available() {
   if [[ "$(wmctrl -l)" =~ "CarlaUE4" ]]; then
@@ -24,7 +37,7 @@ function carla_available() {
   fi
 }
 function _close_ros() {
-  rosnode kill -a
+  rosnode kill -a 1>/dev/null 2>/dev/null
   wmctrl -c "spawn_npc.py"
   wmctrl -c "rqt_console"
   #  wmctrl -c ".launch"
@@ -32,16 +45,16 @@ function _close_ros() {
 }
 function exit_program() {
   # exit all ros instances
-  echo "closing all ros launchers..."
-  _close_ros 1>/dev/null
   echo ""
-  echo "following log files have been created:"
+  echoc "closing all ros launchers..." "$yellow"
+  _close_ros
   echo ""
+  echoc "following log files have been created:" "$yellow"
   cd ~/.ros/log/latest || exit_program
   # shellcheck disable=SC2162
   # shellcheck disable=SC2088
   # shellcheck disable=SC2185
-  find -iname "*.log" | tr " " "\n" | while read line; do echo "~/.ros/log/latest/${line:2}"; done
+  find -iname "*paf*.log" | tr " " "\n" | while read line; do echo "~/.ros/log/latest/${line:2}"; done
   exit
 }
 function close_ros() {
@@ -74,14 +87,14 @@ function start_terminal() { # opt:name, cmd
 function reduce_ros_log_noise() {
   # rqt_console, #rqt_logger_level
   rosservice call /rviz/set_logger_level "logger: 'ros'
-level: 'Error'"
+level: 'Error'" 1>/dev/null
   rosservice call /carla_ros_bridge/set_logger_level "logger: 'rosout'
-level: 'Error'"
+level: 'Error'" 1>/dev/null
   rosservice call /carla_ego_vehicle_ego_vehicle/set_logger_level "logger: 'rosout'
-level: 'Error'"
+level: 'Error'" 1>/dev/null
 }
 function start_terminal_wait_until_it_stays_open() { # cmd, name
-  echo $1
+  echo "$1"
   STATUS=$(./subscripts/wait_for_window.sh "$2" open 3)
   while [ "$STATUS" = "closed" ]; do
     start_terminal "$1"
@@ -98,9 +111,11 @@ arguments:
 --npcs/-n
 --low-quality/-lq
 --manual-control/-mc
+--no-rules/-nr (rules enabled by default)
 TownXX
 
-Allowed towns are Town01, Town02, Town03, Town04, Town05, Town06, Town07 and Town10HD"
+Allowed towns are Town01, Town02, Town03, Town04, Town05, Town06, Town07 and Town10HD
+"
 
 trap exit_program SIGINT
 
@@ -109,6 +124,7 @@ BUILD_ROS=0
 NPCS=0
 CARLA_ARGS=""
 TOWN_ARGS="town:=Town03"
+RULES_ARGS="rules_enabled:=true"
 for VAR in "$@"; do
   if [ "$VAR" = "-h" ]; then
     exit
@@ -121,6 +137,12 @@ for VAR in "$@"; do
   fi
   if [ "$VAR" = "-scr" ]; then
     CARLA_SKIP=1
+  fi
+  if [ "$VAR" = "--no-rules" ]; then
+    RULES_ARGS="rules_enabled:=false"
+  fi
+  if [ "$VAR" = "-nr" ]; then
+    RULES_ARGS="rules_enabled:=false"
   fi
   if [ "$VAR" = "--manual-control" ]; then
     ros_launch_args="$ros_launch_args manual_control:=true"
@@ -161,10 +183,11 @@ if ((BUILD_ROS)); then
 fi
 if ((CARLA_SKIP)); then
   if carla_available; then
-    echo skipping carla restart...
+    echoc "skipping carla restart..." "$yellow"
+    echo ""
     NPCS=0
   else
-    echo starting carla...
+    echoc "starting carla..." "$yellow"
     carla_start $CARLA_ARGS
   fi
 else
@@ -174,11 +197,12 @@ else
 fi
 eval "$(cat ~/.bashrc | tail -n +10)"
 close_ros 2>/dev/null
-echo "starting main launcher..."
-start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $TOWN_ARGS $ros_launch_args" "$main_launch_script"
+echoc "starting main launcher..." "$yellow"
+start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $TOWN_ARGS $RULES_ARGS $ros_launch_args" "$main_launch_script"
 reduce_ros_log_noise
 if ((NPCS)); then
   echo "spawning npcs..."
+  # shellcheck disable=SC2086
   gnome-terminal --title="spawn_npc.py" -- python ~/carla_0.9.10.1/PythonAPI/examples/spawn_npc.py $npc_launch_args
 fi
 
@@ -188,11 +212,10 @@ if (rosnode list | grep ERROR); then
   exit
 fi
 
-echo "loaded the following nodes successfully:"
+echoc "loaded the following nodes successfully:" "$yellow"
 rosnode list
 reduce_ros_log_noise
 #gnome-terminal --title="rqt_console" -- rqt_console
-echo ""
 echo "press ctrl+c to kill all ros terminals."
 
 echo "listening for error/exit of carla environment..."

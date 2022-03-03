@@ -1,5 +1,6 @@
 import cv2
 
+
 def show_image(title, image):
     max_width, max_height = 1200, 800
 
