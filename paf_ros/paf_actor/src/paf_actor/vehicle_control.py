@@ -39,7 +39,7 @@ class VehicleController:
         self._emergency_mode: bool = False
 
         # timespan until the actor recognizes a stuck situation
-        self._stuck_check_time: float = 8.0
+        self._stuck_check_time: float = 4.0
         # speed threshold which is considered stuck
         self._stuck_value_threshold: float = 1.0
         self._stuck_start_time: float = 0.0  # time when the car got stuck
@@ -122,6 +122,10 @@ class VehicleController:
         """
         self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
 
+        # http://wiki.ros.org/rospy/Overview/Time
+        # rospy.Timer(rospy.Duration(10), self.found_obst, oneshot=False)
+
+        # self.__init_test_szenario()
         try:
             steering, self._target_speed, distance = self.__calculate_steering()
             self._is_reverse = self._target_speed < 0.0
@@ -152,8 +156,7 @@ class VehicleController:
 
             if rear_gear:
                 throttle = 1
-                # steering = 0.33 * -1 if is_unstucking_left else 1
-                steering = 0.0
+                steering = 0.33 * -1 if is_unstucking_left else 1
                 self._is_reverse = True
 
         except RuntimeError as e:
@@ -203,6 +206,7 @@ class VehicleController:
         return np.abs(self._lat_controller.heading_error) > np.pi * 0.66
 
     def __check_stuck(self):
+        return False
         stuck = self._current_speed < self._stuck_value_threshold < self._target_speed
         if not self._emergency_mode and stuck:
             if self._stuck_start_time == 0.0:
