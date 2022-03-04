@@ -39,7 +39,7 @@ class VehicleController:
         self._emergency_mode: bool = False
 
         # timespan until the actor recognizes a stuck situation
-        self._stuck_check_time: float = 8.0
+        self._stuck_check_time: float = 4.0
         # speed threshold which is considered stuck
         self._stuck_value_threshold: float = 1.0
         self._stuck_start_time: float = 0.0  # time when the car got stuck
@@ -50,8 +50,9 @@ class VehicleController:
         self._is_unstucking: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
-        self._obstacle_follow_min_distance: float = 5
-        self._obstacle_follow_target_distance: float = 15
+        self._obstacle_follow_min_distance: float = 4.0
+        self._obstacle_follow_target_distance: float = 8.0
+        self._obstacle_follow_active = False
 
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
@@ -130,6 +131,13 @@ class VehicleController:
             if not self._is_reverse:
                 if self._target_speed > self._obstacle_follow_speed:
                     self._target_speed = self._obstacle_follow_speed
+                    if self._obstacle_follow_speed < 0:  # if we are to close we just want to reverse
+                        steering = 0.0
+
+            rospy.logerr(
+                f"[ACTOR] target_speed: {self._target_speed}, "
+                "\nobstacle_follow_speed: {self._obstacle_follow_speed},\ncurrent_speed: {self._current_speed}"
+            )
 
             throttle: float = self.__calculate_throttle(dt, distance)
 
@@ -144,6 +152,7 @@ class VehicleController:
                     self._is_unstucking = False
                 else:
                     rear_gear = True
+
             elif self.__check_stuck() or self.__check_wrong_way():
                 rospy.logerr(f"stuck {'left' if is_unstucking_left else 'right'} " f"{self._lat_controller.cross_err}")
                 self._is_unstucking = True
@@ -211,6 +220,8 @@ class VehicleController:
             elif rospy.get_rostime().secs - self._stuck_start_time >= self._stuck_check_time:
                 self._stuck_start_time = 0.0
                 return True
+        else:
+            self._stuck_start_time = 0.0
         return False
 
     def __generate_control_message(self, throttle: float, steering: float) -> CarlaEgoVehicleControl:
@@ -239,12 +250,16 @@ class VehicleController:
         control.manual_gear_shift = False
         control.reverse = self._is_reverse
 
-        if control.brake > 0 and self._current_speed > 1:
+        if control.brake > 0 and (self._current_speed > 1 or self._obstacle_follow_active):
             control.reverse = not self._is_reverse
             control.throttle = control.brake
 
+            if self._obstacle_follow_active:
+                control.brake = 0.0
+                control.steer = 0.0
+
         if self._emergency_mode:
-            control.hand_brake = True  # True
+            control.hand_brake = True
             control.steer = np.rad2deg(30.0)
             control.brake = 0.0
             control.throttle = 1.0
@@ -337,6 +352,7 @@ class VehicleController:
             obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
         """
         if not obstacle_follow_info.no_target:
+            rospy.loginfo("FOUND OBSTACLE")
             if obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
                 rospy.loginfo_throttle(
                     3, f"[Actor] reversing for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
@@ -349,8 +365,11 @@ class VehicleController:
                 self._obstacle_follow_speed = 0
             elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
                 rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
-                self._obstacle_follow_speed = max(7, obstacle_follow_info.speed * 0.99)
+                self._obstacle_follow_speed = obstacle_follow_info.speed * 0.99
+            if self._obstacle_follow_speed != float("inf"):
+                self._obstacle_follow_active = True
         else:
+            self._obstacle_follow_active = False
             self._obstacle_follow_speed = float("inf")
 
     def run(self):
