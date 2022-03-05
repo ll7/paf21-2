@@ -96,6 +96,15 @@ class TrafficLightDetector:
         :param use_gpu: whether the classification model should be loaded to the gpu
         """
 
+        self.map_name = None
+        self.init = True
+
+        if self.map_name is None:
+            try:
+                self.map_name = rospy.get_param("/carla/town")
+            except ConnectionRefusedError:
+                self.map_name = "Town03"
+
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         self.traffic_light_publisher: rospy.Publisher = rospy.Publisher(
@@ -253,6 +262,19 @@ class TrafficLightDetector:
                         max([int(x1 * h_scale - 5), 0]) : min([width_rgb, int(x2 * h_scale + 1)]),
                         :,
                     ]
+                    if self.map_name == "Town10HD":
+                        crop_rgb_hsv = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2HSV)
+                        lower_yellow = np.array([20, 93, 0], dtype="uint8")
+                        upper_yellow = np.array([27, 255, 240], dtype="uint8")
+                        yellow_mask = cv2.inRange(crop_rgb_hsv, lower_yellow, upper_yellow)
+                        yellow_mask = cv2.bitwise_not(yellow_mask, yellow_mask)
+                        result = cv2.bitwise_and(crop_rgb_hsv, crop_rgb_hsv, mask=yellow_mask)
+                        crop_rgb = cv2.cvtColor(result, cv2.COLOR_HSV2RGB)
+                        if self.init:
+                            cv2.imwrite("crop_rgb_hsv.jpg", crop_rgb_hsv)
+                            cv2.imwrite("yellow_mask.jpg", yellow_mask)
+                            cv2.imwrite("crop_rgb_after.jpg", crop_rgb)
+                            self.init = False
                     # Classify the cropped image
                     label, confidence = self.__extract_label(crop_rgb)
                     if label is not None:
