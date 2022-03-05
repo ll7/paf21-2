@@ -97,7 +97,6 @@ class TrafficLightDetector:
         """
 
         self.map_name = None
-        self.init = True
 
         if self.map_name is None:
             try:
@@ -263,18 +262,22 @@ class TrafficLightDetector:
                         :,
                     ]
                     if self.map_name == "Town10HD":
+                        # cv2.imshow("crop_rgb", crop_rgb)
+                        # cv2.waitKey(1)
+                        self.confidence_min = 0.75
                         crop_rgb_hsv = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2HSV)
-                        lower_yellow = np.array([20, 93, 0], dtype="uint8")
-                        upper_yellow = np.array([27, 255, 240], dtype="uint8")
+                        lower_yellow = np.array([20, 100, 100], dtype="uint8")
+                        upper_yellow = np.array([30, 255, 255], dtype="uint8")
                         yellow_mask = cv2.inRange(crop_rgb_hsv, lower_yellow, upper_yellow)
-                        yellow_mask = cv2.bitwise_not(yellow_mask, yellow_mask)
+                        yellow_mask = 255 - yellow_mask
                         result = cv2.bitwise_and(crop_rgb_hsv, crop_rgb_hsv, mask=yellow_mask)
                         crop_rgb = cv2.cvtColor(result, cv2.COLOR_HSV2RGB)
-                        if self.init:
-                            cv2.imwrite("crop_rgb_hsv.jpg", crop_rgb_hsv)
-                            cv2.imwrite("yellow_mask.jpg", yellow_mask)
-                            cv2.imwrite("crop_rgb_after.jpg", crop_rgb)
-                            self.init = False
+                        # cv2.imshow("crop_rgb_hsv", cv2.cvtColor(crop_rgb_hsv, cv2.COLOR_HSV2BGR))
+                        # cv2.waitKey(1)
+                        # cv2.imshow("yellow_mask", yellow_mask)
+                        # cv2.waitKey(1)
+                        # cv2.imshow("crop_rgb_after", cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2BGR))
+                        # cv2.waitKey(1)
                     # Classify the cropped image
                     label, confidence = self.__extract_label(crop_rgb)
                     if label is not None:
