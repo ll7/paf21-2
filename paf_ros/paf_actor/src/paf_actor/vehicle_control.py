@@ -55,8 +55,7 @@ class VehicleController:
         self._obstacle_follow_active = False
         self._obstacle_follow_distance = float("inf")
 
-        # TODO remove this (handled by the local planner)
-        self._last_point_reached = False
+        self._u_turn_speed = 5
 
         self._start_time = None
         self._end_time = None
@@ -65,7 +64,6 @@ class VehicleController:
         args_longitudinal = {"K_P": 0.25, "K_D": 0.0, "K_I": 0.1}
         self._target_speed_offset = 1.2
         # Stanley control parameters
-        args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
         args_lateral = {"k": 2.5, "Kp": 1.0, "L": 2, "max_steer": 30.0, "min_speed": 0.1}
 
         self._lon_controller: PIDLongitudinalController = PIDLongitudinalController(**args_longitudinal)
@@ -141,13 +139,16 @@ class VehicleController:
             #    f"\nobstacle_follow_distance: {self._obstacle_follow_distance}"
             # )
 
+            rospy.loginfo(
+                f"heading error: {self._lat_controller.heading_error}, cross_error: {self._lat_controller.cross_err}"
+            )
+            if np.abs(self._lat_controller.heading_error) > 0.8:  # np.pi/2:
+                rospy.logerr("U-TURN BABY")
+                self._target_speed = self._u_turn_speed
+
             throttle: float = self.__calculate_throttle(dt, distance)
 
             rear_gear = False
-            is_left_of_path = self._lat_controller.cross_err < 0
-            is_unstucking_left = self._lat_controller.heading_error < 0
-            if is_left_of_path:
-                is_unstucking_left = not is_unstucking_left
 
             if self._is_unstucking:
                 if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
@@ -156,7 +157,6 @@ class VehicleController:
                     rear_gear = True
 
             elif self.__check_stuck() or self.__check_wrong_way():
-                rospy.logerr(f"stuck {'left' if is_unstucking_left else 'right'} " f"{self._lat_controller.cross_err}")
                 self._is_unstucking = True
                 self._unstuck_start_time = rospy.get_rostime().secs
                 rear_gear = True
