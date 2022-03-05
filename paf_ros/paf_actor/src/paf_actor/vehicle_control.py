@@ -53,6 +53,7 @@ class VehicleController:
         self._obstacle_follow_min_distance: float = 4.0
         self._obstacle_follow_target_distance: float = 8.0
         self._obstacle_follow_active = False
+        self._obstacle_follow_distance = float("inf")
 
         # TODO remove this (handled by the local planner)
         self._last_point_reached = False
@@ -134,10 +135,11 @@ class VehicleController:
                     if self._obstacle_follow_speed < 0:  # if we are to close we just want to reverse
                         steering = 0.0
 
-            rospy.logerr(
-                f"[ACTOR] target_speed: {self._target_speed}, "
-                "\nobstacle_follow_speed: {self._obstacle_follow_speed},\ncurrent_speed: {self._current_speed}"
-            )
+            # rospy.logerr(
+            #    f"\n[ACTOR] \ntarget_speed: {self._target_speed}, "
+            #    f"\nobstacle_follow_speed: {self._obstacle_follow_speed},\ncurrent_speed: {self._current_speed}"
+            #    f"\nobstacle_follow_distance: {self._obstacle_follow_distance}"
+            # )
 
             throttle: float = self.__calculate_throttle(dt, distance)
 
@@ -352,7 +354,8 @@ class VehicleController:
             obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
         """
         if not obstacle_follow_info.no_target:
-            rospy.loginfo("FOUND OBSTACLE")
+
+            self._obstacle_follow_distance = obstacle_follow_info.distance
             if obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
                 rospy.loginfo_throttle(
                     3, f"[Actor] reversing for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
@@ -366,6 +369,9 @@ class VehicleController:
             elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
                 rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
                 self._obstacle_follow_speed = obstacle_follow_info.speed * 0.99
+            else:
+                self._obstacle_follow_speed = float("inf")
+                self._obstacle_follow_active = False
             if self._obstacle_follow_speed != float("inf"):
                 self._obstacle_follow_active = True
         else:
