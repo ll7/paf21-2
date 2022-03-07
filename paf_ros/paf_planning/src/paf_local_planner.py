@@ -436,8 +436,7 @@ class LocalPlanner:
             if self._current_speed < 0.01:
                 if sleep > 0:
                     rospy.sleep(sleep)
-                # self._send_standard_loop_request()  # todo remove in production
-                self._send_random_global_path_request()
+                self._send_standard_loop_request()
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)
