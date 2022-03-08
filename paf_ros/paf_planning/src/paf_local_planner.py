@@ -188,14 +188,22 @@ class LocalPlanner:
         self._check_for_signs_on_path()
         self._publish_local_path_msg()
 
-        if (
-            self._current_speed < 25 / 3.6
-            and self._current_speed > 5 / 3.6
-            and self._local_path_idx < len(self._local_path) - 150
-        ):  # todo fix: acting does not like very short paths
-            rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally and globally")
-            # self._replan_local_path()
-            # self._send_global_reroute_request()
+        if self.rules_enabled:
+            if (
+                self._current_speed < 25 / 3.6
+                and self._current_speed > 5 / 3.6
+                and self._local_path_idx < len(self._local_path) - 150
+            ):  # todo fix: acting does not like very short paths
+                rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally and globally")
+                # self._replan_local_path()
+                # self._send_global_reroute_request()
+        else:
+            if (
+                self._current_speed < 25 / 3.6 and self._local_path_idx < len(self._local_path) - 150
+            ):  # todo fix: acting does not like very short paths
+                rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally and globally")
+                self._replan_local_path()
+                # self._send_global_reroute_request()
 
         # if self._last_sign is not None:
         #     self._ignore_sign = self._last_sign
