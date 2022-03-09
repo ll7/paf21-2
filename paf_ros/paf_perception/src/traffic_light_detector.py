@@ -262,7 +262,7 @@ class TrafficLightDetector:
                         :,
                     ]
                     if self.map_name == "Town10HD":
-                        self.confidence_min = 0.52
+                        self.confidence_min = 0.45
                         crop_rgb_hsv = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2HSV)
                         # lower boundary RED color range values; Hue (0 - 10)
                         lower_red_1 = np.array([0, 100, 20])
@@ -281,23 +281,36 @@ class TrafficLightDetector:
                         upper_green = np.array([86, 255, 255], dtype="uint8")
                         green_mask = cv2.inRange(crop_rgb_hsv, lower_green, upper_green)
                         full_mask = lower_mask_red + upper_mask_red + red_mask_violet + green_mask
-                        result = cv2.bitwise_and(crop_rgb_hsv, crop_rgb_hsv, mask=full_mask)
-                        crop_rgb = cv2.cvtColor(result, cv2.COLOR_HSV2RGB)
+                        # Turn image to grayscale
+                        h1, s1, v1 = cv2.split(crop_rgb_hsv)
+                        h0 = np.zeros_like(h1)
+                        s0 = np.zeros_like(s1)
+                        crop_rgb_grayscale = cv2.merge([h0, s0, v1])
+                        gray_masked = cv2.bitwise_and(crop_rgb_grayscale, crop_rgb_grayscale, mask=255 - full_mask)
+                        colors = cv2.bitwise_and(crop_rgb_hsv, crop_rgb_hsv, mask=full_mask)
+                        crop_rgb = cv2.cvtColor(gray_masked + colors, cv2.COLOR_HSV2RGB)
                         # cv2.imshow("crop_rgb_hsv", cv2.cvtColor(crop_rgb_hsv, cv2.COLOR_HSV2BGR))
                         # cv2.waitKey(1)
                         # cv2.imshow("full_mask", full_mask)
+                        # cv2.waitKey(1)
+                        # cv2.imshow("rgb_grayscale", crop_rgb_grayscale)
+                        # cv2.waitKey(1)
+                        # cv2.imshow("gray_masked", gray_masked)
                         # cv2.waitKey(1)
                         # cv2.imshow("crop_rgb_after", cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2BGR))
                         # cv2.waitKey(1)
                     # Classify the cropped image
                     label, confidence = self.__extract_label(crop_rgb)
                     if label is not None:
-                        boxes.append(
-                            np.array([x1, y1, w, h]) / np.array([width_seg, height_seg, width_seg, height_seg])
-                        )
-                        classes.append(label)
-                        confidences.append(confidence)
-                        distances.append(distance)
+                        if self.map_name == "Town10HD" and (w > h or x2 < 750):
+                            pass
+                        else:
+                            boxes.append(
+                                np.array([x1, y1, w, h]) / np.array([width_seg, height_seg, width_seg, height_seg])
+                            )
+                            classes.append(label)
+                            confidences.append(confidence)
+                            distances.append(distance)
 
         # apply non-maxima suppression to suppress weak, overlapping bounding boxes
         idxs = cv2.dnn.NMSBoxes(boxes, confidences, self.confidence_min, self.threshold)
