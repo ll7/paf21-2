@@ -35,8 +35,9 @@ from tf.transformations import euler_from_quaternion
 class ObstaclePlanner:
     rules_enabled = MapManager.get_rules_enabled()
     network = MapManager.get_current_scenario().lanelet_network
+    # TODO:MM
     ON_LANELET_DISTANCE = 2
-    ON_LANELET_DISTANCE_PEDESTRIANS = 0.01
+    ON_LANELET_DISTANCE_PEDESTRIANS = 0.3  # vorher 0.01
     SHOW_TRACE_PTS = True
     SHOW_FOLLOW_PTS = True
 

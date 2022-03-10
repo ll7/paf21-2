@@ -139,9 +139,9 @@ class VehicleController:
             #    f"\nobstacle_follow_distance: {self._obstacle_follow_distance}"
             # )
 
-            rospy.loginfo(
-                f"heading error: {self._lat_controller.heading_error}, cross_error: {self._lat_controller.cross_err}"
-            )
+            # rospy.loginfo(
+            #    f"heading error: {self._lat_controller.heading_error}, cross_error: {self._lat_controller.cross_err}"
+            # )
             if np.abs(self._lat_controller.heading_error) > 0.8:  # np.pi/2:
                 rospy.logerr("U-TURN BABY")
                 self._target_speed = self._u_turn_speed
@@ -353,14 +353,15 @@ class VehicleController:
         Args:
             obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
         """
-        if not obstacle_follow_info.no_target:
+        if not obstacle_follow_info.no_target and rospy.get_param("rules_enabled", False):
 
             self._obstacle_follow_distance = obstacle_follow_info.distance
             if obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
                 rospy.loginfo_throttle(
                     3, f"[Actor] reversing for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
                 )
-                self._obstacle_follow_speed = -5
+                pass
+                # self._obstacle_follow_speed = -5
             elif obstacle_follow_info.distance <= self._obstacle_follow_min_distance:
                 rospy.loginfo_throttle(
                     3, f"[Actor] stopping for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
