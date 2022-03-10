@@ -96,6 +96,14 @@ class TrafficLightDetector:
         :param use_gpu: whether the classification model should be loaded to the gpu
         """
 
+        self.map_name = None
+
+        if self.map_name is None:
+            try:
+                self.map_name = rospy.get_param("/carla/town")
+            except ConnectionRefusedError:
+                self.map_name = "Town03"
+
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         self.traffic_light_publisher: rospy.Publisher = rospy.Publisher(
@@ -253,6 +261,34 @@ class TrafficLightDetector:
                         max([int(x1 * h_scale - 5), 0]) : min([width_rgb, int(x2 * h_scale + 1)]),
                         :,
                     ]
+                    if self.map_name == "Town10HD":
+                        self.confidence_min = 0.52
+                        crop_rgb_hsv = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2HSV)
+                        # lower boundary RED color range values; Hue (0 - 10)
+                        lower_red_1 = np.array([0, 100, 20])
+                        upper_red_1 = np.array([10, 255, 255])
+                        # upper boundary RED color range values; Hue (160 - 180)
+                        lower_red_2 = np.array([160, 100, 20])
+                        upper_red_2 = np.array([179, 255, 255])
+                        # violet RED color range
+                        lower_violet = np.array([170, 70, 50], dtype="uint8")
+                        upper_violet = np.array([180, 255, 240], dtype="uint8")
+                        lower_mask_red = cv2.inRange(crop_rgb_hsv, lower_red_1, upper_red_1)
+                        upper_mask_red = cv2.inRange(crop_rgb_hsv, lower_red_2, upper_red_2)
+                        red_mask_violet = cv2.inRange(crop_rgb_hsv, lower_violet, upper_violet)
+                        # GREEN color range
+                        lower_green = np.array([36, 0, 0], dtype="uint8")
+                        upper_green = np.array([86, 255, 255], dtype="uint8")
+                        green_mask = cv2.inRange(crop_rgb_hsv, lower_green, upper_green)
+                        full_mask = lower_mask_red + upper_mask_red + red_mask_violet + green_mask
+                        result = cv2.bitwise_and(crop_rgb_hsv, crop_rgb_hsv, mask=full_mask)
+                        crop_rgb = cv2.cvtColor(result, cv2.COLOR_HSV2RGB)
+                        # cv2.imshow("crop_rgb_hsv", cv2.cvtColor(crop_rgb_hsv, cv2.COLOR_HSV2BGR))
+                        # cv2.waitKey(1)
+                        # cv2.imshow("full_mask", full_mask)
+                        # cv2.waitKey(1)
+                        # cv2.imshow("crop_rgb_after", cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2BGR))
+                        # cv2.waitKey(1)
                     # Classify the cropped image
                     label, confidence = self.__extract_label(crop_rgb)
                     if label is not None:
