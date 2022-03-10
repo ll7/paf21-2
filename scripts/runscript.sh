@@ -124,7 +124,7 @@ BUILD_ROS=0
 NPCS=0
 CARLA_ARGS=""
 TOWN_ARGS="town:=Town03"
-RULES_ARGS="rules_enabled:=false"
+RULES_ARGS="rules_enabled:=true"
 for VAR in "$@"; do
   if [ "$VAR" = "-h" ]; then
     exit
