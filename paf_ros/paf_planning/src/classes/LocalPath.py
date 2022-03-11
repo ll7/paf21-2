@@ -1,6 +1,7 @@
 from time import perf_counter
 from typing import List, Tuple, Optional, Union
 
+
 import rospy
 from paf_messages.msg import (
     PafLocalPath,
@@ -30,11 +31,12 @@ class LocalPath:
     DENSE_POINT_DISTANCE = 0.25
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
-    LANE_CHANGE_SECS = 7
+    LANE_CHANGE_SECS = 5
     STRAIGHT_TO_TARGET_DIST = 10
     END_OF_ROUTE_SPEED = 5
     SPLINE_IN_CURVE_RADIUS = 15
-    OFFSET_LIGHTS_EU_M = 10  # stopping points x meters before traffic light
+    OFFSET_LIGHTS_EU_M = 9
+    CLEARING_SIGN_DIST_LIGHT = 0  # war 5
     CLEARING_SIGN_DIST = 5
     RESUME_COURSE_COLORS = ["green", "yellow"]
     PREFER_TARGET_LANES_DIST = 200
@@ -222,6 +224,14 @@ class LocalPath:
         index_dense = max(0, index_dense + offset)
         n = round(1 / LocalPath.DENSE_POINT_DISTANCE)
         i1 = max(index_dense - 1, 0)
+
+        # if chosen_sign is not None and chosen_sign.type == "LIGHT":
+        #     chosen_sign_copy = PafTrafficSignal()
+        #     chosen_sign_copy.type = chosen_sign.type
+        #     chosen_sign_copy.value = chosen_sign.value
+        #     chosen_sign_copy.point = self.message.points[index_dense]
+        # else:
+        #     chosen_sign_copy = chosen_sign
 
         self.set_alternate_speed()
 
@@ -487,6 +497,7 @@ class LocalPath:
         if prev_idx < 0 or section_from < 0:
             section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
             if section_from > 0:
+                section_from = max(0, section_from - 3)
                 point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
                 if current_speed < 0:
                     rospy.logerr(f"section {section_from}, lane {current_lane} is undefined")

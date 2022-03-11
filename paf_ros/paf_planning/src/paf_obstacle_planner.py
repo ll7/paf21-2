@@ -35,8 +35,10 @@ from tf.transformations import euler_from_quaternion
 class ObstaclePlanner:
     rules_enabled = MapManager.get_rules_enabled()
     network = MapManager.get_current_scenario().lanelet_network
+    # TODO:MM
     ON_LANELET_DISTANCE = 2
-    SHOW_TRACE_PTS = False
+    ON_LANELET_DISTANCE_PEDESTRIANS = 0.3  # vorher 0.01
+    SHOW_TRACE_PTS = True
     SHOW_FOLLOW_PTS = True
 
     def __init__(self):
@@ -143,7 +145,7 @@ class ObstaclePlanner:
 
     def pedestrian_on_lanelet(self, ped: PafObstacle):
         idx, distance = closest_index_of_point_list(self._last_local_path.points, ped.closest)
-        if distance <= self.ON_LANELET_DISTANCE:
+        if distance <= self.ON_LANELET_DISTANCE_PEDESTRIANS and distance > 0:
             return True
         return False
 
@@ -314,7 +316,8 @@ class ObstaclePlanner:
                 if len(path_lanelets) <= 1:
                     continue  # is parallel lane
                 if not self._pt_within_angle_range(ref_pt):
-                    continue  # not within view cone of ego vehicle (distance limit still applies)
+                    # not within view cone of ego vehicle (distance limit still applies)
+                    continue
                 rospy.logwarn_throttle(
                     4,
                     f"[obstacle info] including vehicle distance_to_path={distance_to_path} "
@@ -453,7 +456,8 @@ class ObstaclePlanner:
         if pos is not None:
             pts = [np.array([pos.x, pos.y], dtype=float)]
         else:
-            pts = [np.array(pt, dtype=float) for pt in [msg.closest]]  # , msg.bound_1, msg.bound_2]]
+            # , msg.bound_1, msg.bound_2]]
+            pts = [np.array(pt, dtype=float) for pt in [msg.closest]]
         result = self.network.find_lanelet_by_position(pts)
         lanelets = []
         for res in result:

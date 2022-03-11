@@ -1,0 +1,3 @@
+#!/bin/bash
+rosnode kill traffic_light_detector 2>/dev/null
+roslaunch paf_perception traffic_light_detector.launch

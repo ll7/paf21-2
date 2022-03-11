@@ -1,0 +1,3 @@
+#!/bin/bash
+
+scripts/runscript.sh -mc -scr -nr $1
