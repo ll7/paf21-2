@@ -353,7 +353,7 @@ class VehicleController:
         Args:
             obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
         """
-        if not obstacle_follow_info.no_target and rospy.get_param("rules_enabled", False):
+        if not obstacle_follow_info.no_target:  # and rospy.get_param("rules_enabled", False):
 
             self._obstacle_follow_distance = obstacle_follow_info.distance
             if obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
