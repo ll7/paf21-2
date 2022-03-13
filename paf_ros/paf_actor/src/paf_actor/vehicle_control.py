@@ -143,7 +143,7 @@ class VehicleController:
             #    f"heading error: {self._lat_controller.heading_error}, cross_error: {self._lat_controller.cross_err}"
             # )
             if np.abs(self._lat_controller.heading_error) > 0.8:  # np.pi/2:
-                rospy.loginfo_throttle(5, "[ACTOR] U-TURN")
+                rospy.loginfo_throttle(5, "[Actor] U-TURN")
                 self._target_speed = self._u_turn_speed
 
             throttle: float = self.__calculate_throttle(dt, distance)
@@ -369,7 +369,7 @@ class VehicleController:
                 self._obstacle_follow_speed = 0
             elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
                 rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
-                self._obstacle_follow_speed = obstacle_follow_info.speed * 0.99
+                self._obstacle_follow_speed = obstacle_follow_info.speed + 2
             else:
                 self._obstacle_follow_speed = float("inf")
                 self._obstacle_follow_active = False
