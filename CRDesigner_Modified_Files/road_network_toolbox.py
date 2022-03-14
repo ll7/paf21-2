@@ -1687,6 +1687,8 @@ class RoadNetworkToolbox(QDockWidget):
 
         id_lane_1 = self._get_new_lanelet_id()
         id_lane_2 = self._get_new_lanelet_id()
+        if id_lane_1 == id_lane_2:
+            id_lane_2 += 1
 
         lanelet_copy = self.current_scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         if lanelet_copy is None:
@@ -2020,12 +2022,17 @@ class RoadNetworkToolbox(QDockWidget):
         generates new unique lanelet id
         :return: new unique lanelet id
         """
-        if self.highest_lanelet_id == -1:
-            max_id = 0
-            for lane in self.current_scenario.lanelet_network.lanelets:
-                if lane.lanelet_id > max_id:
-                    max_id = lane.lanelet_id
-            self.highest_lanelet_id = max_id
+        max_id = 0
+        for lane in self.current_scenario.lanelet_network.lanelets:
+            if lane.lanelet_id > max_id:
+                max_id = lane.lanelet_id
+        for sign in self.current_scenario.lanelet_network.traffic_signs:
+            if sign.traffic_sign_id > max_id:
+                max_id = sign.traffic_sign_id
+        for light in self.current_scenario.lanelet_network.traffic_lights:
+            if light.traffic_light_id > max_id:
+                max_id = light.traffic_light_id
+        self.highest_lanelet_id = max_id
         self.highest_lanelet_id += 1
         return self.highest_lanelet_id
 
