@@ -97,8 +97,9 @@ class ObstaclePlanner:
         o: PafObstacle
         for o in msg.obstacles:
             process_fun(o)
-            if msg.type == "Pedestrians" and not self.rules_enabled:
-                continue
+            # running over motorcycles detected as pedestrians can cause the ego_vehicle to flip over
+            # if msg.type == "Pedestrians" and not self.rules_enabled:
+            #     continue
             _close, _close_pts = self.process_very_close_obstacles(o, close)
             if _close is not None:
                 close, close_pts = _close, _close_pts
