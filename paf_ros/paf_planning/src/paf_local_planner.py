@@ -188,12 +188,22 @@ class LocalPlanner:
         self._check_for_signs_on_path()
         self._publish_local_path_msg()
 
-        if (
-            self._current_speed < 25 / 3.6 and self._local_path_idx < len(self._local_path) - 150
-        ):  # todo fix: acting does not like very short paths
-            rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally and globally")
-            self._replan_local_path()
-            # self._send_global_reroute_request()
+        if self.rules_enabled:
+            if (
+                self._current_speed < 25 / 3.6
+                and self._current_speed > 15 / 3.6
+                and self._local_path_idx < len(self._local_path) - 150
+            ):  # todo fix: acting does not like very short paths
+                rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
+                # traffic light handling not working correctly when turned on
+                # self._replan_local_path()
+
+        else:
+            if (
+                self._current_speed < 25 / 3.6 and self._local_path_idx < len(self._local_path) - 150
+            ):  # todo fix: acting does not like very short paths
+                rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
+                self._replan_local_path()
 
         # if self._last_sign is not None:
         #     self._ignore_sign = self._last_sign
@@ -226,8 +236,23 @@ class LocalPlanner:
             return
         to_clear = copy.copy(self._last_sign)
         self._local_path.reset_alternate_speed()
-        if dist(self._current_pose.position, to_clear.point) <= LocalPath.CLEARING_SIGN_DIST:
-            self._add_cleared_signal(to_clear)  # only add to ignored list when very close
+
+        if self._last_sign.type == "LIGHT":
+            clear_distance = LocalPath.CLEARING_SIGN_DIST_LIGHT
+        else:
+            clear_distance = LocalPath.CLEARING_SIGN_DIST
+
+        if MapManager.light_is_opposite_stop_point():
+            # american traffic light
+            if dist(self._current_pose.position, to_clear.point) <= clear_distance:
+                self._add_cleared_signal(to_clear)
+        else:
+            # european traffic light
+            # experimental solution better for european style traffic lights
+            if dist(self._current_pose.position, to_clear.point) - LocalPath.OFFSET_LIGHTS_EU_M <= clear_distance:
+                # only add to ignored list when very close
+                self._add_cleared_signal(to_clear)
+
         if and_publish:
             self._local_path.publish()
             rospy.logwarn_throttle(5, "[local planner] publishing original path after clearing path")
@@ -271,7 +296,9 @@ class LocalPlanner:
 
         def traffic_light_limits():
             if MapManager.light_is_opposite_stop_point():
+                # american
                 return 0.25, 0.75, 50
+            # european
             return 0.25, 1, 20
 
         def filter_msgs():
@@ -417,7 +444,7 @@ class LocalPlanner:
             if self._current_speed < 0.01:
                 if sleep > 0:
                     rospy.sleep(sleep)
-                self._send_standard_loop_request()  # todo remove in production
+                self._send_standard_loop_request()
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)
