@@ -1,4 +1,5 @@
 import copy
+from math import dist
 
 from commonroad.planning.planning_problem import PlanningProblemSet
 from commonroad.scenario.lanelet import Lanelet, LaneletNetwork
@@ -28,11 +29,11 @@ class MapManipulator:
         self._generate_bidirectional_cr_file()
 
     def _load_scenario(self):
-        self.scenario = MapManager.get_current_scenario(True)
+        self.scenario = MapManager.get_current_scenario(rules=False, map_name="Town03")
 
     def _generate_cr_file(self):
         if self.scenario is not None:
-            map_file_path = self.save_path_prefix + "TEMP_" + "DEU_" + rospy.get_param("/carla/town") + "-1_1_T-1.xml"
+            map_file_path = self.save_path_prefix + "REM_" + "DEU_" + "Town03" + "-1_1_T-1.xml"
             writer = CommonRoadFileWriter(
                 scenario=self.scenario,
                 planning_problem_set=PlanningProblemSet(),
@@ -217,11 +218,26 @@ class MapManipulator:
             if lane.adj_right == old_lanelet_id:
                 lane._adj_right = new_lanelet_id
 
+    def _remove_unconnected_refs(self):
+        for lane in self.scenario.lanelet_network.lanelets:
+            for succ in lane.successor:
+                successor = self.scenario.lanelet_network.find_lanelet_by_id(succ)
+                if 0.5 < dist(successor.center_vertices[0], lane.center_vertices[-1]):
+                    lane.remove_successor(succ)
+                    print("Removed successor " + str(succ) + " for lanelet " + str(lane.lanelet_id))
+            for pred in lane.predecessor:
+                predec = self.scenario.lanelet_network.find_lanelet_by_id(pred)
+                if 0.5 < dist(predec.center_vertices[-1], lane.center_vertices[0]):
+                    lane.remove_predecessor(predec)
+                    print("Removed predecessor " + str(pred) + " for lanelet " + str(lane.lanelet_id))
+
 
 def main():
     manipulator = MapManipulator()
 
-    manipulator.generate_no_rules_map()
+    manipulator._load_scenario()
+    manipulator._remove_unconnected_refs()
+    manipulator._generate_cr_file()
 
 
 if __name__ == "__main__":
