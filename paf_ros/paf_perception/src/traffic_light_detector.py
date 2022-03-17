@@ -242,6 +242,14 @@ class TrafficLightDetector:
             x1, y1, w, h = cv2.boundingRect(contours_poly)
             x2 = x1 + w
             y2 = y1 + h
+            if self.map_name == "Town04":
+                self.confidence_min = 0.54
+                if w > 7:
+                    x1 += 3
+                    x2 -= 3
+                if h > 7:
+                    y1 += 3
+                    y2 -= 3
             if w > 1 and h > 2:
                 mask = segmentation_image[y1:y2, x1:x2] != (255, 255, 255)
 
