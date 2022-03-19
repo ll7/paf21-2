@@ -37,9 +37,13 @@ _ = CR_Scenario_Designer
 
 
 class MWindow(QMainWindow, Ui_mainWindow):
-    """The Main window of the CR Scenario Designer."""
+    """
+    The Main window of the CR Scenario Designer.
+    PAF INFO: Source is CRDesigner, no changes.
+    """
 
     def __init__(self, path=None):
+        """PAF INFO: Source is CRDesigner, no changes."""
         super().__init__()
         self.tmp_folder = "/tmp/cr_designer/"
         pathlib.Path(self.tmp_folder).mkdir(parents=True, exist_ok=True)
@@ -111,7 +115,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.open_path(path)
 
     def create_road_network_toolbox(self):
-        """Create the Road network toolbox."""
+        """
+        Create the Road network toolbox.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.road_network_toolbox = RoadNetworkToolbox(
             current_scenario=self.cr_viewer.current_scenario,
             text_browser=self.text_browser,
@@ -122,7 +129,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.addDockWidget(Qt.LeftDockWidgetArea, self.road_network_toolbox)
 
     def create_converter_toolbox(self):
-        """Create the map converter toolbox."""
+        """
+        Create the map converter toolbox.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.map_converter_toolbox = MapConversionToolbox(
             self.cr_viewer.current_scenario,
             self.toolbox_callback,
@@ -132,16 +142,21 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.map_converter_toolbox)
 
     def create_obstacle_toolbox(self):
-        """Create the obstacle toolbox."""
+        """
+        Create the obstacle toolbox.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.obstacle_toolbox = ObstacleToolbox(self.cr_viewer.current_scenario, self.toolbox_callback, self.tmp_folder)
         self.addDockWidget(Qt.RightDockWidgetArea, self.obstacle_toolbox)
 
     def click_callback(self, pos_x: float, pos_y: float):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.road_network_toolbox.update_create_lane_table(pos_x=pos_x, pos_y=pos_y)
 
     def viewer_callback(
         self, selected_object: Union[Lanelet, Obstacle], output: str, pos_x=0.0, pos_y=0.0, vertices_click=False
     ):
+        """PAF INFO: Source is CRDesigner, no changes."""
         if vertices_click:
             self.click_callback(pos_x=pos_x, pos_y=pos_y)
             return
@@ -169,6 +184,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.text_browser.append(output)
 
     def toolbox_callback(self, scenario):
+        """PAF INFO: Source is CRDesigner, no changes."""
         if scenario is not None:
             self.cr_viewer.open_scenario(scenario)
             self.update_view(focus_on_network=True)
@@ -176,40 +192,51 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.store_scenario()
 
     def show_osm_settings(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         osm_interface = OSMInterface(self)
         osm_interface.show_settings()
 
     def show_opendrive_settings(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         opendrive_interface = OpenDRIVEInterface(self)
         opendrive_interface.show_settings()
 
     def show_gui_settings(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.gui_settings = GUISettings(self)
 
     def initialize_toolboxes(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.road_network_toolbox.initialize_toolbox()
         self.obstacle_toolbox.initialize_toolbox()
 
     def show_sumo_settings(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.sumo_settings = SUMOSettings(self, config=self.obstacle_toolbox.sumo_simulation.config)
 
     def detect_slider_clicked(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.slider_clicked = True
         self.cr_viewer.pause()
         self.cr_viewer.dynamic.update_plot()
 
     def detect_slider_release(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.slider_clicked = False
         self.cr_viewer.pause()
 
     def time_step_change(self, value):
+        """PAF INFO: Source is CRDesigner, no changes."""
         if self.cr_viewer.current_scenario:
             self.cr_viewer.set_timestep(value)
             self.label1.setText("  Time Stamp: " + str(value))
             self.cr_viewer.animation.event_source.start()
 
     def play_pause_animation(self):
-        """Function connected with the play button in the sumo-toolbox."""
+        """
+        Function connected with the play button in the sumo-toolbox.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         if not self.cr_viewer.current_scenario:
             messbox = QMessageBox()
             reply = messbox.warning(
@@ -234,7 +261,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.play_activated = False
 
     def save_video(self):
-        """Function connected with the save button in the Toolbar."""
+        """
+        Function connected with the save button in the Toolbar.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         if not self.cr_viewer.current_scenario:
             messbox = QMessageBox()
             reply = messbox.warning(
@@ -256,7 +286,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.text_browser.append("Saving the video finished.")
 
     def create_console(self):
-        """Function to create the console."""
+        """
+        Function to create the console.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.console = QDockWidget(self)
         self.console.setTitleBarWidget(QWidget(self.console))  # no title of Dock
         self.text_browser = QTextBrowser()
@@ -268,7 +301,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.addDockWidget(Qt.BottomDockWidgetArea, self.console)
 
     def create_toolbar(self):
-        """Function to create toolbar of the main Window."""
+        """
+        Function to create toolbar of the main Window.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         tb1 = self.addToolBar("File")
         action_new = QAction(QIcon(":/icons/new_file.png"), "new CR File", self)
         tb1.addAction(action_new)
@@ -337,13 +373,17 @@ class MWindow(QMainWindow, Ui_mainWindow):
         action_save_video.triggered.connect(self.save_video)
 
     def update_max_step(self, value: int = -1):
+        """PAF INFO: Source is CRDesigner, no changes."""
         logging.info("update_max_step")
         value = value if value > -1 else self.cr_viewer.max_timestep
         self.label2.setText(" / " + str(value))
         self.slider.setMaximum(value)
 
     def create_setting_actions(self):
-        """Function to create the export action in the menu bar."""
+        """
+        Function to create the export action in the menu bar.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.osm_settings = self.create_action(
             "OSM Settings",
             icon="",
@@ -379,7 +419,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
             )
 
     def create_help_actions(self):
-        """Function to create the help action in the menu bar."""
+        """
+        Function to create the help action in the menu bar.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.open_web = self.create_action(
             "Open CR Web", icon="", checkable=False, slot=self.open_cr_web, tip="Open CommonRoad Website", shortcut=None
         )
@@ -388,6 +431,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         )
 
     def create_viewer_dock(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.viewer_dock = QWidget(self)
         toolbar = NavigationToolbar(self.cr_viewer.dynamic, self.viewer_dock)
         layout = QVBoxLayout()
@@ -397,13 +441,19 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.setCentralWidget(self.viewer_dock)
 
     def center(self):
-        """Function that makes sure the main window is in the center of screen."""
+        """
+        Function that makes sure the main window is in the center of screen.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         screen = QDesktopWidget().screenGeometry()
         size = self.geometry()
         self.move((screen.width() - size.width()) / 2, (screen.height() - size.height()) / 2)
 
     def create_file_actions(self):
-        """Function to create the file action in the menu bar."""
+        """
+        Function to create the file action in the menu bar.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.fileNewAction = self.create_action(
             "New",
             icon=QIcon(":/icons/new_file.png"),
@@ -442,7 +492,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
         )
 
     def create_action(self, text, icon=None, checkable=False, slot=None, tip=None, shortcut=None):
-        """Function to create the action in the menu bar."""
+        """
+        Function to create the action in the menu bar.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         action = QAction(text, self)
         if icon is not None:
             action.setIcon(QIcon(icon))
@@ -462,15 +515,24 @@ class MWindow(QMainWindow, Ui_mainWindow):
         return action
 
     def open_cr_web(self):
-        """Function to open the CommonRoad website."""
+        """
+        Function to open the CommonRoad website.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         QDesktopServices.openUrl(QUrl("https://commonroad.in.tum.de/"))
 
     def open_cr_forum(self):
-        """Function to open the CommonRoad Forum."""
+        """
+        Function to open the CommonRoad Forum.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         QDesktopServices.openUrl(QUrl("https://commonroad.in.tum.de/forum/c/map-tool/11"))
 
     def file_new(self):
-        """Function to create the action in the menu bar."""
+        """
+        Function to create the action in the menu bar.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
 
         scenario = Scenario(0.1, affiliation="Technical University of Munich", source="CommonRoad Scenario Designer")
         net = LaneletNetwork()
@@ -482,7 +544,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
     #        self.restore_parameters()
 
     def open_commonroad_file(self):
-        """ """
+        """PAF INFO: Source is CRDesigner, no changes."""
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Open a CommonRoad scenario",
@@ -495,7 +557,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.open_path(path)
 
     def open_path(self, path):
-        """ """
+        """PAF INFO: Source is CRDesigner, no changes."""
         try:
             commonroad_reader = CommonRoadFileReader(path)
             scenario, pps = commonroad_reader.open()
@@ -513,6 +575,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.open_scenario(scenario, filename, pps)
 
     def update_toolbox_scenarios(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         scenario = self.cr_viewer.current_scenario
         self.road_network_toolbox.refresh_toolbox(scenario)
         self.obstacle_toolbox.refresh_toolbox(scenario)
@@ -522,7 +585,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
             self.map_converter_toolbox.sumo_simulation.scenario = scenario
 
     def open_scenario(self, new_scenario, filename="new_scenario", pps=None):
-        """ """
+        """PAF INFO: Source is CRDesigner, no changes."""
         if self.check_scenario(new_scenario) >= 2:
             self.text_browser.append("loading aborted")
             return
@@ -540,7 +603,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.update_to_new_scenario()
 
     def update_to_new_scenario(self):
-        """ """
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.update_max_step()
         self.initialize_toolboxes()
         self.viewer_dock.setWindowIcon(QIcon(":/icons/cr1.ico"))
@@ -551,6 +614,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         """
         Check the scenario to validity and calculate a quality score.
         The higher the score the higher the data faults.
+        PAF INFO: Source is CRDesigner, no changes.
 
         :return: score
         """
@@ -602,7 +666,10 @@ class MWindow(QMainWindow, Ui_mainWindow):
         return error_score
 
     def file_save(self):
-        """Function to save a CR .xml file."""
+        """
+        Function to save a CR .xml file.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
 
         if self.cr_viewer.current_scenario is None:
             messbox = QMessageBox()
@@ -613,9 +680,11 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.scenario_saving_dialog.show(self.cr_viewer.current_scenario, self.cr_viewer.current_pps)
 
     def process_trigger(self, q):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.status.showMessage(q.text() + " is triggered")
 
     def close_window(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         reply = QMessageBox.warning(
             self, "Warning", "Do you really want to quit?", QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
         )
@@ -623,20 +692,27 @@ class MWindow(QMainWindow, Ui_mainWindow):
             qApp.quit()
 
     def closeEvent(self, event):
+        """PAF INFO: Source is CRDesigner, no changes."""
         event.ignore()
         self.close_window()
 
     def road_network_toolbox_show(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.road_network_toolbox.show()
 
     def obstacle_toolbox_show(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.obstacle_toolbox.show()
 
     def map_converter_toolbox_show(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.map_converter_toolbox.show()
 
     def update_view(self, focus_on_network=None):
-        """update all components."""
+        """
+        update all components.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
 
         # reset selection of all other selectable elements
         if self.cr_viewer.current_scenario is None:
@@ -646,11 +722,13 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.cr_viewer.update_plot(focus_on_network=focus_on_network)
 
     def store_scenario(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.scenarios.append(copy.deepcopy(self.cr_viewer.current_scenario))
         self.current_scenario_index += 1
         self.update_toolbox_scenarios()
 
     def undo_action(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         if self.current_scenario_index >= 0:
             self.current_scenario_index -= 1
         else:
@@ -660,6 +738,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
         self.update_toolbox_scenarios()
 
     def redo_action(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         if self.current_scenario_index < len(self.scenarios) - 1:
             self.current_scenario_index += 1
         else:
@@ -670,6 +749,7 @@ class MWindow(QMainWindow, Ui_mainWindow):
 
 
 def start_gui(input_file: str = None):
+    """PAF INFO: Source is CRDesigner, no changes."""
     # application
     app = QApplication(sys.argv)
     if input_file:
@@ -681,4 +761,5 @@ def start_gui(input_file: str = None):
 
 
 if __name__ == "__main__":
+    """main function"""
     start_gui()
