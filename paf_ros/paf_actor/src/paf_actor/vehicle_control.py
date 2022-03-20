@@ -39,7 +39,7 @@ class VehicleController:
         self._emergency_mode: bool = False
 
         # timespan until the actor recognizes a stuck situation
-        self._stuck_check_time: float = 4.0
+        self._stuck_check_time: float = 2.0
         # speed threshold which is considered stuck
         self._stuck_value_threshold: float = 1.0
         self._stuck_start_time: float = 0.0  # time when the car got stuck
@@ -50,8 +50,8 @@ class VehicleController:
         self._is_unstucking: bool = False
 
         self._obstacle_follow_speed: float = float("inf")
-        self._obstacle_follow_min_distance: float = 4.0
-        self._obstacle_follow_target_distance: float = 8.0
+        self._obstacle_follow_min_distance: float = 6.0
+        self._obstacle_follow_target_distance: float = 15.0
         self._obstacle_follow_active = False
         self._obstacle_follow_distance = float("inf")
 
@@ -143,7 +143,7 @@ class VehicleController:
             #    f"heading error: {self._lat_controller.heading_error}, cross_error: {self._lat_controller.cross_err}"
             # )
             if np.abs(self._lat_controller.heading_error) > 0.8:  # np.pi/2:
-                rospy.logerr("U-TURN BABY")
+                rospy.loginfo_throttle(5, "[Actor] U-TURN")
                 self._target_speed = self._u_turn_speed
 
             throttle: float = self.__calculate_throttle(dt, distance)
@@ -353,7 +353,7 @@ class VehicleController:
         Args:
             obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
         """
-        if not obstacle_follow_info.no_target and rospy.get_param("rules_enabled", False):
+        if not obstacle_follow_info.no_target:  # and rospy.get_param("rules_enabled", False):
 
             self._obstacle_follow_distance = obstacle_follow_info.distance
             if obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
@@ -369,7 +369,7 @@ class VehicleController:
                 self._obstacle_follow_speed = 0
             elif obstacle_follow_info.distance <= self._obstacle_follow_target_distance:
                 rospy.loginfo_throttle(3, f"[Actor] following an obstacle (d={obstacle_follow_info.distance:.1f})")
-                self._obstacle_follow_speed = obstacle_follow_info.speed * 0.99
+                self._obstacle_follow_speed = obstacle_follow_info.speed + 2
             else:
                 self._obstacle_follow_speed = float("inf")
                 self._obstacle_follow_active = False
