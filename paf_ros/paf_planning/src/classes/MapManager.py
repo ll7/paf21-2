@@ -14,7 +14,7 @@ from commonroad.visualization.mp_renderer import MPRenderer
 from commonroad_route_planner.route import Route
 from commonroad_route_planner.utility.visualization import obtain_plot_limits_from_reference_path, draw_state
 
-from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, Point
 from paf_messages.msg import Point2D
 from tf.transformations import quaternion_from_euler
 
@@ -45,7 +45,19 @@ class MapManager:
         else:
             map_file_path = "Maps/No Rules/" + map_file_name
         scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{map_file_path}")).open()
+        scenario.lanelet_network = MapManager.remove_u_turns(scenario.lanelet_network)
         return scenario
+
+    @staticmethod
+    def remove_u_turns(network: LaneletNetwork):
+        for let in network.lanelets:
+            if let.adj_left is not None and not let.adj_left_same_direction:
+                let._adj_left = None
+                let._adj_left_same_direction = None
+            if let.adj_right is not None and not let.adj_right_same_direction:
+                let._adj_right = None
+                let._adj_right_same_direction = None
+        return network
 
     @staticmethod
     def get_map() -> str:
@@ -216,8 +228,20 @@ class MapManager:
         plt.show()
 
     @staticmethod
+    def lanelet_on_bridge(let_id):
+        on_bridge_lanelets = {
+            "Town04": [329, 327, 325, 323, 348, 350, 352, 354],
+            "Town05": [437, 436, 435, 426, 429, 432],
+        }
+
+        current_map = MapManager.get_map()
+        if current_map not in on_bridge_lanelets:
+            return False
+        return let_id in on_bridge_lanelets[current_map]
+
+    @staticmethod
     def visualize_lp_and_gp(
-        local_path_obj, cur_pt: Point2D, xmin: float = None, xmax: float = None, ymin: float = None, ymax: float = None
+        local_path_obj, cur_pt: Point, xmin: float = None, xmax: float = None, ymin: float = None, ymax: float = None
     ):
         """
         Visualize local and global path with matplotlib (for debugging planners)
@@ -226,7 +250,7 @@ class MapManager:
         :param ymin: Optional graph axis limit
         :param ymax: Optional graph axis limit
         :param local_path_obj: LocalPath object
-        :param cur_pt: location to start local plan on
+        :param cur_pt: location to start local plan on (x,y,z)
         """
         from matplotlib import pyplot as plt
 

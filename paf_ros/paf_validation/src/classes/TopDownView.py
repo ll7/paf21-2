@@ -86,7 +86,7 @@ class TopDownView(BirdViewProducer):
         self.center_on_agent = not show_whole_map
         self.global_path, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
-        self.path_width_px = 4
+        self.path_width_px = 3
         self.pt_width_px = 4
         self.line_width_px = 4
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
@@ -333,6 +333,8 @@ class TopDownView(BirdViewProducer):
             points = []
             rospy.logerr("[top down view] NaN / Invalid path!")
         points = np.array([(p.x, p.y) for p in points])
+        # for p in points[::10]:
+        #     mask = cv2.circle(mask, tuple(p), 2, COLOR_ON, -1)
         mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
         return mask
 

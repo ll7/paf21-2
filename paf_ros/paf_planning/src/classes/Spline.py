@@ -266,8 +266,8 @@ def calc_bezier_curve(pts, ds=0.1, convert_to_pts=False):
                 break
         if not valid:
             raise ValueError(f"ERROR, unable to calc bezier\n{pts2}")
-        if k != 1:
-            msg = f"bezier is limited to every {k}th item of list (len={len(pts)})"
+        if k > 2:
+            msg = f"[local planner] bezier calculation is limited to every {k}th item of list (len={len(pts)})"
             try:
                 rospy.logwarn_throttle(1, msg)
             except rospy.ROSInitException:

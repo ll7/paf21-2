@@ -17,9 +17,11 @@ from numpy import ndarray
 import rospy
 from paf_messages.msg import PafLaneletRoute, Point2D, PafTrafficSignal, PafRouteSection
 
-from .HelperFunctions import closest_index_of_point_list, dist, sparse_list_from_dense_pts
+from geometry_msgs.msg import Point
+from .HelperFunctions import closest_index_of_point_list, dist, sparse_list_from_dense_pts, on_bridge
 from .SpeedCalculator import SpeedCalculator
 from .Spline import bezier_refit_all_with_tangents
+from .MapManager import MapManager
 
 
 class GlobalPath:
@@ -27,6 +29,7 @@ class GlobalPath:
     MERGE_SPEED_RESET = 50 / 3.6
     APPLY_MERGING_RESET = True
     POINT_DISTANCE = 2.5
+    TARGET_Z = 0
 
     def __init__(
         self,
@@ -34,26 +37,32 @@ class GlobalPath:
         lanelet_ids: List[int] = None,
         target=None,
         traffic_sign_country: Country = Country.GERMANY,
-        msg: PafLaneletRoute = PafLaneletRoute(),
+        msg: PafLaneletRoute = None,
     ):
         SpeedCalculator.set_limits()
         self._adjacent_lanelets = None
-        self._lanelet_network = None
+        self.lanelet_network = None
         self._graph = None
         self.route = None
         self.sections_visited = 0
-        self.signals_on_path = msg.signals
-        self._lanelet_network = lanelet_network
+
+        self.lanelet_network = lanelet_network
         self.lanelet_ids = lanelet_ids
 
-        if lanelet_network is None:
+        if msg is not None:
             self.route = msg
-            self.target = msg.target
-        else:
-            assert lanelet_ids is not None
-            self.target = target if hasattr(target, "x") else Point2D(target[0], target[1])
+            self.target = Point(msg.target.x, msg.target.y, self.TARGET_Z)
+        elif lanelet_ids is not None:
+            if not hasattr(target, "x"):
+                target = Point(*target) if len(target) == 3 else Point2D(*target)
+            self.target = target if hasattr(target, "z") else Point(target.x, target.y, self.TARGET_Z)
             self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
             self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, lanelet_network)
+        else:
+            self.route = PafLaneletRoute()
+        self.signals_on_path = self.route.signals if self.route is not None else []
+        if self.lanelet_network is None:
+            self.lanelet_network = MapManager.get_current_scenario().lanelet_network
 
     def get_signals(self, section: Union[int, PafRouteSection], lane_idx: int) -> List[PafTrafficSignal]:
         """
@@ -86,14 +95,14 @@ class GlobalPath:
 
     def get_section_and_lane_indices(
         self,
-        position: Union[np.ndarray, Point2D, Tuple[float, float]],
+        position: Point,
         not_found_threshold_meters: float = 100.0,
         min_section: int = None,
     ) -> Tuple[int, int]:
-        if hasattr(position, "x"):
-            ref = (position.x, position.y)
-        else:
-            ref = position
+        ref = (position.x, position.y)
+
+        if not hasattr(position, "z"):
+            raise RuntimeError("unable to search section without z value (bridges!)")
 
         if len(self.route.sections) == 0:
             return -1, -1
@@ -101,8 +110,16 @@ class GlobalPath:
         if min_section is None:
             min_section = self.sections_visited
 
-        filter1 = [section.points[int(len(section.points) / 2 - 0.5)] for section in self.route.sections[min_section:]]
-        section, d = closest_index_of_point_list(filter1, ref)
+        car_on_bridge = on_bridge(position, self.lanelet_network)
+
+        relevant = [
+            (i, s) for i, s in enumerate(self.route.sections) if car_on_bridge == s.on_bridge and i >= min_section
+        ]
+        relevant_indices, relevant_sections = zip(*relevant)
+
+        filter1 = [section.points[int(len(section.points) / 2 - 0.5)] for section in relevant_sections]
+        idx, d = closest_index_of_point_list(filter1, ref)
+        section = relevant_indices[idx]
 
         if d > not_found_threshold_meters:
             return -2, -2
@@ -110,7 +127,7 @@ class GlobalPath:
         filter2 = self.route.sections[section].points
         lane, d = closest_index_of_point_list(filter2, ref)
 
-        return section + min_section, lane
+        return section, lane
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
@@ -119,7 +136,7 @@ class GlobalPath:
         """
 
         def get_right_lanelets_same_directions(_lanelet_id: int, lanelets: List[int] = None) -> List[int]:
-            lanelet = self._lanelet_network.find_lanelet_by_id(_lanelet_id)
+            lanelet = self.lanelet_network.find_lanelet_by_id(_lanelet_id)
             if lanelets is None:
                 lanelets = []
             if lanelet.adj_right_same_direction:
@@ -128,7 +145,7 @@ class GlobalPath:
             return lanelets
 
         def get_left_lanelets_same_directions(_lanelet_id: int, lanelets: List[int] = None) -> List[int]:
-            lanelet = self._lanelet_network.find_lanelet_by_id(_lanelet_id)
+            lanelet = self.lanelet_network.find_lanelet_by_id(_lanelet_id)
             if lanelets is None:
                 lanelets = []
             if lanelet.adj_left_same_direction:
@@ -158,7 +175,7 @@ class GlobalPath:
             if check_lanelet.lanelet_id in l_id_check:
                 return check_lanelet.lanelet_id
             for l_successor in check_lanelet.successor:
-                successor_lanelet = self._lanelet_network.find_lanelet_by_id(l_successor)
+                successor_lanelet = self.lanelet_network.find_lanelet_by_id(l_successor)
                 if l_successor not in l_id_check or 0.5 < dist(
                     successor_lanelet.center_vertices[0], check_lanelet.center_vertices[-1]
                 ):
@@ -173,7 +190,7 @@ class GlobalPath:
             possible_0 = [planned_id_0] + l_ids_0 + r_ids_0
             possible_1 = [planned_id_1] + l_ids_1 + r_ids_1
             for l_id in possible_0:
-                lanelet = self._lanelet_network.find_lanelet_by_id(l_id)
+                lanelet = self.lanelet_network.find_lanelet_by_id(l_id)
                 can_turn_left = lanelet.adj_left in (possible_1 + possible_0)
                 can_turn_right = lanelet.adj_right in (possible_1 + possible_0)
 
@@ -192,14 +209,14 @@ class GlobalPath:
         route_ids = self.lanelet_ids
         out = f"start route from {route_ids[0]}\n"
         for lanelet_id, next_lanelet_id in zip(route_ids, route_ids[1:]):
-            lanelet = self._lanelet_network.find_lanelet_by_id(lanelet_id)
+            lanelet = self.lanelet_network.find_lanelet_by_id(lanelet_id)
             l_set = frozenset([lanelet_id])
             speed_limit = self._traffic_sign_interpreter.speed_limit(l_set)
             speed_minimum = self._traffic_sign_interpreter.required_speed(l_set)
             speed_minimum = 0 if speed_minimum is None else speed_minimum
 
             for sign in lanelet.traffic_signs:
-                sign = self._lanelet_network.find_traffic_sign_by_id(sign)
+                sign = self.lanelet_network.find_traffic_sign_by_id(sign)
                 sign_name = sign.traffic_sign_elements[0].traffic_sign_element_id.name
                 if sign_name == "MAX_SPEED":
                     continue
@@ -305,7 +322,7 @@ class GlobalPath:
         traffic_signals = []
         speed_limits = []
 
-        lanelet = self._lanelet_network.find_lanelet_by_id(lanelet_id)
+        lanelet = self.lanelet_network.find_lanelet_by_id(lanelet_id)
         vertices = lanelet.center_vertices
 
         # lane merge events
@@ -324,7 +341,7 @@ class GlobalPath:
         # all traffic signs
         for sign_id in lanelet.traffic_signs:
             paf_sign = PafTrafficSignal()
-            sign = self._lanelet_network.find_traffic_sign_by_id(sign_id)
+            sign = self.lanelet_network.find_traffic_sign_by_id(sign_id)
             paf_sign.type = sign.traffic_sign_elements[0].traffic_sign_element_id.value
             is_speed_limit = paf_sign.type == TrafficSignIDGermany.MAX_SPEED.value
             try:
@@ -345,7 +362,7 @@ class GlobalPath:
 
         # all traffic lights
         for light_id in lanelet.traffic_lights:
-            light = self._lanelet_network.find_traffic_light_by_id(light_id)
+            light = self.lanelet_network.find_traffic_light_by_id(light_id)
             paf_sign = PafTrafficSignal()
             paf_sign.type = "LIGHT"
             paf_sign.value = 0.0
@@ -370,9 +387,9 @@ class GlobalPath:
         for i in range(25):
             pre = lanelet.predecessor
             lanelet_id = lanelet.predecessor[int(len(pre) / 2)]
-            lanelet = self._lanelet_network.find_lanelet_by_id(lanelet_id)
+            lanelet = self.lanelet_network.find_lanelet_by_id(lanelet_id)
             for sign_id in lanelet.traffic_signs:
-                sign = self._lanelet_network.find_traffic_sign_by_id(sign_id)
+                sign = self.lanelet_network.find_traffic_sign_by_id(sign_id)
                 if sign.traffic_sign_elements[0].traffic_sign_element_id.name == TrafficSignIDGermany.MAX_SPEED.value:
                     _, speed_limits = self._extract_traffic_signals(lanelet.lanelet_id, np.array([[0.0, 0.0]]))
                     break
@@ -395,7 +412,7 @@ class GlobalPath:
                 return None, None
 
             def sort_blob(blob):
-                _li = [self._lanelet_network.find_lanelet_by_id(_id) for _id in blob]
+                _li = [self.lanelet_network.find_lanelet_by_id(_id) for _id in blob]
                 _lanelets = deque(_li[1:])
                 _out = deque(_li[:1])
                 iae = 0
@@ -441,7 +458,7 @@ class GlobalPath:
                 anchors.append((shift_l, anchor_l, anchor_r))
 
             i, _ = closest_index_of_point_list(
-                [self._lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
+                [self.lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
             )
             anchors.append((0, i, i))
             # print(blobs)
@@ -478,7 +495,7 @@ class GlobalPath:
         out = []
         resolution = 10
         for blob, anchor in groups:
-            lanelets = [self._lanelet_network.find_lanelet_by_id(lanelet) for lanelet in blob]
+            lanelets = [self.lanelet_network.find_lanelet_by_id(lanelet) for lanelet in blob]
             distances = [
                 [np.sum(np.abs(x - y)) for x, y in zip(lanelet.center_vertices, lanelet.center_vertices[1:])]
                 for lanelet in lanelets
@@ -555,6 +572,8 @@ class GlobalPath:
                     last_limits = last_limits + [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(missing)]
 
             signals_per_lane, speed_limits_per_lane = [], []
+            on_bridge = MapManager.lanelet_on_bridge(lanelet_id_list[0])
+
             for lanelet_id, vertices in zip(lanelet_id_list, lanes):
                 signals, speed_limits = self._extract_traffic_signals(lanelet_id, vertices)
                 signals_per_lane.append(signals)
@@ -562,6 +581,7 @@ class GlobalPath:
 
             for j, section_points in enumerate(zip(*lanes)):
                 paf_section = PafRouteSection()
+                paf_section.on_bridge = on_bridge
                 paf_section.points = [Point2D(p[0], p[1]) for p in section_points]
                 paf_section.speed_limits = [x for x in last_limits]
                 paf_section.signals = []
