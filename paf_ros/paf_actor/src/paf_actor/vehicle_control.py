@@ -353,10 +353,13 @@ class VehicleController:
         Args:
             obstacle_follow_info (PafObstacleFollowInfo): The ObstacleFollowInfo
         """
-        if not obstacle_follow_info.no_target:  # and rospy.get_param("rules_enabled", False):
-
+        if not obstacle_follow_info.no_target:  #
             self._obstacle_follow_distance = obstacle_follow_info.distance
-            if obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
+
+            if not obstacle_follow_info.is_vehicle and not rospy.get_param("rules_enabled", False):
+                # drive slowly over pedestrains to not flip over motorcycles and bicycles
+                self._obstacle_follow_speed = 10.0 / 3.6
+            elif obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
                 rospy.loginfo_throttle(
                     3, f"[Actor] reversing for obstacle in front " f"(d={obstacle_follow_info.distance:.1f})"
                 )
