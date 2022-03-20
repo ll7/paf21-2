@@ -262,11 +262,11 @@ class ObstaclePlanner:
 
         def process(trace_pts, is_vehicle):
             for i, pt in enumerate(relevant_path):
-                indices, distances = k_closest_indices_of_point_in_list(2, trace_pts, pt, acc)
+                indices, _distances = k_closest_indices_of_point_in_list(2, trace_pts, pt, acc)
                 i += local_path_index
                 pt = path_pts[max(i - 20, 0)]
-                for idx, distance in zip(indices, distances):
-                    trace_pt = trace_pts[idx]
+                for _idx, distance in zip(indices, _distances):
+                    trace_pt = trace_pts[_idx]
                     # angle = self._angle_rel_to_ego_yaw(trace_pt)
                     # if -np.pi / 2 <= angle <= np.pi / 2:
                     #     continue  # only consider traces on the sides
