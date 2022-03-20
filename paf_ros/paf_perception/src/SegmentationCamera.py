@@ -13,23 +13,28 @@ from typing import Set, Callable
 class Tag(Enum):
     """
     Enum that stores the colors for the available tags inside the segmentation camera
+    Source: PAF 2020/21 group 1
     """
 
     def __init__(self, id, label, color):
+        """Source: PAF 2020/21 group 1"""
         self._value_ = id
         self.color = color
         self.label = label
 
     @property
     def get_color(self):
+        """Source: PAF 2020/21 group 1"""
         return self.color
 
     @property
     def get_label(self):
+        """Source: PAF 2020/21 group 1"""
         return self.label
 
     """
     For details go to https://carla.readthedocs.io/en/latest/ref_sensors/#semantic-segmentation-camera
+    Source: PAF 2020/21 group 1
     """
     Unlabeled = (0, "Unlabeled", (0, 0, 0))
     Building = (1, "Building", (70, 70, 70))
@@ -58,10 +63,11 @@ class Tag(Enum):
 class SegmentationCamera:
     """
     The segmentation camera interface that allows us to  access the segmentation camera
+    Source: PAF 2020/21 group 1
     """
 
     def __init__(self, role_name: str = "ego_vehicle", id: str = "front", queue_size=None):
-
+        """Source: PAF 2020/21 group 1"""
         self.image = None
         self.bridge = CvBridge()
         self.__subscriber = rospy.Subscriber(
@@ -76,6 +82,8 @@ class SegmentationCamera:
     def __update_image(self, image_msg: Image):
         """
         Internal method to update the position data
+        Source: PAF 2020/21 group 1
+
         :param image_msg: the message
         :return: None
         """
@@ -87,6 +95,8 @@ class SegmentationCamera:
     def get_image(self):
         """
         Return the current segmentation image
+        Source: PAF 2020/21 group 1
+
         :return:the current image
         """
         return self.image
@@ -94,6 +104,8 @@ class SegmentationCamera:
     def set_on_image_listener(self, func: Callable[[numpy.ndarray, Time], None]):
         """
         Set function to be called with the segmentation image as parameter
+        Source: PAF 2020/21 group 1
+
         :param func: the function
         :return: None
         """
@@ -103,6 +115,8 @@ class SegmentationCamera:
     def filter_for_tags(cls, image: np.ndarray, tags: Set[Tag]) -> np.ndarray:
         """
         Filters the given image for the given set of tags
+        Source: PAF 2020/21 group 1
+
         :param image: the image that will be filtered
         :param tags: the set of tags
         :return: the filtered image
@@ -122,6 +136,7 @@ class SegmentationCamera:
 
 # Show case code
 if __name__ == "__main__":
+    """Source: PAF 2020/21 group 1"""
     rospy.init_node("SegmentationTest")
 
     def show_image(image, _):
