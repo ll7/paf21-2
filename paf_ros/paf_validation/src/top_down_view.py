@@ -44,7 +44,7 @@ class TopDownRosNode(object):
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.update_obstacles)
         rospy.Subscriber("/paf/paf_local_planner/path", PafLocalPath, self.update_local_path)
-        rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
+        rospy.Subscriber("/paf/paf_global_planner/routing_response_tdv", PafLaneletRoute, self.update_global_path)
         rospy.Subscriber("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, self._update_pt_set)
         rospy.Subscriber("/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, self._update_line_set)
         rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._update_speed_str)

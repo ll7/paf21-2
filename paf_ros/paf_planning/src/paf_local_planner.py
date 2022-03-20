@@ -122,7 +122,7 @@ class LocalPlanner:
         if self._global_path is None or self._global_path.route.distance != msg.distance:
             rospy.loginfo_throttle(5, f"[local planner] receiving new route len={int(msg.distance)}m")
             self._reset_detected_signs()
-            self._global_path = GlobalPath(msg=msg)
+            self._global_path = GlobalPath(msg=msg, lanelet_network=self._network)
             self._local_path = LocalPath(self._global_path, self.rules_enabled)
             self._set_local_path_idx()
             path, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
@@ -182,19 +182,16 @@ class LocalPlanner:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
             self._publish_local_path_msg()
 
-        cur = None if self._last_sign is None else self._last_sign.type
-        ign = None if len(self._cleared_signs) == 0 else self._cleared_signs[-1].type
-        rospy.loginfo_throttle(5, f"[local planner] signs last={cur}, ign={ign}")
+        # cur = None if self._last_sign is None else self._last_sign.type
+        # ign = None if len(self._cleared_signs) == 0 else self._cleared_signs[-1].type
         self._check_for_signs_on_path()
         self._publish_local_path_msg()
 
         if (
-            self._current_speed < 25 / 3.6
-            and self._current_speed > 5 / 3.6
-            and self._local_path_idx < len(self._local_path) - 150
+            25 / 3.6 > self._current_speed > 5 / 3.6 and self._local_path_idx < len(self._local_path) - 150
         ):  # todo fix: acting does not like very short paths
-            rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally and globally")
-            # self._replan_local_path()
+            rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
+            self._replan_local_path()
             # self._send_global_reroute_request()
 
         # if self._last_sign is not None:
@@ -322,15 +319,21 @@ class LocalPlanner:
         else:
             rospy.loginfo_throttle(1, f"[local planner] keeping #{self._traffic_light_color.upper()}")
 
+    def _changing_lanes(self):
+        idx, d = closest_index_of_point_list(self._local_path.sparse_local_path, self._current_pose.position)
+        if d > 10:
+            return False
+        return self._local_path.lane_change_at(idx)
+
     def _replan_local_path(self, ignore_prev=False):
         t = time.perf_counter()
         delta_t = t - self._last_replan_request_loc
-        if self.REPLAN_THROTTLE_SEC_LOCAL > delta_t:
+        if self.REPLAN_THROTTLE_SEC_LOCAL > delta_t or self._changing_lanes():
             return
 
         self._last_replan_request_loc = t
         msg, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
-            self._current_pose.position, self._current_speed, ignore_previous=ignore_prev, min_section=self._to_section
+            self._current_pose.position, self._current_speed, ignore_previous=ignore_prev
         )
         self._set_local_path_idx()
         if self.rules_enabled:
@@ -429,7 +432,7 @@ class LocalPlanner:
     def _end_of_route_handling(self, sleep=0):
         self._global_path = GlobalPath()
         rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1).publish(Empty())
-        if self._current_speed < 5:
+        if self._current_speed < 5 / 3.6:
             self._emergency_break_pub.publish(Bool(False))
 
         if rospy.get_param("/validation"):
