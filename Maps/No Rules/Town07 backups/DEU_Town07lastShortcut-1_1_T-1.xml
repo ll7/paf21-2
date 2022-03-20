@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<commonRoad timeStepSize="0.1" commonRoadVersion="2020a" author="paf21-2" affiliation="Augsburg University" source="CommonRoad Scenario Designer" benchmarkID="DEU_Town07-1_1_T-1" date="2022-03-20">
+<commonRoad timeStepSize="0.1" commonRoadVersion="2020a" author="paf21-2" affiliation="Augsburg University" source="CommonRoad Scenario Designer" benchmarkID="DEU_Town07lastShortcut-1_1_T-1" date="2022-03-20">
   <location>
     <geoNameId>-999</geoNameId>
     <gpsLatitude>999.0</gpsLatitude>
@@ -131682,15 +131682,15 @@
         <y>89.4894</y>
       </point>
       <point>
-        <x>-49.77</x>
-        <y>89.179</y>
+        <x>-49.7700</x>
+        <y>89.1790</y>
       </point>
       <point>
         <x>-48.9788</x>
         <y>88.7673</y>
       </point>
       <point>
-        <x>-48.232</x>
+        <x>-48.2320</x>
         <y>88.2266</y>
       </point>
       <point>
@@ -131714,7 +131714,7 @@
         <y>84.0514</y>
       </point>
       <point>
-        <x>-46.733</x>
+        <x>-46.7330</x>
         <y>83.2501</y>
       </point>
       <point>
@@ -131722,8 +131722,8 @@
         <y>82.4827</y>
       </point>
       <point>
-        <x>-46.991</x>
-        <y>81.749</y>
+        <x>-46.9910</x>
+        <y>81.7490</y>
       </point>
       <point>
         <x>-47.1313</x>
@@ -131758,7 +131758,7 @@
       </point>
       <point>
         <x>-52.2698</x>
-        <y>86.236</y>
+        <y>86.2360</y>
       </point>
       <point>
         <x>-51.7549</x>
@@ -131770,7 +131770,7 @@
       </point>
       <point>
         <x>-50.9356</x>
-        <y>85.669</y>
+        <y>85.6690</y>
       </point>
       <point>
         <x>-50.6851</x>
@@ -131782,7 +131782,7 @@
       </point>
       <point>
         <x>-50.4965</x>
-        <y>85.192</y>
+        <y>85.1920</y>
       </point>
       <point>
         <x>-50.4563</x>
@@ -131801,7 +131801,7 @@
         <y>83.7918</y>
       </point>
       <point>
-        <x>-50.644</x>
+        <x>-50.6440</x>
         <y>83.2103</y>
       </point>
       <point>
@@ -131891,10 +131891,10 @@
       </point>
       <point>
         <x>-47.4162</x>
-        <y>65.355</y>
+        <y>65.3550</y>
       </point>
       <point>
-        <x>-46.531</x>
+        <x>-46.5310</x>
         <y>64.9224</y>
       </point>
       <point>
@@ -131907,7 +131907,7 @@
       </point>
       <point>
         <x>-43.5112</x>
-        <y>64.143</y>
+        <y>64.1430</y>
       </point>
       <point>
         <x>-42.5485</x>
@@ -131938,7 +131938,7 @@
       </point>
       <point>
         <x>-52.6661</x>
-        <y>72.695</y>
+        <y>72.6950</y>
       </point>
       <point>
         <x>-52.9358</x>
@@ -131973,7 +131973,7 @@
         <y>62.9078</y>
       </point>
       <point>
-        <x>-49.169</x>
+        <x>-49.1690</x>
         <y>62.1673</y>
       </point>
       <point>
@@ -132030,7 +132030,7 @@
         <y>70.8676</y>
       </point>
       <point>
-        <x>-49.354</x>
+        <x>-49.3540</x>
         <y>69.5165</y>
       </point>
       <point>
@@ -132093,7 +132093,7 @@
         <y>78.2655</y>
       </point>
       <point>
-        <x>-51.633</x>
+        <x>-51.6330</x>
         <y>77.0173</y>
       </point>
       <point>
@@ -132114,7 +132114,7 @@
       </point>
       <point>
         <x>-53.1619</x>
-        <y>70.741</y>
+        <y>70.7410</y>
       </point>
       <point>
         <x>-53.5852</x>
@@ -132185,8 +132185,8 @@
         <y>76.7561</y>
       </point>
       <point>
-        <x>-47.702</x>
-        <y>75.493</y>
+        <x>-47.7020</x>
+        <y>75.4930</y>
       </point>
       <point>
         <x>-47.8145</x>
@@ -132218,11 +132218,11 @@
       </point>
       <point>
         <x>-51.4617</x>
-        <y>65.427</y>
+        <y>65.4270</y>
       </point>
       <point>
         <x>-52.7022</x>
-        <y>64.74</y>
+        <y>64.7400</y>
       </point>
       <point>
         <x>-54.0123</x>
@@ -132293,7 +132293,7 @@
       </point>
       <point>
         <x>-52.8049</x>
-        <y>69.444</y>
+        <y>69.4440</y>
       </point>
       <point>
         <x>-53.1836</x>
@@ -132308,7 +132308,7 @@
         <y>68.1286</y>
       </point>
       <point>
-        <x>-55.005</x>
+        <x>-55.0050</x>
         <y>67.8445</y>
       </point>
       <point>
@@ -132316,7 +132316,7 @@
         <y>67.6319</y>
       </point>
       <point>
-        <x>-57.027</x>
+        <x>-57.0270</x>
         <y>67.4926</y>
       </point>
       <point>
@@ -132358,14 +132358,14 @@
       </point>
       <point>
         <x>-57.6362</x>
-        <y>56.033</y>
+        <y>56.0330</y>
       </point>
       <point>
         <x>-57.3564</x>
         <y>57.4463</y>
       </point>
       <point>
-        <x>-57.023</x>
+        <x>-57.0230</x>
         <y>58.8379</y>
       </point>
       <point>
@@ -132377,12 +132377,12 @@
         <y>61.5627</y>
       </point>
       <point>
-        <x>-55.795</x>
+        <x>-55.7950</x>
         <y>62.8993</y>
       </point>
       <point>
         <x>-55.3398</x>
-        <y>64.221</y>
+        <y>64.2210</y>
       </point>
       <point>
         <x>-54.8762</x>
@@ -132436,8 +132436,8 @@
         <y>52.8608</y>
       </point>
       <point>
-        <x>-53.883</x>
-        <y>54.104</y>
+        <x>-53.8830</x>
+        <y>54.1040</y>
       </point>
       <point>
         <x>-53.6956</x>
@@ -132500,7 +132500,7 @@
         <y>73.5682</y>
       </point>
       <point>
-        <x>-47.886</x>
+        <x>-47.8860</x>
         <y>74.9816</y>
       </point>
       <point>
