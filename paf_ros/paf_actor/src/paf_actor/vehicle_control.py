@@ -49,11 +49,20 @@ class VehicleController:
         # true while the car is driving backwards to unstuck
         self._is_unstucking: bool = False
 
+        self._deadlock_start_time: float = 0.0
+        self._deadlock_stuck_check_time: float = 30.0
+        self._deadlock_is_unlocking: bool = False
+        self._deadlock_timer: float = 0.0
+        self._deadlock_phase_1: float = 2.0
+        self._deadlock_phase_2: float = 4.0
+        self._deadlock_phase_3: float = 8.0
+        self._deadlock_phase_end: float = 10.0
+
         self._obstacle_follow_speed: float = float("inf")
         self._obstacle_follow_min_distance: float = 6.0
         self._obstacle_follow_target_distance: float = 15.0
-        self._obstacle_follow_active = False
-        self._obstacle_follow_distance = float("inf")
+        self._obstacle_follow_active: bool = False
+        self._obstacle_follow_distance: float = float("inf")
 
         self._u_turn_speed = 5
 
@@ -120,59 +129,79 @@ class VehicleController:
         Returns:
             carla_msgs_.msg.CarlaEgoVehicleControl: Ego Vehicle Control command
         """
-        self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
+        throttle: float = 0.0
+        steering: float = 0.0
+        if not self._deadlock_is_unlocking:
+            self._last_control_time, dt = self.__calculate_current_time_and_delta_time()
 
-        try:
-            steering, self._target_speed, distance = self.__calculate_steering()
-            self._is_reverse = self._target_speed < 0.0
-            self._target_speed = abs(self._target_speed)
+            try:
+                steering, self._target_speed, distance = self.__calculate_steering()
+                self._is_reverse = self._target_speed < 0.0
+                self._target_speed = abs(self._target_speed)
 
-            if not self._is_reverse:
-                if self._target_speed > self._obstacle_follow_speed:
-                    self._target_speed = self._obstacle_follow_speed
-                    if self._obstacle_follow_speed < 0:  # if we are to close we just want to reverse
-                        steering = 0.0
+                if not self._is_reverse:
+                    if self._target_speed > self._obstacle_follow_speed:
+                        self._target_speed = self._obstacle_follow_speed
+                        if self._obstacle_follow_speed < 0:  # if we are to close we just want to reverse
+                            steering = 0.0
 
-            # rospy.logerr(
-            #    f"\n[ACTOR] \ntarget_speed: {self._target_speed}, "
-            #    f"\nobstacle_follow_speed: {self._obstacle_follow_speed},\ncurrent_speed: {self._current_speed}"
-            #    f"\nobstacle_follow_distance: {self._obstacle_follow_distance}"
-            # )
+                if np.abs(self._lat_controller.heading_error) > 0.8:
+                    rospy.loginfo_throttle(5, "[Actor] U-TURN")
+                    self._target_speed = self._u_turn_speed
 
-            # rospy.loginfo(
-            #    f"heading error: {self._lat_controller.heading_error}, cross_error: {self._lat_controller.cross_err}"
-            # )
-            if np.abs(self._lat_controller.heading_error) > 0.8:  # np.pi/2:
-                rospy.loginfo_throttle(5, "[Actor] U-TURN")
-                self._target_speed = self._u_turn_speed
+                throttle: float = self.__calculate_throttle(dt, distance)
 
-            throttle: float = self.__calculate_throttle(dt, distance)
+                rear_gear = False
 
-            rear_gear = False
+                if self._is_unstucking:
+                    if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
+                        self._is_unstucking = False
+                    else:
+                        rear_gear = True
 
-            if self._is_unstucking:
-                if rospy.get_rostime().secs - self._unstuck_start_time >= self._unstuck_check_time:
-                    self._is_unstucking = False
-                else:
+                elif self.__check_stuck() or self.__check_wrong_way():
+                    self._is_unstucking = True
+                    self._unstuck_start_time = rospy.get_rostime().secs
                     rear_gear = True
 
-            elif self.__check_stuck() or self.__check_wrong_way():
-                self._is_unstucking = True
-                self._unstuck_start_time = rospy.get_rostime().secs
-                rear_gear = True
+                if rear_gear:
+                    throttle = 1
+                    # steering = 0.33 * -1 if is_unstucking_left else 1
+                    steering = 0.0
+                    self._is_reverse = True
 
-            if rear_gear:
-                throttle = 1
-                # steering = 0.33 * -1 if is_unstucking_left else 1
+            except RuntimeError as e:
+                throttle = -1.0
+                steering = 0.0
+                self._is_reverse = False
+                self._target_speed = 0.0
+                rospy.logwarn_throttle(10, f"[Actor] error ({e})")
+
+            if not self._deadlock_is_unlocking and self.__check_deadlock():
+                self._deadlock_is_unlocking = True
+                self._deadlock_timer = rospy.get_rostime().secs
+
+        else:
+            self._deadlock_timer = rospy.get_rostime().secs - self._deadlock_timer
+            if self._deadlock_timer <= self._deadlock_phase_1:
+                throttle = 1.0
                 steering = 0.0
                 self._is_reverse = True
-
-        except RuntimeError as e:
-            throttle = -1.0
-            steering = 0.0
-            self._is_reverse = False
-            self._target_speed = 0.0
-            rospy.logwarn_throttle(10, f"[Actor] error ({e})")
+                rospy.loginfo_throttle(5, "[Actor] PHASE 1 of deadlock_handling")
+            elif self._deadlock_timer <= self._deadlock_phase_2:
+                throttle = 0.0
+                steering = 0.0
+                self._is_reverse = False
+                rospy.loginfo_throttle(5, "[Actor] PHASE 2 of deadlock_handling")
+            elif self._deadlock_timer <= self._deadlock_phase_3:
+                throttle = 1.0
+                steering = 0.0
+                self._is_reverse = False
+                rospy.loginfo_throttle(5, "[Actor] PHASE 3 of deadlock_handling")
+            elif self._deadlock_timer <= self._deadlock_phase_end:
+                self._deadlock_is_unlocking = False
+                self._deadlock_timer = 0.0
+                rospy.loginfo_throttle(5, "[Actor] PHASE END of deadlock_handling")
 
         control: CarlaEgoVehicleControl = self.__generate_control_message(throttle, steering)
 
@@ -226,6 +255,20 @@ class VehicleController:
             self._stuck_start_time = 0.0
         return False
 
+    def __check_deadlock(self):
+        deadlock = abs(self._current_speed) < self._stuck_value_threshold
+        if deadlock:
+            if self._deadlock_start_time == 0.0:
+                self._deadlock_start_time = rospy.get_rostime().secs
+                return False
+            elif rospy.get_rostime().secs - self._deadlock_start_time >= self._deadlock_stuck_check_time:
+                self._deadlock_start_time = 0.0
+                rospy.logerr_throttle(5, "[Actor] DEADLOCK FOUND!!")
+                return True
+        else:
+            self._deadlock_start_time = 0.0
+        return False
+
     def __generate_control_message(self, throttle: float, steering: float) -> CarlaEgoVehicleControl:
         """
         Generate a control message for the CarlaEgoVehicle
@@ -240,33 +283,42 @@ class VehicleController:
         # piece together the control message
         control: CarlaEgoVehicleControl = CarlaEgoVehicleControl()
 
-        # positive throttle outputs are directed to the throttle, negative ones to the brakes
-        if throttle >= 0.0:
-            control.throttle = np.clip(throttle, 0.0, 1.0)
-            control.brake = 0.0
-        else:
-            control.brake = -np.clip(throttle, -1.0, 0.0)
-            control.throttle = 0.0
-        control.steer = steering
-        control.hand_brake = False
-        control.manual_gear_shift = False
-        control.reverse = self._is_reverse
-
-        if control.brake > 0 and (self._current_speed > 1 or self._obstacle_follow_active):
-            control.reverse = not self._is_reverse
-            control.throttle = control.brake
-
-            if self._obstacle_follow_active:
+        if not self._deadlock_is_unlocking:
+            # positive throttle outputs are directed to the throttle, negative ones to the brakes
+            if throttle >= 0.0:
+                control.throttle = np.clip(throttle, 0.0, 1.0)
                 control.brake = 0.0
-                control.steer = 0.0
+            else:
+                control.brake = -np.clip(throttle, -1.0, 0.0)
+                control.throttle = 0.0
+            control.steer = steering
+            control.hand_brake = False
+            control.manual_gear_shift = False
+            control.reverse = self._is_reverse
 
-        if self._emergency_mode:
-            control.hand_brake = True
-            control.steer = np.rad2deg(30.0)
+            if control.brake > 0 and (self._current_speed > 1 or self._obstacle_follow_active):
+                control.reverse = not self._is_reverse
+                control.throttle = control.brake
+
+                if self._obstacle_follow_active:
+                    control.brake = 0.0
+                    control.steer = 0.0
+
+            if self._emergency_mode:
+                control.hand_brake = True
+                control.steer = np.rad2deg(30.0)
+                control.brake = 0.0
+                control.throttle = 1.0
+                control.reverse = not self._is_reverse
+            return control
+        else:
+            control.steer = steering
+            control.hand_brake = False
+            control.throttle = throttle
             control.brake = 0.0
-            control.throttle = 1.0
-            control.reverse = not self._is_reverse
-        return control
+            control.reverse = self._is_reverse
+            control.hand_brake = False
+            return control
 
     def __calculate_throttle(self, dt: float, distance: float) -> float:
         """
