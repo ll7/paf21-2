@@ -12,7 +12,7 @@ from paf_messages.msg import (
 )
 from paf_messages.srv import PafLaneInfoService, PafLaneInfoServiceResponse
 
-from geometry_msgs.msg import Point as Point3D
+from geometry_msgs.msg import Point as Point3D, Point
 from .GlobalPath import GlobalPath
 from .HelperFunctions import dist, closest_index_of_point_list, expand_sparse_list, pts_to_xy, on_bridge
 
@@ -28,6 +28,8 @@ from .Spline import (
 
 
 class LocalPath:
+    """All not ROS-related path calculations are happening in this class"""
+
     DENSE_POINT_DISTANCE = 0.25
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
@@ -42,6 +44,12 @@ class LocalPath:
     PREFER_TARGET_LANES_DIST = 200
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None, plan_maximum_distance=False):
+        """
+        A local path (LP) is calculated based on the global path.
+        :param global_path: global path object
+        :param rules_enabled: game mode
+        :param plan_maximum_distance: set to true to calculate local path to the end of the route (rerouting very slow)
+        """
         self._local_path_signals = []  # this stores lane change signals
         self._sparse_local_path_speeds = []
         self.sparse_local_path = []
@@ -59,6 +67,11 @@ class LocalPath:
 
     @staticmethod
     def _lane_info_service_call(pts: List[Point2D]) -> Optional[PafObstacleFollowInfo]:
+        """
+        Call the lane info service to ask for obstacles on a given path (used for lane change options)
+        :param pts: path points
+        :return: follow information (velocity + distance of next actor on path)
+        """
         service_name = "/paf/paf_obstacle_planner/lane_info_service"
         try:
             rospy.loginfo_throttle(3, f"[local planner] requesting obstacle info for {len(pts)} points")
@@ -71,11 +84,13 @@ class LocalPath:
         call_service = rospy.ServiceProxy(service_name, PafLaneInfoService)
         response: PafLaneInfoServiceResponse = call_service(send)
         return response.follow_info
-        # except Exception as e:
-        #     rospy.logerr_throttle(1, f"[local planner] {e}")
-        #     return None
 
-    def lane_change_at(self, sparse_index):
+    def lane_change_at(self, sparse_index: int) -> bool:
+        """
+        Test if the car is between two lanes at this index
+        :param sparse_index: index of sparse local path
+        :return: truth value
+        """
         if sparse_index < 0:
             return False
         for start, end in zip(self._lane_change_start_indices, self._lane_change_end_indices):
@@ -83,7 +98,7 @@ class LocalPath:
                 return True
         return False
 
-    def current_indices(self, position: Point2D, min_section=None) -> Tuple[int, int]:
+    def current_indices(self, position: Point, min_section=None) -> Tuple[int, int]:
         """
         get indices in current global path of a position
         :param min_section: start index for section search
@@ -107,9 +122,21 @@ class LocalPath:
         return from_index, from_index
 
     def get_all_traffic_signals(self) -> List[PafTrafficSignal]:
+        """
+        Retrieve a list of traffic signals on the global path
+        :return: list of signs, lights, etc.
+        """
         return [x for x in self.global_path.signals_on_path + self._local_path_signals]
 
-    def get_signal_indices(self, max_dist=5, return_negative=False):
+    def get_signal_indices(
+        self, max_dist: float = 5, return_negative: bool = False
+    ) -> List[Tuple[PafTrafficSignal, int, float, Point2D]]:
+        """
+        Retrieve information about all signals (lights,signs,etc.) on the GP within a given distance from the LP.
+        :param max_dist: maximum distance from local path allowed
+        :param return_negative: return all signs not only matching ones (index=-1)
+        :return: List of tuples: (signal, index, distance, position_on_global_path)
+        """
         accuracy = int(1 / self.DENSE_POINT_DISTANCE)  # 1m accuracy
         last_idx = 0
         continued_times = 0
@@ -120,7 +147,7 @@ class LocalPath:
             idx0, distance = closest_index_of_point_list(self.message.points[last_idx:], p.point, accuracy)
             idx = idx0 + last_idx
             match = self.message.points[idx]
-            if "LC" in p.type:
+            if "LC" in p.type:  # lane changes
                 out.append((p, idx, distance, match))
                 continue
             last_idx = max(0, idx // 2)
@@ -135,6 +162,8 @@ class LocalPath:
         if len(out) < 2:
             return out
         out2 = [out[0]]
+
+        # test for neighbouring signs being the same (example: multiple lights for multiple lanes -> one light)
         for x1, x2 in zip(out, out[1:]):
             delta = x2[1] - x1[1]
             if delta > accuracy:
@@ -146,8 +175,10 @@ class LocalPath:
                     out2[-1] = x2
                     continue
                 elif x1[0].type in SpeedCalculator.MUST_STOP_EVENTS:
+                    # lights override stop signs if on the same position
                     continue
                 elif x2[0].type in SpeedCalculator.MUST_STOP_EVENTS:
+                    # lights override stop signs if on the same position
                     out2[-1] = x2
                     continue
                 else:
@@ -158,7 +189,13 @@ class LocalPath:
         return out2
 
     @staticmethod
-    def signs_equal(sig1: PafTrafficSignal, sig2: PafTrafficSignal):
+    def signs_equal(sig1: PafTrafficSignal, sig2: PafTrafficSignal) -> bool:
+        """
+        Compare two signals for equality
+        :param sig1: signal 1
+        :param sig2: signal 2
+        :return: truth
+        """
         if sig1 is None or sig2 is None:
             return False
         if sig1.type != sig2.type:
@@ -168,6 +205,16 @@ class LocalPath:
     def get_next_traffic_signal(
         self, from_index: int = 0, ignore_sign: PafTrafficSignal = None, to_index: int = None
     ) -> Tuple[int, Optional[PafTrafficSignal], str, bool]:
+        """
+        Get next relevant signal for the ego vehicle
+        :param from_index: current index of vehicle on LP (dense path)
+        :param ignore_sign: optional sign to skip if found (e.g. green light, stop sign once stopped)
+        :param to_index: search up to this index
+        :return: tuple(4): index of found sign, sign object found,
+        priority group of sign ("MUST_STOP" (stop sign), "CAN_STOP" (lights, yield) or "NONE")
+        and true/false if the sign to ignore has been found
+
+        """
         sign_group = "NONE"
         found_ignored = False
 
@@ -190,11 +237,20 @@ class LocalPath:
         return -1, None, sign_group, found_ignored
 
     def reset_alternate_speed(self):
+        """
+        Reset the alt speed
+        """
         self.alternate_speeds = None
 
     def set_alternate_speed(
         self, index_start_dense: int = 0, speed: Union[np.ndarray, List[float]] = None, reset=False
     ):
+        """
+        Set the alt speed with given target speed array (or reset if not given)
+        :param index_start_dense: start index (dense path) for alt speed
+        :param speed: speed to add to path
+        :param reset: true/false reset before adding the speed
+        """
         if len(self) is None:
             return
         if reset or self.alternate_speeds is None:
@@ -205,19 +261,24 @@ class LocalPath:
         self.alternate_speeds[index_start_dense:index_end] = speed
         if speed[-1] < 1e-3:
             self.alternate_speeds[index_end:] *= 0
-        # self.debug_pts = self.message.points[index_start_dense:index_end]
-        # self._draw_path_pts(self.debug_pts, "lanechnge", (200, 24, 0))
 
     def set_alternate_speed_next_sign(
-        self, current_dense_index: int, ignore_sign: PafTrafficSignal = None, traffic_sign_color: str = None
+        self, current_dense_index: int, ignore_sign: PafTrafficSignal = None, traffic_light_color: str = None
     ):
+        """
+        Set alt speed for the upcoming sign, skip if no sign found.
+        :param current_dense_index: current position on LP
+        :param ignore_sign: optional: sign to ignore
+        :param traffic_light_color: last detected color of the traffic light detector (or None if no lights in sight)
+        :return: (chosen_sign, found_ignored_sign)
+        """
         if current_dense_index < 0:
             return None, None
         index_dense, chosen_sign, sign_group, found_ignored_sign = self.get_next_traffic_signal(
             current_dense_index, ignore_sign
         )
 
-        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_sign_color in self.RESUME_COURSE_COLORS:
+        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_light_color in self.RESUME_COURSE_COLORS:
             return chosen_sign, found_ignored_sign
 
         if found_ignored_sign:
@@ -395,7 +456,16 @@ class LocalPath:
         publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         publisher.publish(msg)
 
-    def _get_previous_local_path(self, sparse_idx, current_speed, num_points_previous_plan=5):
+    def _get_relevant_previous_local_path(
+        self, sparse_idx: int, num_points_previous_plan: int = 5
+    ) -> Tuple[int, int, List[Point2D], List[float], int, int]:
+        """
+        Trace back last planned local path and add it backwards (num_points) and
+        forwards (to lanechange end) from current position to increase driving smoothness
+        :param sparse_idx: index position on previous sparse plan
+        :param num_points_previous_plan: number of points to include backwards from here
+        :return: distance_planned, sparse idx previous, sparse path, sparse speeds, end section index, end_lane
+        """
         distance_planned = 0
         current_idx = sparse_idx
         sparse_idx = max(0, sparse_idx - num_points_previous_plan)
@@ -477,7 +547,7 @@ class LocalPath:
                 sparse_local_path_speeds,
                 section_from,
                 current_lane,
-            ) = self._get_previous_local_path(prev_idx, current_speed)
+            ) = self._get_relevant_previous_local_path(prev_idx)
 
         self._lane_change_end_indices = []
         self._lane_change_start_indices = []
@@ -869,7 +939,7 @@ class LocalPath:
     def visualize(
         town: str,
         rules: bool,
-        position: Point2D,
+        position: Tuple[float],
         target: Union[Point2D, Point3D],
         lanelet_ids: List[int],
         bounds: Tuple[Optional[float], Optional[float], Optional[float], Optional[float]] = None,
