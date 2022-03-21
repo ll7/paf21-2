@@ -67,6 +67,9 @@ class GlobalPlanner:
         rospy.Service("/paf/paf_local_planner/routing_request_random", PafRoutingService, self._routing_provider_random)
 
         self._routing_pub = rospy.Publisher("/paf/paf_global_planner/routing_response", PafLaneletRoute, queue_size=1)
+        self._tdv_routing_pub = rospy.Publisher(
+            "/paf/paf_global_planner/routing_response_tdv", PafLaneletRoute, queue_size=1
+        )
         self._target_on_map_pub = rospy.Publisher(
             "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
         )
@@ -102,7 +105,15 @@ class GlobalPlanner:
 
     def _find_closest_position_on_lanelet_network(self) -> Tuple[np.ndarray, float]:
         pos = self._position[0], self._position[1]
-        lanelet_id = find_closest_lanelet(self._scenario.lanelet_network, Point2D(*pos))[0]
+
+        lanelets = find_closest_lanelet(self._scenario.lanelet_network, Point2D(*pos))
+
+        angle_offsets = [
+            np.abs(find_lanelet_yaw(self._scenario.lanelet_network, Point2D(*pos), let) - self._yaw) for let in lanelets
+        ]
+        rospy.logerr(f"uiaeuiae {np.round(np.rad2deg(angle_offsets))}")
+        lanelet_id = lanelets[np.argmin(angle_offsets)]
+
         lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         idx = np.argmin([dist(a, pos) for a in lanelet.center_vertices])
         if idx == len(lanelet.center_vertices) - 1:
@@ -204,6 +215,7 @@ class GlobalPlanner:
         self._last_route = route_paf
         self._target_on_map_pub.publish(draw_msg)
         self._start_score_pub.publish(Empty_msg())
+        self._tdv_routing_pub.publish(route_paf)
         return route_paf
 
     def _odometry_provider(self, odometry: Odometry):
@@ -217,6 +229,8 @@ class GlobalPlanner:
                 odometry.pose.pose.orientation.w,
             ]
         )
+        if self._yaw < 0:
+            self._yaw += np.pi * 2
 
     def _route_from_objective(
         self,
