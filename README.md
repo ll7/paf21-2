@@ -1,11 +1,19 @@
 # Praktikum für Autonomes Fahren (PAF)
 
+### Aufgabenstellung
+Im Rahmen des Praktikums "Praktikum Autonomes Fahren" sollte ein autonomes Fahrzeug entwickelt werden, dass autonom von einem Startpunkt zu einem Zielpunkt fahren kann. Dafür wurde als Simulationsumgebung Carla verwendet. Das Fahrzeug an sich soll in ROS implementiert werden. 
+
+Die Aufgabenstellung umfasst 2 Teile.
+
+Teil 1: Modus ohne Regeln. Ziel dabei ist es ohne Beachtung aller Verkehrsregeln möglichst schnell ans Ziel zu kommen 
+
+Teil 2: Modus mit Regeln. Ziel dabei ist es unter Beachtung aller Verkehrsregeln möglichst schnell ans Ziel zu kommen. Für Verstöße gegen die Verkehrsregeln werden Strafzeiten vergeben.
+
 ### Architekturbeschreibung (WIP)
 
 https://app.diagrams.net/#G1EHm7NKyF9iLAxI_44CEEAst4w_rrSQ1e
 
 ![Architecture Graph](docs/imgs/architecture.png)
-
 
 ### Module:
 
