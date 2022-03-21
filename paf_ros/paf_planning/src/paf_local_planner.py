@@ -187,12 +187,24 @@ class LocalPlanner:
         self._check_for_signs_on_path()
         self._publish_local_path_msg()
 
-        if (
-            25 / 3.6 > self._current_speed > 5 / 3.6 and self._local_path_idx < len(self._local_path) - 150
-        ):  # todo fix: acting does not like very short paths
-            rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
-            self._replan_local_path()
-            # self._send_global_reroute_request()
+        if self.rules_enabled:
+            if (
+                self._current_speed < 25 / 3.6
+                and self._current_speed > 15 / 3.6
+                and self._local_path_idx < len(self._local_path) - 150
+            ):  # todo fix: acting does not like very short paths
+                rospy.loginfo_throttle(
+                    5, "[local planner] car is slow, no replanning locally because traffic light bug"
+                )
+                # traffic light handling not working correctly when turned on
+                # self._replan_local_path()
+        else:
+
+            if (
+                self._current_speed < 25 / 3.6 and self._local_path_idx < len(self._local_path) - 150
+            ):  # todo fix: acting does not like very short paths
+                rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
+                self._replan_local_path()
 
         # if self._last_sign is not None:
         #     self._ignore_sign = self._last_sign
@@ -439,8 +451,7 @@ class LocalPlanner:
             if self._current_speed < 0.01:
                 if sleep > 0:
                     rospy.sleep(sleep)
-                # self._send_standard_loop_request()  # todo remove in production
-                self._send_random_global_path_request()
+                self._send_standard_loop_request()
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)
