@@ -752,7 +752,7 @@ class LocalPath:
         :return: list of speeds
         """
         speed = self.speed_calc.get_curve_speed(local_path)
-        if self.rules_enabled:  # todo speed limit logic for no rules
+        if self.rules_enabled:
             speed = np.clip(speed, 0, speed_limit)
         if end_of_route and speed[-1] > self.END_OF_ROUTE_SPEED:
             n = int(10 / 0.25)

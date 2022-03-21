@@ -1,7 +1,8 @@
 import copy
-from typing import List
+from typing import List, Tuple
 import numpy as np
 from commonroad.scenario.traffic_sign import TrafficSignIDGermany
+from numpy import ndarray
 
 from paf_messages.msg import Point2D
 from .HelperFunctions import dist
@@ -9,6 +10,8 @@ from .MapManager import MapManager
 
 
 class SpeedCalculator:
+    """Class for handling speed in the local plan (deceleration, curve speed, etc.)"""
+
     CITY_SPEED_LIMIT = 50 / 3.6
     SPEED_LIMIT_MULTIPLIER = 1
     CURVE_RAD_MEASURE_STEP = 5
@@ -19,6 +22,10 @@ class SpeedCalculator:
     UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 100, 100, 10, 1, 10
 
     def __init__(self, step_size: float):
+        """
+        Constructor sets step size and sets speed limits based on rule-mode
+        :param step_size: step size (in meter) in which the speed changes on the path.
+        """
         # step size is assumed constant but has a variance of +/- 1mm
         self._step_size = step_size
         self._plots = None
@@ -26,6 +33,11 @@ class SpeedCalculator:
 
     @staticmethod
     def set_limits(rules_enabled: bool = None):
+        """
+        Sets speed limits with given rule set. Must be called, when rule parameter is changed at runtime from both
+        global and local planner.
+        :param rules_enabled: rule mode
+        """
         if rules_enabled is None:
             rules_enabled = MapManager.get_rules_enabled()
         SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if rules_enabled else 250 / 3.6
@@ -35,15 +47,27 @@ class SpeedCalculator:
         SpeedCalculator.MAX_DECELERATION = 20 if rules_enabled else 20
         # m/s^2, higher value = later and harder braking
 
-    def _get_deceleration_distance(self, v_0, v_target):
+    def _get_deceleration_distance(self, v_0: float, v_target: float) -> float:
+        """
+        Deceleration distance in meters based on delta speed
+        :param v_0: start speed
+        :param v_target: target speed
+        :return: braking distance (ideal)
+        """
         # s = 1/2 * d_v * t
         # a = d_v / d_t
         # => s = d_v^2 / 2a
         return (v_0 ** 2 - v_target ** 2) / (2 * self.MAX_DECELERATION)
 
     @staticmethod
-    def _radius_to_speed_fast(curve_radius):
+    def _radius_to_speed_fast(curve_radius: float) -> float:
+        """
+        Convert a curve radius to a speed value (used for speeds > 80 kmh / 50 mph)
+        :param curve_radius: radius in m
+        :return: speed in m/s
+        """
         # https://www.state.nj.us/transportation/eng/tools/CalculatorESafeSpeedGreaterThan50.shtm
+        # wrong formula on page, correct formula in HTML only
         if curve_radius < 0:
             return SpeedCalculator.MAX_SPEED
         e = 0  # super_elevation in percent
@@ -54,21 +78,30 @@ class SpeedCalculator:
         return speed * 0.44704 * SpeedCalculator.CURVE_FACTOR
 
     @staticmethod
-    def _radius_to_speed_slow(curve_radius):
+    def _radius_to_speed_slow(curve_radius: float) -> float:
+        """
+        Convert a curve radius to a speed value (used for speeds < 80 kmh / 50 mph)
+        :param curve_radius: radius in m
+        :return: speed in m/s
+        """
         # https://www.state.nj.us/transportation/eng/tools/CalculatorESafeSpeedLessThanEqualTo50.shtm
+        # wrong formula on page, correct formula in HTML only
         if curve_radius < 0:
             return SpeedCalculator.MAX_SPEED
         e = 0  # super_elevation in percent
         r = curve_radius * 3.28084  # m to ft
         speed = ((-0.015 * r) + (np.sqrt(((0.015 * r) * (0.015 * r)) + ((4 * r) * ((15 * (e / 100)) + 2.85))))) / 2
-        # speed = 0.5 * (-.015 * curve_radius + (
-        #         (.015 * curve_radius) ** 2 + 4 * curve_radius * np.sqrt(15 * super_elevation + 3.6)))
         if speed > 50:
             return -1
         return speed * 0.44704 * SpeedCalculator.CURVE_FACTOR  # mi/h to m/s
 
     @staticmethod
-    def _radius_to_speed(curve_radius):
+    def _radius_to_speed(curve_radius: float) -> float:
+        """
+        Convert a radius to a speed value. Selects between the different methods automatically
+        :param curve_radius: radius in m
+        :return: speed in m/s
+        """
         if curve_radius < 0:
             return SpeedCalculator.MAX_SPEED
 
@@ -79,11 +112,22 @@ class SpeedCalculator:
             speed = -100
         speed = np.clip(speed, SpeedCalculator.MIN_SPEED, SpeedCalculator.MAX_SPEED)
         if speed < 0:
-            raise RuntimeError("IMPORSSIBLEuiaretni")
-        return speed
+            raise RuntimeError("this statement should not be reached ever. Check the code!")
+        return float(speed)
 
     @staticmethod
-    def get_curve_radius_list(path: List[Point2D], max_radius=99999999, equal_dist=False):
+    def get_curve_radius_list(
+        path: List[Point2D], max_radius: float = 99999999, equal_dist: bool = False
+    ) -> List[float]:
+        """
+        Convert a list of points to a list of curve radii. The last radius is ALWAYS max_radius,
+        so that the length of the returning array stays the same
+        :param path: list of points (path). Must be a sparse list (distances should be in range of
+        CURVE_RAD_MEASURE_STEP meters), or the radius calculation goes nuts.
+        :param max_radius: radius value if going straight (big number)
+        :param equal_dist: if set to True, equal distance between the path points is assumed
+        :return: List of radii
+        """
         # https://www.mathopenref.com/arcradius.html
         # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
 
@@ -122,7 +166,14 @@ class SpeedCalculator:
         return radius_list
 
     @staticmethod
-    def _get_curve_radius_list_equal_distances(path_in: List[Point2D]):
+    def _get_curve_radius_list_equal_distances(path_in: List[Point2D]) -> Tuple[List[float], List[int], List[float]]:
+        """
+        Converts a path with not equal distances to one with equal distances between points by enlarging the array if
+        the distance is smaller than CURVE_RAD_MEASURE_STEP.
+        :param path_in: path with differing distances between points
+        :return: path with equal distances, amount of repetitions for each point (to use again later)
+        and the distances between all points (to use again later)
+        """
         min_dist = SpeedCalculator.CURVE_RAD_MEASURE_STEP
         max_radius = 99999999
         path = []
@@ -147,7 +198,12 @@ class SpeedCalculator:
 
         return radius_list, fill, distances
 
-    def get_curve_speed(self, path: List[Point2D]):
+    def get_curve_speed(self, path: List[Point2D]) -> List[float]:
+        """
+        Get curve speed for given path
+        :param path: sparse or smoothed path (radius and speed calculation for every point!)
+        :return: list of speeds with the same dimension
+        """
         curve_radius_list, fill, distances = self._get_curve_radius_list_equal_distances(path)
         speed1 = [SpeedCalculator._radius_to_speed(r) for r in curve_radius_list]
         speed2 = []
@@ -161,7 +217,13 @@ class SpeedCalculator:
             speed2.append(speed1[-1])
         return speed2
 
-    def _linear_deceleration_function(self, target_speed):
+    def _linear_deceleration_function(self, target_speed: float) -> Tuple[ndarray, float]:
+        """
+        Get a deceleration function as speed over distance. After FULL_VS_HALF_DECEL_FRACTION percent of the path,
+        the half deceleration is used for a smoother stopping experience
+        :param target_speed: target speed clipped between MIN_SPEED and MAX_SPEED
+        :return: deceleration as speed array with f[0]=MAX_SPEED and f[-1]=target_speed and the distance taken
+        """
         b = self.MAX_SPEED
         delta_v = self.MAX_SPEED - target_speed
 
@@ -181,8 +243,12 @@ class SpeedCalculator:
 
         return np.clip(speed, self.MIN_SPEED, self.MAX_SPEED), braking_distance
 
-    def add_linear_deceleration(self, speed):
-
+    def add_linear_deceleration(self, speed: List[float]) -> ndarray:
+        """
+        Adds deceleration speed to a given speed array
+        :param speed: list of speed values (step size set in constructor)
+        :return: list of speed values with linear deceleration added
+        """
         time_steps = [self._step_size / dv if dv > 0 else 1e-6 for dv in speed]
         accel = np.array(list(reversed([(v2 - v1) / dt for v1, v2, dt in zip(speed, speed[1:], time_steps)])))
         length = len(accel)
@@ -210,7 +276,12 @@ class SpeedCalculator:
         speed = np.clip(speed, 0, 999)
         return speed
 
-    def plt_init(self, add_accel=False):
+    def plt_init(self, add_accel: bool = False):
+        """
+        Init matplotlib plot for plot velocity (and optional: acceleration data).
+        Cannot be used within a ROS-Node (debugging only)
+        :param add_accel: plot acceleration data as well
+        """
         import matplotlib.pyplot as plt
 
         num_plts = 2 if add_accel else 1
@@ -221,17 +292,22 @@ class SpeedCalculator:
 
     @staticmethod
     def plt_show():
+        """
+        Show plot created before. Function plt_init and function plt_add must have been called before.
+        """
         import matplotlib.pyplot as plt
 
         plt.show()
 
-    def plt_add(self, speed):
+    def plt_add(self, speed: np.ndarray):
+        """
+        Add speed array to matplotlib plot
+        :param speed: speed array
+        """
         speed = copy.deepcopy(speed)
         length = len(speed)
         add_accel = len(self._plots) == 2
-        # x_values = [self._step_size / dv for dv in speed]
         x_values = [i * self._step_size for i in range(length)]
-        # x_values = [i for i in range(length)]
         if add_accel:
             accel = np.array(
                 list(
