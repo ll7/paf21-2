@@ -3,7 +3,12 @@
 ### Aufgabenstellung
 Im Rahmen des Praktikums "Praktikum Autonomes Fahren" sollte ein autonomes Fahrzeug entwickelt werden, dass autonom von einem Startpunkt zu einem Zielpunkt fahren kann. Dafür wurde als Simulationsumgebung Carla verwendet. Das Fahrzeug an sich soll in ROS implementiert werden. 
 
-Die Aufgabenstellung umfasst 2 Teile.
+Die Aufgabenstellung umfasst 2 Teile.\
+Allgemeine Anforderungen:
+1. Das Fahrzeug muss autonom einen Weg vom Startpunkt zum Zielpunkt planen 
+2. Das Fahrzeug muss diesen Weg autonom abfahren 
+3. Folgenden CARLA Karten müssen unterstützt werden: Town01, Town02, Town03, Town04, Town05, Town06, Town07, Town10HD
+4. Das Fahrzeug befindet sich in einer Welt mit anderen Verkehrsteilnehmer (andere Autos, Motorradfahrer, Fußgänger) 
 
 Teil 1: Modus ohne Regeln. Ziel dabei ist es ohne Beachtung aller Verkehrsregeln möglichst schnell ans Ziel zu kommen 
 
