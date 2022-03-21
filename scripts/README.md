@@ -7,15 +7,17 @@ Starts CARLA and the main launcher.
 ```
 bash scripts/runscript.sh [--build] [--skip-carla-restart]
 ```
+
+```
 Argumente:
 --skip-carla-restart/-scr : die Carla Simulation wird nicht neugestartet 
---build/-b		: erneutes builden des Projekts, wenn man Änderungen im Code vorgenommen hat 
---npcs/-n		: Starten mit npcs 
---low-quality/-lq	:Starten in niedrigerer Qualität für leistungsschwächere Geräte 
---manual-control/-mc	: Starten mit Öffnen eines manual-control Fensters
+--build/-b		  : erneutes builden des Projekts, wenn man Änderungen im Code vorgenommen hat 
+--npcs/-n		  : Starten mit npcs 
+--low-quality/-lq	  : Starten in niedrigerer Qualität für leistungsschwächere Geräte 
+--manual-control/-mc	  : Starten mit Öffnen eines manual-control Fensters
 --no-rules/-nr (rules enabled by default): Unterscheidung ob man mit oder ohne Regeln Fahren möchte
-TownXX
-
+TownXX                    : Town auf der gefahren werden soll, Town01-07 oder Town10HD
+```
 
 ### Build Script
 
