@@ -13,7 +13,6 @@ from geometry_msgs.msg import Pose
 from nav_msgs.msg import Odometry
 from paf_messages.msg import (
     PafLaneletRoute,
-    PafTopDownViewPointSet,
     PafSpeedMsg,
     PafDetectedTrafficLights,
 )
@@ -46,21 +45,17 @@ class LocalPlanner:
 
         self._current_pose = Pose()
         self._current_speed = 0
-        self._current_pitch = 0
         self._current_yaw = 0
 
         self._global_path = GlobalPath()
         self._local_path = LocalPath(self._global_path)
         self._local_path_idx, self._distance_to_local_path = -1, 0
-        # self._sparse_local_path_idx = -1
-        self._current_global_location = (0, 0)
-        self._from_section, self._to_section = -1, -1
+        self._last_replan_request_loc = time.perf_counter()
+        self._last_replan_request_glob = time.perf_counter()
 
         self._traffic_light_color = None
         self._last_sign = None
         self._traffic_light_detector_enabled = True
-
-        self._last_local_reroute = rospy.get_time()
         self._speed_msg = PafSpeedMsg()
 
         self._network: LaneletNetwork = MapManager.get_current_scenario().lanelet_network
@@ -78,15 +73,9 @@ class LocalPlanner:
         )
 
         self._emergency_break_pub = rospy.Publisher(f"/local_planner/{role_name}/emergency_break", Bool, queue_size=1)
-        self._last_replan_request_loc = time.perf_counter()
-        self._last_replan_request_glob = time.perf_counter()
         self._srv_global_reroute = "/paf/paf_local_planner/reroute"
         self._srv_global_random = "/paf/paf_local_planner/routing_request_random"
         self._srv_global_standard_loop = "/paf/paf_local_planner/routing_request_standard_loop"
-
-        self._sign_publisher = rospy.Publisher(
-            "/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1
-        )
         self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", PafSpeedMsg, queue_size=1)
         self._traffic_light_detector_toggle_pub = rospy.Publisher(
             "/paf/paf_local_planner/activate_traffic_light_detection", Bool, queue_size=1
@@ -125,7 +114,7 @@ class LocalPlanner:
             self._global_path = GlobalPath(msg=msg, lanelet_network=self._network)
             self._local_path = LocalPath(self._global_path, self.rules_enabled)
             self._set_local_path_idx()
-            path, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
+            path, _, _ = self._local_path.calculate_new_local_path(
                 self._current_pose.position, self._current_speed, ignore_previous=ignore_prev
             )
             self._set_local_path_idx()
@@ -332,7 +321,7 @@ class LocalPlanner:
             return
 
         self._last_replan_request_loc = t
-        msg, self._from_section, self._to_section = self._local_path.calculate_new_local_path(
+        msg, _, _ = self._local_path.calculate_new_local_path(
             self._current_pose.position, self._current_speed, ignore_previous=ignore_prev
         )
         self._set_local_path_idx()
@@ -369,7 +358,7 @@ class LocalPlanner:
         self._current_speed = np.sqrt(
             odometry.twist.twist.linear.x ** 2 + odometry.twist.twist.linear.y ** 2 + odometry.twist.twist.linear.z ** 2
         )
-        _, self._current_pitch, self._current_yaw = euler_from_quaternion(
+        _, _, self._current_yaw = euler_from_quaternion(
             [
                 odometry.pose.pose.orientation.x,
                 odometry.pose.pose.orientation.y,
@@ -388,7 +377,6 @@ class LocalPlanner:
             self._local_path_idx, self._distance_to_local_path = closest_index_of_point_list(
                 self._local_path.message.points, self._current_pose.position
             )
-            self._current_global_location = self._global_path.get_section_and_lane_indices(self._current_pose.position)
             self._local_path.current_index = self._local_path_idx
 
     def _publish_speed_msg(self):

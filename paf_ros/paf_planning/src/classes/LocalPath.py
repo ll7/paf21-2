@@ -28,7 +28,6 @@ from .Spline import (
 
 
 class LocalPath:
-    STEP_SIZE = 5
     DENSE_POINT_DISTANCE = 0.25
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
@@ -44,9 +43,7 @@ class LocalPath:
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None, plan_maximum_distance=False):
         self._local_path_signals = []  # this stores lane change signals
-        self._local_path_start_section = 0
         self._sparse_local_path_speeds = []
-        self._sparse_traffic_signals = []
         self.sparse_local_path = []
         self._lane_change_end_indices = []
         self._lane_change_start_indices = []
@@ -86,13 +83,14 @@ class LocalPath:
                 return True
         return False
 
-    def current_indices(self, position: Point2D) -> Tuple[int, int]:
+    def current_indices(self, position: Point2D, min_section=None) -> Tuple[int, int]:
         """
         get indices in current global path of a position
+        :param min_section: start index for section search
         :param position: search point
         :return: section, lane
         """
-        return self.global_path.get_section_and_lane_indices(position)
+        return self.global_path.get_section_and_lane_indices(position, min_section=min_section)
 
     def _next_lanechange_index(self, from_index: int = 0) -> Tuple[int, int]:
         """
@@ -254,15 +252,6 @@ class LocalPath:
 
         return chosen_sign, found_ignored_sign
 
-    def sparse_to_dense_index(self, index, start_pos=0):
-        if index is None or start_pos < 0:
-            return -1
-        i, _ = closest_index_of_point_list(self.message.points[start_pos:], self.sparse_local_path[index])
-        rospy.logwarn_throttle(3, (index, start_pos, i + start_pos, _))
-        if i < 0:
-            return i
-        return i + start_pos
-
     def _calculate_lane_options(
         self,
         start_idx,
@@ -418,18 +407,11 @@ class LocalPath:
 
         search_pt = self.sparse_local_path[end_index - 1]
         search_pt = Point3D(search_pt.x, search_pt.y, 0)
-        _end_section, _end_lane = self.global_path.get_section_and_lane_indices(search_pt)
-        # if current_speed < 30 / 3.6 and currently_changing:
-        #     _end_section, _ = self.global_path.get_section_and_lane_indices(self.sparse_local_path[current_idx])
-        #     sparse_idx = current_idx
-        #     sparse_local_path = []
-        #     sparse_local_path_speeds = []
-        #     rospy.logerr("reset1")
-        # el
+        _end_section, _end_lane = self.current_indices(search_pt)
         if not currently_changing:
             search_pt = self.sparse_local_path[current_idx]
             search_pt = Point3D(search_pt.x, search_pt.y, 0)
-            _end_section, _end_lane = self.global_path.get_section_and_lane_indices(search_pt)
+            _end_section, _end_lane = self.current_indices(search_pt)
             sparse_idx = current_idx
             sparse_local_path = []
             sparse_local_path_speeds = []
@@ -461,7 +443,7 @@ class LocalPath:
         t0 = perf_counter()
         local_path = PafLocalPath()
         target_pt = self.global_path.target
-        section_target, target_lane = self.global_path.get_section_and_lane_indices(target_pt, min_section=min_section)
+        section_target, target_lane = self.current_indices(target_pt, min_section=min_section)
         if section_target < 0:
             section_target = len(self.global_path)
         sparse_local_path, sparse_local_path_speeds = [], []
@@ -470,7 +452,6 @@ class LocalPath:
             prev_idx, _ = closest_index_of_point_list(self.sparse_local_path, from_position)
         else:
             self.sparse_local_path = []
-            self._sparse_traffic_signals = []
             self._sparse_local_path_speeds = []
             prev_idx = -1
 
@@ -501,7 +482,7 @@ class LocalPath:
         self._lane_change_end_indices = []
         self._lane_change_start_indices = []
         if prev_idx < 0 or section_from < 0:
-            section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
+            section_from, current_lane = self.current_indices(from_position)
             if section_from > 0:
                 section_from = max(0, section_from - 3)
                 point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
@@ -524,7 +505,6 @@ class LocalPath:
             self.message = local_path
             return local_path, 0, 0
 
-        self._local_path_start_section = section_from
         end_idx_lane_change = 0
         idx1 = section_from + 1
 
@@ -535,11 +515,6 @@ class LocalPath:
             s_prev = None if i == 0 else self.global_path.route.sections[i - 1]
             if s_prev is not None and s_prev.target_lanes_distance == 0:
                 future_lane = current_lane - s_prev.target_lanes[0] + s_prev.target_lanes_left_shift
-                # self.debug_pts += s.points
-                # rospy.logerr(
-                #     f"end of segment ({i})! current_lane={current_lane}, target_lanes={list(s_prev.target_lanes)},"
-                #     f" shift={s_prev.target_lanes_left_shift} => {future_lane}"
-                # )
                 current_lane = future_lane
 
             # test if current lane exists on this section
@@ -559,15 +534,10 @@ class LocalPath:
                     current_lane = len(s.points) - 1
 
                 self._draw_path_pts(self.debug_pts, "lanechnge", (200, 24, 0))
-                # from paf_ros.paf_planning.src.classes.MapManager import MapManager
-                # MapManager.visualize_pts_list(sparse_local_path)
-                # raise RuntimeError()
 
             if not self.plan_maximum_distance and distance_planned > target_distance:
-                # rospy.logerr(f"break! distance_planned > target_distance: {distance_planned} > {target_distance}")
                 break
             if i <= end_idx_lane_change:
-                # rospy.logerr("continue1")
                 continue
 
             # end of route handling
@@ -818,7 +788,7 @@ class LocalPath:
     @staticmethod
     def _draw_path_line(points: List[Point2D], lbl: str = "lp_line", color=(0, 45, 123)):
         """
-        Draw line on the topdown view
+        Draw/Update a line on the top-down-view map (debugging)
         :param points: pts to draw
         :param lbl: label in tdv
         :param color: color of points
@@ -830,13 +800,14 @@ class LocalPath:
         left: Optional[List[Point2D]],
         straight: Optional[List[Point2D]],
         right: Optional[List[Point2D]],
-        target_lane_offset: int = 0,  # >0=left, <0=right
+        target_lane_offset: int = 0,  #
     ) -> str:
         """
-        Chose lane from lane change options
+        Chose lane from given lane change options (left, straight, right)
         :param left: left option (or None)
         :param straight: straight option (or None)
         :param right: right option (or None)
+        :param target_lane_offset: current lane is this number of lanes off the target lane (>0=left, <0=right)
         :return: keyword "left", "straight" or "right"
         """
         if left is None and straight is None and right is None:
@@ -893,6 +864,36 @@ class LocalPath:
         choice = np.random.choice(["left", "straight", "right"], p=probabilities)
 
         return choice
+
+    @staticmethod
+    def visualize(
+        town: str,
+        rules: bool,
+        position: Point2D,
+        target: Union[Point2D, Point3D],
+        lanelet_ids: List[int],
+        bounds: Tuple[Optional[float], Optional[float], Optional[float], Optional[float]] = None,
+    ):
+        """
+        Visualize a path based on logging information with matplotlib (debugging without ros)
+        :param town: name of the town to load
+        :param rules: rules or no rules
+        :param position: starting point
+        :param target: target point
+        :param lanelet_ids: list of lanelet ids in the given network (global route)
+        :param bounds: canvas bounds with format (xmin, xmax, ymin, ymax),
+                        None means outermost point is selected in this dimension
+        """
+        sc = MapManager.get_current_scenario(rules, town)
+        MapManager.remove_u_turns(sc.lanelet_network)
+        route_paf = GlobalPath(sc.lanelet_network, lanelet_ids, target)
+        local = LocalPath(route_paf, rules)  # , plan_maximum_distance=True)
+        if len(position) == 2:
+            position = list(position) + [0]
+        if bounds is not None:
+            MapManager.visualize_lp_and_gp(local, Point3D(*position), *bounds)
+        else:
+            MapManager.visualize_lp_and_gp(local, Point3D(*position))
 
     def __len__(self) -> int:
         """

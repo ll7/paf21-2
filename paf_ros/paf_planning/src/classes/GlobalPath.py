@@ -3,15 +3,13 @@ from collections import deque
 from warnings import catch_warnings
 
 import numpy as np
-from typing import List, Tuple, Union, Optional, Dict
+from typing import List, Tuple, Union
 
-from commonroad.scenario.lanelet import Lanelet, LaneletNetwork
+from commonroad.scenario.lanelet import LaneletNetwork
 from commonroad.scenario.traffic_sign import (
-    SupportedTrafficSignCountry as Country,
     TrafficLightState,
     TrafficSignIDGermany,
 )
-from commonroad.scenario.traffic_sign_interpreter import TrafficSigInterpreter
 from numpy import ndarray
 
 import rospy
@@ -36,13 +34,11 @@ class GlobalPath:
         lanelet_network: LaneletNetwork = None,
         lanelet_ids: List[int] = None,
         target=None,
-        traffic_sign_country: Country = Country.GERMANY,
         msg: PafLaneletRoute = None,
     ):
         SpeedCalculator.set_limits()
         self._adjacent_lanelets = None
         self.lanelet_network = None
-        self._graph = None
         self.route = None
         self.sections_visited = 0
 
@@ -57,7 +53,6 @@ class GlobalPath:
                 target = Point(*target) if len(target) == 3 else Point2D(*target)
             self.target = target if hasattr(target, "z") else Point(target.x, target.y, self.TARGET_Z)
             self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
-            self._traffic_sign_interpreter = TrafficSigInterpreter(traffic_sign_country, lanelet_network)
         else:
             self.route = PafLaneletRoute()
         self.signals_on_path = self.route.signals if self.route is not None else []
@@ -160,92 +155,6 @@ class GlobalPath:
             adj_route.append((lanelet_id, adj_left, adj_right))
         return adj_route
 
-    def _calc_lane_change_graph(self) -> Dict[int, Tuple[Optional[int], Optional[int], Optional[int]]]:
-        """
-        Calculates the options to drive on for each lanelet
-        :return: dict { lanelet_id1: [ allowed_other_lanelet_id, ...], ... }
-        """
-        print("WARNING _calc_lane_change_graph may be wrong")
-
-        def valid_successor_from_list(check_lanelet: Lanelet, l_id_check: list):
-            try:
-                l_id_check.remove(check_lanelet.lanelet_id)
-            except ValueError:
-                ...
-            if check_lanelet.lanelet_id in l_id_check:
-                return check_lanelet.lanelet_id
-            for l_successor in check_lanelet.successor:
-                successor_lanelet = self.lanelet_network.find_lanelet_by_id(l_successor)
-                if l_successor not in l_id_check or 0.5 < dist(
-                    successor_lanelet.center_vertices[0], check_lanelet.center_vertices[-1]
-                ):
-                    continue
-                return l_successor
-            return None
-
-        lane_change_graph = {}
-        for (planned_id_0, l_ids_0, r_ids_0), (planned_id_1, l_ids_1, r_ids_1) in zip(
-            self._adjacent_lanelets, self._adjacent_lanelets[1:]
-        ):
-            possible_0 = [planned_id_0] + l_ids_0 + r_ids_0
-            possible_1 = [planned_id_1] + l_ids_1 + r_ids_1
-            for l_id in possible_0:
-                lanelet = self.lanelet_network.find_lanelet_by_id(l_id)
-                can_turn_left = lanelet.adj_left in (possible_1 + possible_0)
-                can_turn_right = lanelet.adj_right in (possible_1 + possible_0)
-
-                id_straight = valid_successor_from_list(lanelet, possible_1)
-                id_l = lanelet.adj_left if can_turn_left else None
-                id_r = lanelet.adj_right if can_turn_right else None
-                lane_change_graph[l_id] = (id_l, id_straight, id_r)
-
-        return lane_change_graph
-
-    def get_route_instructions(self) -> str:
-        """
-        Calculates the route in a human-readable format
-        :return: pretty string
-        """
-        route_ids = self.lanelet_ids
-        out = f"start route from {route_ids[0]}\n"
-        for lanelet_id, next_lanelet_id in zip(route_ids, route_ids[1:]):
-            lanelet = self.lanelet_network.find_lanelet_by_id(lanelet_id)
-            l_set = frozenset([lanelet_id])
-            speed_limit = self._traffic_sign_interpreter.speed_limit(l_set)
-            speed_minimum = self._traffic_sign_interpreter.required_speed(l_set)
-            speed_minimum = 0 if speed_minimum is None else speed_minimum
-
-            for sign in lanelet.traffic_signs:
-                sign = self.lanelet_network.find_traffic_sign_by_id(sign)
-                sign_name = sign.traffic_sign_elements[0].traffic_sign_element_id.name
-                if sign_name == "MAX_SPEED":
-                    continue
-                # sign_value = sign.traffic_sign_elements[0].traffic_sign_element_id.name
-                out += f"sign on road: {sign_name}\n"
-            for light in lanelet.traffic_lights:
-                print(f"traffic light: {light}\n")
-
-            # next_lanelet = lanelet_network.find_lanelet_by_id(next_lanelet_id)
-            if lanelet.adj_left == next_lanelet_id:
-                out += f"left lane change to {next_lanelet_id} (speed_limit={speed_limit}, min={speed_minimum})\n"
-            elif lanelet.adj_right == next_lanelet_id:
-                out += f"right lane change to {next_lanelet_id} (speed_limit={speed_limit}, min={speed_minimum})\n"
-            elif len(lanelet.successor) == 1 and lanelet.successor[0] == next_lanelet_id:
-                out += f"go straight to {next_lanelet_id} (speed_limit={speed_limit}, min={speed_minimum})\n"
-            elif len(lanelet.successor) > 1:
-                out += f"intersection, go to {next_lanelet_id} (speed_limit={speed_limit}, min={speed_minimum})\n"
-            else:
-                out += (
-                    f"?? go from {lanelet_id} to {next_lanelet_id} "
-                    f"(speed_limit={speed_limit}, min={speed_minimum})\n"
-                )
-
-            if len(lanelet.predecessor) > 1:
-                print(f"merging with {len(lanelet.predecessor) - 1} other lane(s)")
-
-        out += f"Route completed at {route_ids[-1]}"
-        return out
-
     @staticmethod
     def _locate_obj_on_lanelet(route_pts: np.ndarray, object_position: Tuple[float, float]) -> int:
         """
@@ -255,60 +164,6 @@ class GlobalPath:
         :return: index
         """
         return int(np.argmin([dist(x, object_position) for x in route_pts]))
-
-    def _calc_lane_rightmost_leftmost_routes(self) -> Tuple[List[int], List[int]]:
-        """
-        Calculates alternatives to the current route
-        :return: tuple (leftmost_route, rightmost_route)
-        """
-        if self._graph is None:
-            self._calc_lane_change_graph()
-
-        def calc_extremum(is_left_extremum):
-            l_id = self.lanelet_ids[0]
-            target_id = self.lanelet_ids[-1]
-            route_ = []
-
-            def test_direction(l_dir):
-                # don't go back left when forced right before
-                return l_dir is not None and (len(route_) < 2 or route_[-2] != l_dir)
-
-            counter = 0
-            while l_id != target_id:
-                if is_left_extremum:
-                    a, b, c = self._graph[l_id]
-                else:
-                    c, b, a = self._graph[l_id]
-                step = None
-                assert l_id not in (a, b, c), "Circular dependencies are not permitted"
-                if test_direction(a):
-                    step = a
-                elif test_direction(b):
-                    step = b
-                elif test_direction(c):
-                    step = c
-                else:
-                    # backtrack and choose other direction
-                    while len([x for x in self._graph[l_id] if x is not None]) < 2:
-                        assert len(route_) > 0
-                        del route_[-1]
-                        l_id = route_[-1]
-                    if is_left_extremum:
-                        a, b, c = self._graph[l_id]
-                    else:
-                        c, b, a = self._graph[l_id]
-
-                    if test_direction(b):
-                        step = b
-                    elif test_direction(c):
-                        step = c
-                assert step is not None
-                route_.append(step)
-                l_id = step
-                assert counter < 10000, "Unable to find exit of route graph"
-            return route_
-
-        return calc_extremum(is_left_extremum=True), calc_extremum(is_left_extremum=False)
 
     def _extract_traffic_signals(
         self, lanelet_id: int, new_vertices: np.ndarray
@@ -415,12 +270,10 @@ class GlobalPath:
                 _li = [self.lanelet_network.find_lanelet_by_id(_id) for _id in blob]
                 _lanelets = deque(_li[1:])
                 _out = deque(_li[:1])
-                iae = 0
                 for _let in _lanelets:
                     if _let in _out:
                         continue
                     for _let2 in _out:
-                        iae += 1
                         if _let2.adj_left == _let.lanelet_id:
                             _out.appendleft(_let)
                             break
@@ -447,7 +300,7 @@ class GlobalPath:
                 anchor_r = -1  # rightmost lane to continue on
                 shift_l = 99  # merging lanes from next segment on the left
                 for i, l_id in enumerate(blob0):
-                    successor_idx, successor_id = match_lane(l_id, blob1)
+                    successor_idx, _ = match_lane(l_id, blob1)
                     if successor_idx is None:
                         continue
                     anchor_l = min(i, anchor_l)
@@ -461,7 +314,6 @@ class GlobalPath:
                 [self.lanelet_network.find_lanelet_by_id(l_id).center_vertices[-1] for l_id in blobs[-1]], self.target
             )
             anchors.append((0, i, i))
-            # print(blobs)
             return list(zip(blobs, anchors))
 
     def get_paf_lanelet_matrix(
@@ -607,11 +459,10 @@ class GlobalPath:
                             break
                         if signal.index > j:
                             break
-                    # if len(paf_section.signals) == 0:
-                    #     paf_section.signals.append(dummy_signal)
-
+                paf_section.speed_limits = [
+                    s * SpeedCalculator.SPEED_LIMIT_MULTIPLIER for s in paf_section.speed_limits
+                ]
                 last_limits = [x for x in paf_section.speed_limits]
-                # print(len(section_points))
                 msg.sections.append(paf_section)
 
             next_lanelet_list_len = 1 if i == len(groups) - 1 else len(groups[i + 1][0])
@@ -619,9 +470,8 @@ class GlobalPath:
                 lanes_l, anchor_l, anchor_r, len(lanelet_id_list), next_lanelet_list_len
             ):
                 # shift speed limit lanes
-                # print(lanes_l, anchor_l, anchor_r)
                 last_limits_new = [-1 for _ in range(anchor_l, anchor_r + 1)]
-                for index, entry in enumerate(last_limits_new):
+                for index in range(len(last_limits_new)):
                     if index + 1 <= lanes_l:
                         continue
                     index_old_limits = index - lanes_l + anchor_l
@@ -631,13 +481,12 @@ class GlobalPath:
                         last_limits_new[index] = last_limits[index_old_limits]
                     except IndexError:
                         break
-                # print(last_limits_new)
+
                 unknown_limits = [
                     SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(msg.sections[-1].target_lanes_left_shift)
                 ]
                 last_limits = unknown_limits + last_limits_new
 
-                # set target lanes etc. for all previous lanes
                 target_lanes = list(range(anchor_l, anchor_r + 1))
                 if len(target_lanes) == 0:
                     RuntimeError(f"target lanes unspecified (lanes {anchor_l} to {anchor_r})")
@@ -658,14 +507,8 @@ class GlobalPath:
         msg.target = self.target
 
         self.route = msg
-        # final_section, _ = self.get_section_and_lane_indices(self.target)
-        # rospy.logerr((final_section, self.target))
-        # # msg.sections = msg.sections[:final_section + 20]
 
         for i, paf_section in enumerate(msg.sections):
-            # rospy.logwarn(f"section {i}: {[(round(p.x), round(p.y)) for p in paf_section.points]}, "
-            #               f"{paf_section.target_lanes}, {paf_section.target_lanes_left_shift}, "
-            #               f"{paf_section.target_lanes_distance}")
             if len(paf_section.target_lanes) == 0:
                 raise RuntimeError(
                     f"[global planner] no target lanes specified in section {i}, "
@@ -673,8 +516,6 @@ class GlobalPath:
                 )
             if len(paf_section.points) == 0:
                 rospy.logerr(f"[global planner] section {i} has no points")
-
-        # rospy.logwarn(groups)
 
         try:
             from paf_messages.msg import PafTopDownViewPointSet

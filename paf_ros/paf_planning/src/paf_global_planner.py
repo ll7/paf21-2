@@ -46,8 +46,6 @@ class GlobalPlanner:
         self._position = [1e99, 1e99]
         self._yaw = 0
         self._waypoints = deque()
-        self._lanelet_ids_route = []
-        self._last_route = None
         self._standard_loop = MapManager.get_demo_route()
         self._rerouting_target = None
 
@@ -139,7 +137,6 @@ class GlobalPlanner:
         return self._routing_provider_waypoints(msg)
 
     def _routing_provider_random(self, _: Empty_srv = None):
-        self._last_route = None
         try:
             position, yaw = self._find_closest_position_on_lanelet_network()
         except IndexError:
@@ -211,8 +208,6 @@ class GlobalPlanner:
 
         lanelet_ids = route.list_ids_lanelets
         route_paf = GlobalPath(self._scenario.lanelet_network, lanelet_ids, target).as_msg()
-        self._lanelet_ids_route = lanelet_ids
-        self._last_route = route_paf
         self._target_on_map_pub.publish(draw_msg)
         self._start_score_pub.publish(Empty_msg())
         self._tdv_routing_pub.publish(route_paf)
@@ -328,13 +323,6 @@ class GlobalPlanner:
         )
 
         return PlanningProblem(1, initial_state, GoalRegion([target_state]))
-
-    def _route_from_ids(self, lanelet_ids: List[int]):
-        return GlobalPath(
-            self._scenario.lanelet_network,
-            lanelet_ids,
-            self._scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[-1]).center_vertices[-1],
-        )
 
     @staticmethod
     def start():

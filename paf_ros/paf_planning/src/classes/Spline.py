@@ -12,7 +12,7 @@ import numpy as np
 from bezier import Curve
 
 import rospy
-from .HelperFunctions import xy_to_pts, dist, closest_index_of_point_list, pts_to_xy
+from .HelperFunctions import xy_to_pts, dist, pts_to_xy
 
 
 class Spline:
@@ -21,6 +21,11 @@ class Spline:
     """
 
     def __init__(self, x, y):
+        """
+        Constructor unchanged from source
+        :param x: x values of input points
+        :param y: y values of input points
+        """
         self.b, self.c, self.d, self.w = [], [], [], []
 
         self.x = x
@@ -33,8 +38,8 @@ class Spline:
         self.a = [iy for iy in y]
 
         # calc coefficient c
-        A = self.__calc_A(h)
-        B = self.__calc_B(h)
+        A = self.__calc_a_matrix(h)
+        B = self.__calc_b_matrix(h)
         self.c = np.linalg.solve(A, B)
         #  print(self.c1)
 
@@ -46,10 +51,8 @@ class Spline:
 
     def calc(self, t):
         """
-        Calc position
-
-        if t is outside of the input x, return None
-
+        Calculate result
+        :param t: if t is outside the input x, return None, else return resulting spline
         """
 
         if t < self.x[0]:
@@ -63,11 +66,10 @@ class Spline:
 
         return result
 
-    def calcd(self, t):
+    def calc_derivative(self, t):
         """
-        Calc first derivative
-
-        if t is outside of the input x, return None
+        Calculate first derivative
+        :param t: if t is outside the input x, return None, else return resulting function
         """
 
         if t < self.x[0]:
@@ -80,9 +82,10 @@ class Spline:
         result = self.b[i] + 2.0 * self.c[i] * dx + 3.0 * self.d[i] * dx ** 2.0
         return result
 
-    def calcdd(self, t):
+    def calc_derivative_2(self, t):
         """
         Calc second derivative
+        :param t: if t is outside the input x, return None, else return resulting function
         """
 
         if t < self.x[0]:
@@ -101,7 +104,7 @@ class Spline:
         """
         return bisect.bisect(self.x, x) - 1
 
-    def __calc_A(self, h):
+    def __calc_a_matrix(self, h):
         """
         calc matrix A for spline coefficient c
         """
@@ -119,7 +122,7 @@ class Spline:
         #  print(A)
         return A
 
-    def __calc_B(self, h):
+    def __calc_b_matrix(self, h):
         """
         calc matrix B for spline coefficient c
         """
@@ -161,10 +164,10 @@ class Spline2D:
         """
         calc curvature
         """
-        dx = self.sx.calcd(s)
-        ddx = self.sx.calcdd(s)
-        dy = self.sy.calcd(s)
-        ddy = self.sy.calcdd(s)
+        dx = self.sx.calc_derivative(s)
+        ddx = self.sx.calc_derivative_2(s)
+        dy = self.sy.calc_derivative(s)
+        ddy = self.sy.calc_derivative_2(s)
         k = (ddy * dx - ddx * dy) / ((dx ** 2 + dy ** 2) ** (3 / 2))
         return k
 
@@ -172,22 +175,10 @@ class Spline2D:
         """
         calc yaw
         """
-        dx = self.sx.calcd(s)
-        dy = self.sy.calcd(s)
+        dx = self.sx.calc_derivative(s)
+        dy = self.sy.calc_derivative(s)
         yaw = math.atan2(dy, dx)
         return yaw
-
-
-def calc_spline_course_from_point_list_grouped(xy_list, ds=0.1, group_no=10):
-    assert group_no > 0
-    out = []
-    temp = []
-    for point in xy_list:
-        temp.append(point)
-        if len(temp) == group_no:  # tangent to previous points
-            out += list(calc_spline_course_from_point_list(temp, ds))
-            temp = []
-    return out
 
 
 def calc_spline_course_from_point_list(xy_list, ds=0.1, to_pts=False):
@@ -216,31 +207,6 @@ def calc_spline_course_xy_only(x, y, ds=0.1):
         ry.append(iy)
 
     return rx, ry
-
-
-def calc_spline_course(x, y, ds=0.1):
-    assert len(x) == len(y)
-    assert len(x) > 1
-    sp = Spline2D(x, y)
-    s = list(np.arange(0, sp.s[-1], ds))
-
-    rx, ry, ryaw, rk = [], [], [], []
-    for i_s in s:
-        ix, iy = sp.calc_position(i_s)
-        rx.append(ix)
-        ry.append(iy)
-        ryaw.append(sp.calc_yaw(i_s))
-        rk.append(sp.calc_curvature(i_s))
-
-    return rx, ry, ryaw, rk, s
-
-
-def calc_spline_from_indices(from_index, to_index, full_list, ds):
-    indices = list(range(from_index, to_index + 1))
-    spline = [full_list[_i] for _i in indices]
-    if len(spline) > 3:
-        spline = calc_spline_course_from_point_list(spline, ds)
-    return spline
 
 
 def _calc_bezier_curve(x, y, degree=2):
@@ -290,82 +256,6 @@ def calc_bezier_curve(pts, ds=0.1, convert_to_pts=False):
     if convert_to_pts:
         return xy_to_pts(out_pts)
     return out_pts
-
-
-def calc_bezier_from_indices(from_index, to_index, full_list, ds):
-    indices = list(range(from_index, to_index + 1))
-    bezier = [full_list[_i] for _i in indices]
-    if len(bezier) > 3:
-        bezier = calc_bezier_curve(bezier, ds)
-    return bezier
-
-
-def calc_bezier_curve_from_pts(pts, ds=1, max_offset_to_orig=3, simple=False):
-    def draw_path_pts(points, lbl, color):
-        from paf_messages.msg import PafTopDownViewPointSet
-        import rospy
-
-        try:
-            pts1 = PafTopDownViewPointSet()
-            pts1.label = lbl
-            pts1.points = points
-            pts1.color = color
-            rospy.Publisher("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, queue_size=1).publish(pts1)
-        except rospy.exceptions.ROSException:
-            pass
-
-    pts_xy = [(p.x, p.y) for p in pts]
-    _new_bezier_pts = xy_to_pts(calc_bezier_curve(pts_xy, ds))
-
-    if simple:
-        return _new_bezier_pts
-    try:
-        _new_spline_pts = calc_spline_course_from_point_list(pts_xy, 1)
-    except AssertionError:
-        return pts
-
-    corrected_pts = []
-    draw_pts = []
-    bezier_indices_prev = []
-    bezier_indices_wrong = []
-    for k, pt in enumerate(_new_bezier_pts):
-        i, _dist = closest_index_of_point_list(_new_spline_pts, pt)
-        if _dist > max_offset_to_orig:
-
-            if len(bezier_indices_wrong) == 0 and len(bezier_indices_prev) > 0:
-                # need to calc prev bezier again until i
-                bezier = calc_bezier_from_indices(
-                    np.min(bezier_indices_prev), np.max(bezier_indices_prev), _new_spline_pts, ds
-                )
-                corrected_pts += xy_to_pts(bezier)
-
-            bezier_indices_wrong += [i]
-        elif len(bezier_indices_wrong) > 0:
-            # need to calculate new spline (bezier_wrong)
-
-            i1, _ = closest_index_of_point_list(pts_xy, _new_spline_pts[np.min(bezier_indices_wrong)])
-            i3, _ = closest_index_of_point_list(pts_xy, _new_spline_pts[np.max(bezier_indices_wrong)])
-            i3 += 1
-            pts_orig = [pts_xy[_i] for _i in range(i1, i3 + 1)]
-            if len(bezier_indices_wrong) > 3:
-                adding_pts = calc_spline_course_from_point_list(pts_orig, ds)
-                i4, _ = closest_index_of_point_list(adding_pts, corrected_pts[-1])
-                i4 += 2
-                corrected_pts += xy_to_pts(adding_pts[i4:-2])
-            elif len(pts_orig) > 2:
-                i4, _ = closest_index_of_point_list(pts_orig, corrected_pts[-1])
-                i4 += 2
-                corrected_pts += xy_to_pts(pts_orig[i4:-2])
-            bezier_indices_wrong = []
-            bezier_indices_prev = []
-        else:
-            bezier_indices_prev += [i]
-
-    draw_path_pts(draw_pts, "turendiaernua", (255, 255, 0))
-    bezier = calc_bezier_from_indices(np.min(bezier_indices_prev), np.max(bezier_indices_prev), _new_spline_pts, ds)
-    corrected_pts += xy_to_pts(bezier)
-
-    return corrected_pts
 
 
 def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None, convert_to_pts=True):

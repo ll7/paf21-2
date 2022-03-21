@@ -15,14 +15,12 @@ class SpeedCalculator:
     FULL_VS_HALF_DECEL_FRACTION = 0.97
     MUST_STOP_EVENTS = [TrafficSignIDGermany.STOP.value]
     CAN_STOP_EVENT = ["LIGHT", TrafficSignIDGermany.YIELD.value]
-    SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + MUST_STOP_EVENTS + CAN_STOP_EVENT
 
     UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 100, 100, 10, 1, 10
 
-    def __init__(self, step_size: float, index_start: int = 0):
+    def __init__(self, step_size: float):
         # step size is assumed constant but has a variance of +/- 1mm
         self._step_size = step_size
-        self._index_start = index_start
         self._plots = None
         self.set_limits()
 
@@ -192,7 +190,7 @@ class SpeedCalculator:
             if a > -self.MAX_DECELERATION:
                 continue
             j = length - i
-            lin, breaking_distance = self._linear_deceleration_function(speed[j])
+            lin, _ = self._linear_deceleration_function(speed[j])
             k = j - len(lin)
             n = 0
             for n in reversed(range(k, j)):
@@ -211,14 +209,6 @@ class SpeedCalculator:
 
         speed = np.clip(speed, 0, 999)
         return speed
-
-    def get_event_deceleration(self, target_speed: float = 0, buffer_m: float = 0, step=None):
-        if step is None:
-            step = self._step_size
-        buffer_idx = int(buffer_m / step) + 1  # add afterwards
-        speed_limit, breaking_distance = self._linear_deceleration_function(target_speed)
-        speed_limit = list(speed_limit) + [target_speed for _ in range(buffer_idx)]
-        return np.clip(speed_limit, target_speed, self.MAX_SPEED), breaking_distance
 
     def plt_init(self, add_accel=False):
         import matplotlib.pyplot as plt
