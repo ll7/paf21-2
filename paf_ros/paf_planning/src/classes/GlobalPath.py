@@ -23,6 +23,8 @@ from .MapManager import MapManager
 
 
 class GlobalPath:
+    """Everything not handled by ROS or Commonroad for global route planning and conversion is handled here"""
+
     SPEED_KMH_TO_MS = 1 / 3.6
     MERGE_SPEED_RESET = 50 / 3.6
     APPLY_MERGING_RESET = True
@@ -33,9 +35,17 @@ class GlobalPath:
         self,
         lanelet_network: LaneletNetwork = None,
         lanelet_ids: List[int] = None,
-        target=None,
+        target: Union[Point2D, tuple] = None,
         msg: PafLaneletRoute = None,
     ):
+        """
+        Initialisation can either happen with a given set of lanelet ids and CR-Information
+        or with a PafLaneletRoute Message
+        :param lanelet_network: CR network
+        :param lanelet_ids: list of lanelet ids
+        :param target: target point for planner
+        :param msg: lanelet route message (for object creation in the local planner)
+        """
         SpeedCalculator.set_limits()
         self._adjacent_lanelets = None
         self.lanelet_network = None
@@ -94,6 +104,13 @@ class GlobalPath:
         not_found_threshold_meters: float = 100.0,
         min_section: int = None,
     ) -> Tuple[int, int]:
+        """
+        Calculate the closest section and lane index on the global path
+        :param position: searching position
+        :param not_found_threshold_meters: (-1,-1) is returned if this distance is exceeded
+        :param min_section: start search from this section forward
+        :return: (section index, lane index)
+        """
         ref = (position.x, position.y)
 
         if not hasattr(position, "z"):
@@ -126,7 +143,7 @@ class GlobalPath:
 
     def _calc_adjacent_lanelet_routes(self) -> List[Tuple[int, List[int], List[int]]]:
         """
-        Calculates the drivable (adjacent) alternative lanelets on a route.
+        Calculates the drivable space as (adjacent) alternative lanelets on a route.
         :return: list of tuples (planned lanelet id, [list of drivable lanelets left, list of drivable lanelets right])
         """
 
@@ -403,7 +420,11 @@ class GlobalPath:
         return num_lanelets != num_lanelets_after
 
     def as_msg(self) -> PafLaneletRoute:
-
+        """
+        Calculate all the information for driving given route (given the lanelets)
+        and create route object for local planner.
+        :return:
+        """
         if self.route is not None:
             return self.route
 
