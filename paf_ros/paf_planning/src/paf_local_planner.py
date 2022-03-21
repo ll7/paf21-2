@@ -33,6 +33,7 @@ class LocalPlanner:
     REPLAN_THROTTLE_SEC_GLOBAL = 5
     REPLAN_THROTTLE_SEC_LOCAL = 2
     END_OF_ROUTE_REACHED_DIST = 2
+    USE_GLOBAL_STANDARD_LOOP = False
 
     rules_enabled = MapManager.get_rules_enabled()
 
@@ -170,21 +171,12 @@ class LocalPlanner:
         else:
             rospy.loginfo_throttle(5, "[local planner] local planner on route, no need to replan")
             self._publish_local_path_msg()
-
-        # cur = None if self._last_sign is None else self._last_sign.type
-        # ign = None if len(self._cleared_signs) == 0 else self._cleared_signs[-1].type
         self._check_for_signs_on_path()
         self._publish_local_path_msg()
 
-        if (
-            25 / 3.6 > self._current_speed > 5 / 3.6 and self._local_path_idx < len(self._local_path) - 150
-        ):  # todo fix: acting does not like very short paths
+        if 25 / 3.6 > self._current_speed > 5 / 3.6 and self._local_path_idx < len(self._local_path) - 150:
             rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
             self._replan_local_path()
-            # self._send_global_reroute_request()
-
-        # if self._last_sign is not None:
-        #     self._ignore_sign = self._last_sign
 
     def _add_cleared_signal(self, signal):
         if signal is None or not self.rules_enabled:
@@ -427,8 +419,10 @@ class LocalPlanner:
             if self._current_speed < 0.01:
                 if sleep > 0:
                     rospy.sleep(sleep)
-                # self._send_standard_loop_request()  # todo remove in production
-                self._send_random_global_path_request()
+                if self.USE_GLOBAL_STANDARD_LOOP:
+                    self._send_standard_loop_request()
+                else:
+                    self._send_random_global_path_request()
 
     def start(self):
         rate = rospy.Rate(self.UPDATE_HZ)

@@ -7,11 +7,13 @@ https://github.com/AtsushiSakai/PythonRobotics/blob/master/PathPlanning/CubicSpl
 """
 import math
 import bisect
+from typing import List, Union, Any, Optional
 
 import numpy as np
 from bezier import Curve
 
 import rospy
+from paf_messages.msg import Point2D
 from .HelperFunctions import xy_to_pts, dist, pts_to_xy
 
 
@@ -139,11 +141,22 @@ class Spline2D:
     """
 
     def __init__(self, x, y):
+        """
+        Convert list of points in A 2D spline
+        :param x: x values
+        :param y: y values
+        """
         self.s = self.__calc_s(x, y)
         self.sx = Spline(self.s, x)
         self.sy = Spline(self.s, y)
 
     def __calc_s(self, x, y):
+        """
+        Calculate culminating sum
+        :param x: x values
+        :param y: y values
+        :return: cum sum
+        """
         dx = np.diff(x)
         dy = np.diff(y)
         self.ds = np.hypot(dx, dy)
@@ -181,18 +194,19 @@ class Spline2D:
         return yaw
 
 
-def calc_spline_course_from_point_list(xy_list, ds=0.1, to_pts=False):
+def calc_spline_course_from_point_list(
+    xy_list: List[Union[Point2D, Any]], ds: float = 0.1, to_pts: bool = False
+) -> Union[List[Point2D], np.ndarray]:
+    """
+    Calculate a 2D Spline from given list of points
+    :param xy_list: list of points (list of tuples or objects with x,y attributes)
+    :param ds: step size
+    :param to_pts: convert result to List[Point2D]
+    :return: list of Point2D or 2D numpy array
+    """
     if len(xy_list) > 0 and hasattr(xy_list[0], "x"):
         xy_list = [(p.x, p.y) for p in xy_list]
     x, y = list(zip(*xy_list))
-    x_target, y_target = calc_spline_course_xy_only(x, y, ds)
-    out = np.array([np.array([x, y]) for x, y in zip(x_target, y_target)])
-    if to_pts:
-        return xy_to_pts(out)
-    return out
-
-
-def calc_spline_course_xy_only(x, y, ds=0.1):
     assert len(x) == len(y)
     assert len(x) > 1
     sp = Spline2D(x, y)
@@ -206,15 +220,28 @@ def calc_spline_course_xy_only(x, y, ds=0.1):
         rx.append(ix)
         ry.append(iy)
 
-    return rx, ry
+    x_target, y_target = rx, ry
+    out = np.array([np.array([x, y]) for x, y in zip(x_target, y_target)])
+    if to_pts:
+        return xy_to_pts(out)
+    return out
 
 
-def _calc_bezier_curve(x, y, degree=2):
-    nodes = np.asfortranarray([x, y])
-    return Curve(nodes, degree=degree)
+def calc_bezier_curve(
+    pts: List[Union[Point2D, Any]], ds: float = 0.1, convert_to_pts: bool = False
+) -> Union[List[Point2D], List[np.ndarray]]:
+    """
+    Calculate a 2D Bezier Curve from given list of points with degree = len(pts)-1
+    :param pts: list of points (list of tuples or objects with x,y attributes)
+    :param ds: step size
+    :param convert_to_pts: convert result to List[Point2D]
+    :return: list of Point2D or 2D numpy array
+    """
 
+    def _calc_bezier_curve(_x, _y, degree=2):
+        nodes = np.asfortranarray([_x, _y])
+        return Curve(nodes, degree=degree)
 
-def calc_bezier_curve(pts, ds=0.1, convert_to_pts=False):
     def _calc(pts2, _ds=ds):
         _x, _y = [], []
         for pt in pts2:
@@ -258,8 +285,19 @@ def calc_bezier_curve(pts, ds=0.1, convert_to_pts=False):
     return out_pts
 
 
-def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None, convert_to_pts=True):
-    ds0 = ds if ds2 is None else ds2
+def bezier_refit_all_with_tangents(
+    pts_list: List[Union[Point2D, Any]], ds1: float = 0.1, ds2: Optional[float] = None, convert_to_pts: bool = True
+):
+    """
+    Calculate a 2D Bezier Curve given the tangent of the previous two points and the next two points (step A).
+    After this calculation, a Bezier Curve is calculated from the resulting points with degree n-1,
+    if ds2 is given (step B)
+    :param pts_list: list of points (list of tuples or objects with x,y attributes)
+    :param ds1: step size for bezier calculation (for step A)
+    :param ds2: step size 2 (optional for step B)
+    :param convert_to_pts: convert result to List[Point2D]
+    :return: list of Point2D or 2D numpy array
+    """
     if len(pts_list) < 2:
         return pts_list
     try:
@@ -277,7 +315,7 @@ def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None, convert_to_pts=Tr
         else:
             pts[0] = out_pts[-2]
         try:
-            bezier = bezier_refit_with_tangents(*pts, ds=ds0)[:-1]
+            bezier = bezier_refit_with_tangents(*pts, ds=ds1)[:-1]
         except ValueError:
             if is_pts:
                 bezier = pts_to_xy(pts[1:-1])
@@ -285,22 +323,36 @@ def bezier_refit_all_with_tangents(pts_list, ds=0.1, ds2=None, convert_to_pts=Tr
                 bezier = pts[1:-1]
         out_pts += bezier
 
+    # remaining two points at the end
     if is_pts:
-        out_pts += calc_bezier_curve(pts_to_xy(pts_list[-2:]), ds=ds0)
+        out_pts += calc_bezier_curve(pts_to_xy(pts_list[-2:]), ds=ds1)
     else:
-        out_pts += calc_bezier_curve(pts_list[-2:], ds=ds0)
+        out_pts += calc_bezier_curve(pts_list[-2:], ds=ds1)
 
+    # more smoothing if wished
     if ds2 is not None:
-        out_pts = calc_bezier_curve(out_pts, ds=ds)
+        out_pts = calc_bezier_curve(out_pts, ds=ds2)
 
     if convert_to_pts:
         return xy_to_pts(out_pts)
     return out_pts
 
 
-def bezier_refit_with_tangents(
-    lane1_p1, lane1_p2, lane2_p1, lane2_p2, ds=0.1, alpha=1.0, fraction=0.99
-):  # alpha: 0=line, 1=max_curved
+def bezier_refit_with_tangents(lane1_p1, lane1_p2, lane2_p1, lane2_p2, ds=0.1, alpha=1.0, fraction=0.99):
+    """
+    Calculate a Bezier Curve given four points. Example: think of a lane change.
+    The first two points are on the left (0,0) and (0,1), the other two on the right lane in front (1,2) and (1,3).
+    Goal of the algorithm is to find a curve, that is in (0,0) tangential to the line between the first two and in (1,3)
+    tangential to the second two points.
+    :param lane1_p1: p1.1 (see function description)
+    :param lane1_p2: p1.2 (see function description)
+    :param lane2_p1: p2.3 (see function description)
+    :param lane2_p2: p2.4 (see function description)
+    :param ds: step size
+    :param alpha: exponent weight for the distance between the points
+    :param fraction: [0-1] lower=more smooth, higher=less smooth
+    :return:
+    """
     try:
         lane1_p1 = np.array([lane1_p1.x, lane1_p1.y])
         lane1_p2 = np.array([lane1_p2.x, lane1_p2.y])
@@ -313,7 +365,6 @@ def bezier_refit_with_tangents(
         lane2_p2 = np.array(lane2_p2)
 
     # calculate intermediate point
-
     lane1_p1 = np.sum([lane1_p2 * fraction, lane1_p1 * (1 - fraction)], axis=0)
     lane2_p2 = np.sum([lane2_p1 * fraction, lane2_p2 * (1 - fraction)], axis=0)
 

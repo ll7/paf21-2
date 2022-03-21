@@ -36,7 +36,7 @@ def dist(
     return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
 
-def xy_to_pts(xy_list: Union[List[Tuple[float, float], List[np.ndarray]], np.ndarray]) -> List[Point2D]:
+def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray, List[np.ndarray]]) -> List[Point2D]:
     """
     Convert list of point tuples to list of point objects
     :param xy_list: list of tuples
