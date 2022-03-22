@@ -293,7 +293,7 @@ class LocalPlanner:
 
         if and_publish:
             self._local_path.publish()
-            rospy.logwarn_throttle(5, "[local planner] publishing original path after clearing path")
+            rospy.loginfo_throttle(5, "[local planner] publishing original path after clearing path")
 
     def _check_for_signs_on_path(self):
         """
@@ -319,7 +319,7 @@ class LocalPlanner:
         msg_info = []
         for i, (sign, idx, distance, match) in enumerate(self._local_path.traffic_signals):
             p_dist = dist(self._current_pose.position, sign.point)
-            msg_info.append(f"{sign.type} ({p_dist:.1f}m)")
+            msg_info.append(f"{sign.type} {round(p_dist)}m")
         rospy.loginfo_throttle(10, f"[local planner] signs on path: [{', '.join(msg_info)}]")
 
     def _process_traffic_lights(self, msg: PafDetectedTrafficLights):
@@ -362,7 +362,7 @@ class LocalPlanner:
         msg2 = filter_msgs()
         if len(msg.states) == 0 or len(msg2.states) == 0:
             self._traffic_light_color = None
-            rospy.loginfo_throttle(1, "[local planner] N/A []")
+            rospy.loginfo_throttle(1, "[local planner] traffic light detected as NONE")
             return
 
         # select most centered light on the image
@@ -370,12 +370,13 @@ class LocalPlanner:
         index_center = np.argmin(x_list)
         self._traffic_light_color: str = msg2.states[index_center]
 
-        rospy.loginfo_throttle(1, f"[local planner] {self._traffic_light_color.upper()} {msg2.states}")
         if self._traffic_light_color in LocalPath.RESUME_COURSE_COLORS:
-            rospy.loginfo_throttle(1, f"[local planner] clearing traffic light {self._traffic_light_color.upper()}")
+            rospy.loginfo_throttle(
+                1, f"[local planner] clearing traffic light, because it is " f"{self._traffic_light_color.upper()}"
+            )
             self._reset_detected_signs(and_publish=True)
         else:
-            rospy.loginfo_throttle(1, f"[local planner] light detected as {self._traffic_light_color.upper()}")
+            rospy.loginfo_throttle(1, f"[local planner] traffic light detected as {self._traffic_light_color.upper()}")
 
     def _changing_lanes(self):
         """

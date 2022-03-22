@@ -121,7 +121,7 @@ class GlobalPlanner:
 
     def _find_closest_position_on_lanelet_network(self) -> Tuple[np.ndarray, float]:
         """
-        Retrieve the closest lanelet_point on the closest lanelet relative to the current position
+        Retrieve the closest lanelet_point on the closest lanelet relative to the current position and yaw angle
         :return: (lanelet_point,yaw)
         """
         pos = self._position[0], self._position[1]
@@ -131,9 +131,7 @@ class GlobalPlanner:
         angle_offsets = [
             np.abs(find_lanelet_yaw(self._scenario.lanelet_network, Point2D(*pos), let) - self._yaw) for let in lanelets
         ]
-        rospy.logerr(f"uiaeuiae {np.round(np.rad2deg(angle_offsets))}")
         lanelet_id = lanelets[np.argmin(angle_offsets)]
-
         lanelet = self._scenario.lanelet_network.find_lanelet_by_id(lanelet_id)
         idx = np.argmin([dist(a, pos) for a in lanelet.center_vertices])
         if idx == len(lanelet.center_vertices) - 1:
