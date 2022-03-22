@@ -411,7 +411,7 @@ class TopDownView(BirdViewProducer):
         color2 = (255, 0, 0)
         thickness = 1
         y0, dy = 50, 20
-        text = ["current", "target", "limit"]
+        text = ["current", "target"]  # , "limit"] # speed limit is not updated in this version
         current, target, limit, (x, y) = self.info_text
         text = [f"{lbl}: {speed} kmh" for speed, lbl in zip(self.info_text, text)] + [f"x={x},y={y}"]
         for i, text in enumerate(text):
