@@ -218,9 +218,22 @@ class LocalPlanner:
         self._publish_local_path_msg()
 
         # replanning condition (lane changes, reacting to cars on our lane)
-        if 25 / 3.6 > self._current_speed > 5 / 3.6 and self._local_path_idx < len(self._local_path) - 150:
-            rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
-            self._replan_local_path()
+        if self.rules_enabled:
+
+            if (
+                self._current_speed < 25 / 3.6
+                and self._current_speed > 15 / 3.6
+                and self._local_path_idx < len(self._local_path) - 150
+            ):
+                rospy.loginfo_throttle(
+                    5, "[local planner] car is slow, no replanning locally because traffic light bug"
+                )
+        else:
+            if self._current_speed < 25 / 3.6 and self._local_path_idx < len(self._local_path) - 150:
+                rospy.loginfo_throttle(5, "[local planner] car is slow, replanning locally")
+
+                # traffic light handling not working correctly when turned on
+                self._replan_local_path()
 
     def _add_cleared_signal(self, signal: PafTrafficSignal) -> bool:
         """

@@ -104,7 +104,9 @@ class ObstaclePlanner:
         o: PafObstacle
         for o in msg.obstacles:
             process_fun(o)
+
             _close, _close_pts = self.process_very_close_obstacles(o, close, msg.type == "Vehicles")
+
             if _close is not None:
                 close, close_pts = _close, _close_pts
         p, v = self.closest_follow_front
