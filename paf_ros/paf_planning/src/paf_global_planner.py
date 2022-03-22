@@ -197,7 +197,7 @@ class GlobalPlanner:
         self._routing_pub.publish(self._routing_provider_waypoints(msgs, position, yaw))
 
     def _routing_provider_waypoints(
-        self, msgs: PafLocalPath = None, position: Point2D = None, yaw: float = None, reroute: bool = False
+        self, msgs: PafLocalPath = None, position: Union[Point2D, Any] = None, yaw: float = None, reroute: bool = False
     ) -> Union[PafLaneletRoute, PafRoutingServiceResponse]:
         """
         Routing based on a list of waypoints
