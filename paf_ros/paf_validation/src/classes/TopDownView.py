@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 
 import cv2
 import carla
@@ -84,7 +84,7 @@ class TopDownView(BirdViewProducer):
         self.north_is_up = north_is_up
         self.dark_mode = dark_mode
         self.center_on_agent = not show_whole_map
-        self.global_path, self.local_path = None, None
+        self.global_path_options, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
         self.path_width_px = 3
         self.pt_width_px = 4
@@ -138,10 +138,10 @@ class TopDownView(BirdViewProducer):
         rendering_window = RenderingWindow(origin=agent_vehicle_loc, area=self.rendering_area)
         self.masks_generator.enable_local_rendering_mode(rendering_window)
         masks = self._render_actors_masks(agent_vehicle, segregated_actors, masks)
-        if self.global_path is not None:
-            masks[MaskPriority.GLOBAL_PATH] = self._create_path_mask(self.global_path)
+        if self.global_path_options is not None:
+            masks[MaskPriority.GLOBAL_PATH] = self._create_path_mask(self.global_path_options)
         if self.local_path is not None:
-            masks[MaskPriority.LOCAL_PATH] = self._create_path_mask(self.local_path)
+            masks[MaskPriority.LOCAL_PATH] = self._create_path_mask([self.local_path])
 
         mask_obstacles = None
         if self.obstacles_pedestrians is not None:
@@ -243,7 +243,10 @@ class TopDownView(BirdViewProducer):
         return rotated[:, vslice, hslice]
 
     def set_path(
-        self, coordinate_list_global_path: list = None, coordinate_list_local_path: list = None, width_px: float = None
+        self,
+        coordinate_list_global_path: List[list] = None,
+        coordinate_list_local_path: list = None,
+        width_px: float = None,
     ):
         """
         Setter for global path, local path and path width
@@ -252,7 +255,7 @@ class TopDownView(BirdViewProducer):
         :param width_px: pixel width at resolution 10px/m (scaled to other resolutions)
         """
         if coordinate_list_global_path is not None:
-            self.global_path = coordinate_list_global_path
+            self.global_path_options = coordinate_list_global_path
         if coordinate_list_local_path is not None:
             self.local_path = coordinate_list_local_path
         if width_px is not None:
@@ -268,7 +271,7 @@ class TopDownView(BirdViewProducer):
         if clear_local_path:
             self.local_path = None
         if clear_global_path:
-            self.global_path = None
+            self.global_path_options = None
 
     def update_obstacles(self, msg: PafObstacleList):
         """
@@ -318,24 +321,24 @@ class TopDownView(BirdViewProducer):
             mask = cv2.polylines(mask, [np.array(corner_pixels).reshape((-1, 1, 2))], True, COLOR_ON, 1)
         return mask
 
-    def _create_path_mask(self, path: list = None) -> np.array:
+    def _create_path_mask(self, paths: List[list] = None) -> np.array:
         """
         Draws a path on a new mask
-        :param path: list of path points (x,y)
+        :param paths: list of paths list((x,y),(x,y),..)
         :return: updated mask
         """
         mask = self.masks_generator.make_empty_mask()
-        if path is None:
-            return mask
-        try:
-            points = [self.masks_generator.location_to_pixel(Namespace(**{"x": x, "y": y})) for x, y in path]
-        except ValueError:
-            points = []
-            rospy.logerr("[top down view] NaN / Invalid path!")
-        points = np.array([(p.x, p.y) for p in points])
-        # for p in points[::10]:
-        #     mask = cv2.circle(mask, tuple(p), 2, COLOR_ON, -1)
-        mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
+
+        if paths is None:
+            paths = []
+
+        for path in paths:
+            try:
+                points = [self.masks_generator.location_to_pixel(Namespace(**{"x": x, "y": y})) for x, y in path]
+                points = np.array([(p.x, p.y) for p in points])
+                mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
+            except ValueError:
+                rospy.logerr_throttle(3, "[top down view] NaN / Invalid path!")
         return mask
 
     def _render_actors_masks(

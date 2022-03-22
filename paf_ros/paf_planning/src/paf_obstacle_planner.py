@@ -37,7 +37,7 @@ class ObstaclePlanner:
     rules_enabled = MapManager.get_rules_enabled()
     network = MapManager.get_current_scenario().lanelet_network
     ON_LANELET_DISTANCE = 2
-    ON_LANELET_DISTANCE_PEDESTRIANS = 0.3
+    ON_LANELET_DISTANCE_PEDESTRIANS = 0.5
     SHOW_TRACE_PTS = True
     SHOW_FOLLOW_PTS = True
     SAFETY_DISTANCE = 3
