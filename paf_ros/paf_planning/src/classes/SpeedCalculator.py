@@ -17,7 +17,7 @@ class SpeedCalculator:
     CAN_STOP_EVENT = ["LIGHT", TrafficSignIDGermany.YIELD.value]
     SPEED_LIMIT_RESTORE_EVENTS = ["MERGE"] + MUST_STOP_EVENTS + CAN_STOP_EVENT
 
-    UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 100, 100, 10, 1, 10
+    UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 90, 90, 10, 1, 10
 
     def __init__(self, step_size: float, index_start: int = 0):
         # step size is assumed constant but has a variance of +/- 1mm
@@ -31,7 +31,7 @@ class SpeedCalculator:
         if rules_enabled is None:
             rules_enabled = MapManager.get_rules_enabled()
         SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED = SpeedCalculator.CITY_SPEED_LIMIT if rules_enabled else 250 / 3.6
-        SpeedCalculator.MAX_SPEED = 95 / 3.6 if rules_enabled else 95 / 3.6
+        SpeedCalculator.MAX_SPEED = 90 / 3.6 if rules_enabled else 90 / 3.6
         SpeedCalculator.MIN_SPEED = 25 / 3.6 if rules_enabled else 25 / 3.6
         SpeedCalculator.CURVE_FACTOR = 2 if rules_enabled else 2  # higher value = more drifting
         SpeedCalculator.MAX_DECELERATION = 20 if rules_enabled else 20
