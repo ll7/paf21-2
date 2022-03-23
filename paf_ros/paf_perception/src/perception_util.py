@@ -2,6 +2,13 @@ import cv2
 
 
 def show_image(title, image):
+    """
+    Displays image data on the screen
+    Source: PAF 2020/21 group 1
+
+    :param title: Title of the window
+    :param image: Image data
+    """
     max_width, max_height = 1200, 800
 
     limit = (max_height, max_width)
