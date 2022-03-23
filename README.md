@@ -18,6 +18,8 @@
           - [Obstacle Planner](#obstacle-planner)
       - [Starter](#starter)
       - [Validation (optional)](#validation-optional)
+  - [Installation des Projekts](#installation-des-projekts)
+  - [Ausführen des Projekts](#ausführen-des-projekts)
 
 
 
@@ -41,7 +43,6 @@ Teil 2: Modus mit Regeln. Ziel dabei ist es unter Beachtung aller Verkehrsregeln
 
 ![new Architecture Graph](docs/imgs/PAF_Architektur_final.drawio.svg)
 
-https://drive.google.com/file/d/1FefIPUL4YKTEWir82x4AedvwJH-2MFml/view
 
 ###  Module
 
@@ -63,15 +64,34 @@ Dieses Modul ist für die Planung der Route des Ego Vehicles zuständig. Dafür 
 ###### Global Planner
 Der Global Planner ist für die Berechnung der kürzesten Route zwischen Start- und Zielpunkt zuständig. Dafür wird der CommonRoad Route Planner verwendet. 
 ###### Local Planner
-Der Local Planner ist dafür zuständig ein Segment des globalen Pfads bestmöglich abzufahren und dabei alle Verkehrsregeln beachten und korrekt auf anderes Verkehrsteilnehmer reagieren
+Der Local Planner ist dafür zuständig ein Segment des globalen Pfads bestmöglich abzufahren und dabei alle Verkehrsregeln beachten und korrekt auf andere Verkehrsteilnehmer zu reagieren
 
 ###### Obstacle Planner
 Beim Obstacle Planner handelt es sich um ein Teilmodul des Planners, dass dazu dient auf erkannte Hindernisse, wie andere Verkehrsteilnehmer reagieren zu können. 
 Funktionen diese Moduls sind das Folgen anderer Verkehrsteilnhemer unter Beachtung des Mindestabstands und das Anhalten, wenn sich ein Hindenis direkt vor dem Ego Vehicle befindet. 
 
 #### Starter 
-Dieses Modul dient zum komfortablen Starten des Projekts. Dabei werden alle notwendigen oben genannten Module gestartet, die dazu benötigt werden autonom von einem Startpunkt zu einem Zielpunkt zu gelangen. 
+Dieses Modul dient zum einfachen Starten des Projekts. Dabei werden alle notwendigen oben genannten Module gestartet, die dazu benötigt werden autonom von einem Startpunkt zu einem Zielpunkt zu gelangen. 
 
 #### Validation (optional) 
 Das Validation Modul dient dazu, beim Abfahren einer Route automatisch Fehler beim Verhalten des Fahrzeugs zu notieren und das Endergebnis nach dem Abfahren einer Route zu berwerten. 
+
+## Installation des Projekts 
+[TODO]
+## Ausführen des Projekts 
+Ausführen des von scrips/runscripts.sh \
+``` bash /paf21-2/scripts/runscripts.sh ```
+
+Argumente:
+```
+--skip-carla-restart/-scr   die Carla Simulation wird nicht neugestartet 
+--build/-b                  erneutes builden des Projekts, wenn man Änderungen im Code vorgenommen hat 
+--npcs/-n                   Starten mit npcs 
+--low-quality/-lq           Starten in niedrigerer Qualität für leistungsschwächere Geräte 
+--manual-control/-mc        Starten mit Öffnen eines manual-control Fensters
+--no-rules/-nr              Unterscheidung ob man mit oder ohne Regeln Fahren möchte
+TownXX
+```
+
+
 
