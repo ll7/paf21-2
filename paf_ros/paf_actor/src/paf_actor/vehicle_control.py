@@ -146,7 +146,6 @@ class VehicleController:
                             steering = 0.0
 
                 if np.abs(self._lat_controller.heading_error) > 0.8:
-                    rospy.loginfo_throttle(5, "[Actor] U-TURN")
                     self._target_speed = self._u_turn_speed
 
                 throttle: float = self.__calculate_throttle(dt, distance)
@@ -408,7 +407,7 @@ class VehicleController:
         if not obstacle_follow_info.no_target:  #
             self._obstacle_follow_distance = obstacle_follow_info.distance
 
-            if not obstacle_follow_info.is_vehicle and not rospy.get_param("rules_enabled", False):
+            if not obstacle_follow_info.is_vehicle and not rospy.get_param("rules_enabled", True):
                 # drive slowly over pedestrains to not flip over motorcycles and bicycles
                 self._obstacle_follow_speed = 10.0 / 3.6
             elif obstacle_follow_info.distance <= self._obstacle_follow_min_distance / 2:
