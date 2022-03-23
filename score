@@ -1,3 +1,0 @@
-#!/bin/bash
-rosnode kill score_calculation 2>/dev/null
-roslaunch paf_validation score_calculation.launch
