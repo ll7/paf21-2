@@ -23,6 +23,8 @@ With these values, the actor calculates the optimal steering behaviour by using 
 
 These calculations occure every time and are send to Carla via a CarlaEgoVehicleControl-Message.
 
+![Default Routine](../../docs/paf_actor/imgs/ActorDefaultRoutine.png)
+
 ## Unstuck Routine
 
 The unstuck routine is a routine that gets used when the actor is stuck in a situation. It uses a timer and threshold values to detect if the actor is stuck, then tries to get unstuck by driving a few feet backwards without steering.
