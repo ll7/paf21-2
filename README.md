@@ -90,7 +90,7 @@ Argumente:
 --low-quality/-lq           Starten in niedrigerer Qualität für leistungsschwächere Geräte 
 --manual-control/-mc        Starten mit Öffnen eines manual-control Fensters
 --no-rules/-nr              Unterscheidung ob man mit oder ohne Regeln Fahren möchte
-TownXX
+TownXX                      Town auf der gefahren werden soll, mögliche Towns Town01-07, Town10HD
 ```
 
 
