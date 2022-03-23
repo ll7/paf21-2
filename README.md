@@ -25,7 +25,7 @@ https://app.diagrams.net/#G1EHm7NKyF9iLAxI_44CEEAst4w_rrSQ1e
 #### Acting
 Dieses Modul dient dazu dass das Ego Vehicle einem vorgegenen Pfad folgen kann. Dabei wird ein Regler zu Regelung der Geschwindigkeit verwendet und ein Stanley-Controller zur Regelung des Lenkwinkels. Zustätzlich dient diese Modul noch dazu, selbstständig aus kritischen Situationen freizukommen
 
-#### Maps 
+#### Map Manipulation
 Diese Modul dient der Verwaltung von Kartendaten. Diese werden als Commonroad-Kartendaten abgespeichert und enthalten Informationen über alle befahrbaren Wege einer Stadt. Zusätzlich sind in den Karten alle Schilder und Amplen als auch deren zugeordneten Haltelinien eingetragen. 
 
 
@@ -38,16 +38,17 @@ die unter Verwendung des Systems YOLO v3 funktioniert.
 #### Planning
 Dieses Modul ist für die Planung der Route des Ego Vehicles zuständig. Dafür wurde es in folgende Teimodule gegliedert:
 ###### Global Planner:
-Der Global Planner ist für die Berechnung der kürzesten Route zwischen Start- und Zielpunkt zuständig. 
+Der Global Planner ist für die Berechnung der kürzesten Route zwischen Start- und Zielpunkt zuständig. Dafür wird der CommonRoad Route Planner verwendet. 
 ###### Local Planner:
 Der Local Planner ist dafür zuständig ein Segment des globalen Pfads bestmöglich abzufahren und dabei alle Verkehrsregeln beachten und korrekt auf anderes Verkehrsteilnehmer reagieren
 
 ###### Obstacle Planner:
 Beim Obstacle Planner handelt es sich um ein Teilmodul des Planners, dass dazu dient auf erkannte Hindernisse, wie andere Verkehrsteilnehmer reagieren zu können. 
-Funktionen diese Moduls sind das Hinterherfahren mit Mindestabstand hinter anderen Verkehrsteilnehmer und das Anhalten, wenn sich ein Hindenis direkt vor dem Ego Vehicle befindet. 
+Funktionen diese Moduls sind das Folgen anderer Verkehrsteilnhemer unter Beachtung des Mindestabstands und das Anhalten, wenn sich ein Hindenis direkt vor dem Ego Vehicle befindet. 
 
 #### Starter 
 Dieses Modul dient zum komfortablen Starten des Projekts. Dabei werden alle notwendigen oben genannten Module gestartet, die dazu benötigt werden autonom von einem Startpunkt zu einem Zielpunkt zu gelangen. 
 
-#### Validation 
+#### Validation (optional) 
+Das Validation Modul dient dazu, beim Abfahren einer Route automatisch Fehler beim Verhalten des Fahrzeugs zu notieren und das Endergebnis nach dem Abfahren einer Route zu berwerten. 
 
