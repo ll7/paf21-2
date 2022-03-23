@@ -20,6 +20,10 @@ https://app.diagrams.net/#G1EHm7NKyF9iLAxI_44CEEAst4w_rrSQ1e
 
 ![Architecture Graph](docs/imgs/architecture.png)
 
+![new Architecture Graph]((docs/imgs/PAF_Architektur_final.drawio.svg)
+
+https://drive.google.com/file/d/1FefIPUL4YKTEWir82x4AedvwJH-2MFml/view
+
 ### Module:
 
 #### Acting
