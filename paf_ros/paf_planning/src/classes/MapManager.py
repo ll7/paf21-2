@@ -14,12 +14,16 @@ from commonroad.visualization.mp_renderer import MPRenderer
 from commonroad_route_planner.route import Route
 from commonroad_route_planner.utility.visualization import obtain_plot_limits_from_reference_path, draw_state
 
-from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, Point
 from paf_messages.msg import Point2D
 from tf.transformations import quaternion_from_euler
 
 
 class MapManager:
+    """
+    Class for loading and managing Commonroad Scenarios and Carla Maps at runtime
+    """
+
     @staticmethod
     def get_current_scenario(rules: bool = None, map_name: str = None) -> Scenario:
         """
@@ -45,7 +49,24 @@ class MapManager:
         else:
             map_file_path = "Maps/No Rules/" + map_file_name
         scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{map_file_path}")).open()
+        scenario.lanelet_network = MapManager.remove_u_turns(scenario.lanelet_network)
         return scenario
+
+    @staticmethod
+    def remove_u_turns(network: LaneletNetwork):
+        """
+        Remove adjacent lanes from CR-Lanelet-Network in opposite direction to remove U-turns from route calculation
+        :param network: input network
+        :return: modified network
+        """
+        for let in network.lanelets:
+            if let.adj_left is not None and not let.adj_left_same_direction:
+                let._adj_left = None
+                let._adj_left_same_direction = None
+            if let.adj_right is not None and not let.adj_right_same_direction:
+                let._adj_right = None
+                let._adj_right_same_direction = None
+        return network
 
     @staticmethod
     def get_map() -> str:
@@ -75,6 +96,10 @@ class MapManager:
 
     @staticmethod
     def light_is_opposite_stop_point():
+        """
+        Get information about traffic light placement
+        :return: True if traffic lights are at opposite sides of the intersection (or not connected to ROS)
+        """
         try:
             return MapManager.get_map() not in ["Town01", "Town02"]
         except ConnectionRefusedError:
@@ -147,6 +172,8 @@ class MapManager:
     def visualize_route(route: Route, draw_route_lanelets=False, draw_reference_path=False, size_x=10):
         """
         Visualizes the given commonroad route with matplotlib.
+        (NOT working for LocalPath and GlobalPath objects, use MapManager.visualize_lp_and_gp function instead)
+
         :param route: route object to be visualized
         :param draw_route_lanelets: flag to indicate if the lanelets should be visualized
         :param draw_reference_path: flag to indicate if the reference path should be visualized
@@ -216,25 +243,43 @@ class MapManager:
         plt.show()
 
     @staticmethod
+    def lanelet_on_bridge(let_id):
+        """
+        Tests for on-bridge-lanelets
+        :param let_id: any lanelet id
+        :return: True, if it is marked as "on bridge"
+        """
+        on_bridge_lanelets = {
+            "Town04": [329, 327, 325, 323, 348, 350, 352, 354],
+            "Town05": [437, 436, 435, 426, 429, 432],
+        }
+
+        current_map = MapManager.get_map()
+        if current_map not in on_bridge_lanelets:
+            return False
+        return let_id in on_bridge_lanelets[current_map]
+
+    @staticmethod
     def visualize_lp_and_gp(
-        local_path_obj, cur_pt: Point2D, xmin: float = None, xmax: float = None, ymin: float = None, ymax: float = None
+        local_path_obj, cur_pt: Point, xmin: float = None, xmax: float = None, ymin: float = None, ymax: float = None
     ):
         """
-        Visualize local and global path with matplotlib (for debugging planners)
+        Visualize local and global path with matplotlib (for debugging planners).
+        Call LocalPath.visualize(...) for automatic path creation, CAN NOT be called within ROS (!)
         :param xmin: Optional graph axis limit
         :param xmax: Optional graph axis limit
         :param ymin: Optional graph axis limit
         :param ymax: Optional graph axis limit
         :param local_path_obj: LocalPath object
-        :param cur_pt: location to start local plan on
+        :param cur_pt: location to start local plan on (x,y,z)
         """
         from matplotlib import pyplot as plt
 
-        def pts_to_x_y(pts):
-            if len(pts) == 0:
+        def pts_to_x_y(_pts):
+            if len(_pts) == 0:
                 return ([], []), (99999, 99999, -99999, -99999)
-            _x = [p.x for p in pts]
-            _y = [p.y for p in pts]
+            _x = [p.x for p in _pts]
+            _y = [p.y for p in _pts]
             return (_x, _y), (np.min(_x), np.min(_y), np.max(_x), np.max(_y))
 
         pts_gl_1 = []
@@ -260,7 +305,7 @@ class MapManager:
 
         plt.scatter(*xy2, label="Global Path (target)", s=1)
         plt.scatter(*xy1, label="Global Path (other)", s=1)
-        # plt.plot(*xy3, label="Local Path (sparse)")
+        plt.plot(*xy3, label="Local Path (sparse)")
         plt.plot(*xy4, label="Local Path (dense)")
         plt.scatter(*xy5, label="Traffic Signals (GP)", s=10)
 
@@ -275,11 +320,7 @@ class MapManager:
                 plt.annotate(f"NOT{i}:{name}@{distance}m", (match.x, match.y))
                 plt.annotate(f"NOT{i}:{name}@{distance}m", (signal.point.x, signal.point.y))
                 continue
-            # print(
-            #     f"{name: <10}\t{distance: <10}{index: <10}"
-            #     f"{(np.round(signal.point.x, 1), np.round(signal.point.y, 1))}")
             pts.append(match)
-            # plt.annotate(f"{index}:{name}@{distance}m", (signal.point.x, signal.point.y))
             plt.annotate(f"{index}:{name}@{distance}m", (match.x, match.y))
 
         xy7, minima7 = pts_to_x_y(pts)
@@ -287,8 +328,9 @@ class MapManager:
         if len(xy6[0]) > 0:
             plt.scatter(*xy6, label="Local Path (debug pts)", s=6)
 
-        _, _, x_max, y_max = np.max([minima3, minima4, minima6, minima7], axis=0)
-        x_min, y_min, _, _ = np.min([minima3, minima4, minima6, minima7], axis=0)
+        minima = [minima1, minima2, minima3, minima4, minima5, minima6, minima7]
+        _, _, x_max, y_max = np.max(minima, axis=0)
+        x_min, y_min, _, _ = np.min(minima, axis=0)
 
         if xmin is not None:
             x_min = xmin

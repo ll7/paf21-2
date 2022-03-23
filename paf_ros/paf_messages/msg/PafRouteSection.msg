@@ -6,3 +6,4 @@ int64 target_lanes_index_distance
 int32 target_lanes_left_shift
 float32 distance_from_last_section
 float32 target_lanes_distance
+bool on_bridge

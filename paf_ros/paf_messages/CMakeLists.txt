@@ -18,7 +18,6 @@ add_message_files(
   PafObstacleList.msg
   Point2D.msg
   PafRoutingRequest.msg
-  PafRoutingGraphNode.msg
   PafTrafficSignal.msg
   PafLogImage.msg
   PafLogScalar.msg

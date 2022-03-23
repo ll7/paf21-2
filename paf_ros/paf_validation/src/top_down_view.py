@@ -44,7 +44,7 @@ class TopDownRosNode(object):
         self.pub = rospy.Publisher(self.params["topic"], Image, queue_size=1)
         rospy.Subscriber(rospy.get_param("obstacles_topic"), PafObstacleList, self.update_obstacles)
         rospy.Subscriber("/paf/paf_local_planner/path", PafLocalPath, self.update_local_path)
-        rospy.Subscriber(rospy.get_param("global_path_topic"), PafLaneletRoute, self.update_global_path)
+        rospy.Subscriber("/paf/paf_global_planner/routing_response_tdv", PafLaneletRoute, self.update_global_path)
         rospy.Subscriber("/paf/paf_validation/draw_map_points", PafTopDownViewPointSet, self._update_pt_set)
         rospy.Subscriber("/paf/paf_validation/draw_map_lines", PafTopDownViewPointSet, self._update_line_set)
         rospy.Subscriber("/paf/paf_validation/speed_text", PafSpeedMsg, self._update_speed_str)
@@ -67,25 +67,23 @@ class TopDownRosNode(object):
         self.producer.point_sets[msg.label] = msg
 
     def update_global_path(self, msg: PafLaneletRoute):
-        path = []
+        paths = [[] for _ in range(4)]
         section: PafRouteSection
         nan = 0
         for section in msg.sections:
             try:
                 point = section.points[section.target_lanes[0]]
+                paths[0].append([point.x, -point.y])
+                point = section.points[section.target_lanes[-1]]
+                paths[1].append([point.x, -point.y])
+                point = section.points[0]
+                paths[3].append([point.x, -point.y])
+                point = section.points[-1]
+                paths[4].append([point.x, -point.y])
             except IndexError:
                 nan += 1
                 continue
-                # point = section.points[0]
-            if np.isnan(point.x):
-                nan += 1
-                continue
-            path.append([point.x, -point.y])
-        if nan > 0:
-            rospy.logerr_throttle(
-                5, f"[top down view] global path contains {nan} invalid points " f"(nan or target lanes index error)"
-            )
-        self.producer.set_path(coordinate_list_global_path=path)
+        self.producer.set_path(coordinate_list_global_path=paths)
 
     def update_local_path(self, msg: PafLocalPath):
         path = [[point.x, -point.y] for point in msg.points]
