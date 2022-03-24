@@ -85,6 +85,7 @@ class LocalPlanner:
         self._srv_global_random = "/paf/paf_local_planner/routing_request_random"
         self._srv_global_standard_loop = "/paf/paf_local_planner/routing_request_standard_loop"
         self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", PafSpeedMsg, queue_size=1)
+        self._score_pub = rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1)
         self._traffic_light_detector_toggle_pub = rospy.Publisher(
             "/paf/paf_local_planner/activate_traffic_light_detection", Bool, queue_size=1
         )
@@ -540,7 +541,7 @@ class LocalPlanner:
         :param sleep:
         """
         self._global_path = GlobalPath()
-        rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1).publish(Empty())
+        self._score_pub.publish(Empty())
         if self._current_speed < 5 / 3.6:
             self._emergency_break_pub.publish(Bool(False))
 

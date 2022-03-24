@@ -90,21 +90,22 @@ Parameter in paf_global_planner.py
 
 Subscriber
 
-- `/paf/paf_local_planner/routing_request` (`PafRoutingRequest`)
+- `/paf/paf_local_planner/routing_request` (`PafRoutingRequest`) asynchrone Anfrage für eine neue Route
 - `carla/ego_vehicle/odometry` (`Odometry`)
-- `/paf/paf_local_planner/rules_enabled` (`Bool`)
+- `/paf/paf_local_planner/rules_enabled` (`Bool`) Wechsel des Modus während der Laufzeit
 
 Publisher
 
-- `/paf/paf_validation/draw_map_points` (`PafTopDownViewPointSet`)
-- `/paf/paf_validation/score/start` (`Empty`)
+- `/paf/paf_validation/draw_map_points` (`PafTopDownViewPointSet`) debugging Punkte an TopDownView senden
+- `/paf/paf_validation/score/start` (`Empty`) Scoreboard neu starten
+- `/paf/paf_global_planner/routing_response` (`PafLaneletRoute`) asynchrone Antwort mit einer neuen
+- `/paf/paf_global_planner/routing_response_tdv` (`PafLaneletRoute`) senden der Route an TopDownView
 
 Services
 
 - `/paf/paf_local_planner/reroute` (`PafRoutingService`)
 - `/paf/paf_local_planner/routing_request_standard_loop` (`PafRoutingService`)
 - `/paf/paf_local_planner/routing_request_random` (`PafRoutingService`)
-- `/paf/paf_global_planner/routing_response` (`PafLaneletRoute`)
 
 ### Schritt 1: Commonroad Route Planner
 
@@ -138,9 +139,20 @@ Punkte immer auf gleicher Höhe zueinander befinden.
 
 In diesem Package wird die `PafLaneletRoute` mit einer Liste an `PafRouteSection` verwaltet. Dazu gehören u.a. die
 Spurwahl, das Ampelmanagement und der Spurwechsel. In der Node in `paf_local_planner.py` werden alle ROS-Informationen
-gesammelt und mit Hilfe des `LocalPath` in eine Handlungsanweisung für das Acting umgewandelt.
+gesammelt und mithilfe des `LocalPath` in eine Handlungsanweisung für das Acting umgewandelt. Im Folgenden ein
+Beispielpfad als Teil der Route inklusive Spurwechsel.
 
-Parameter in `paf_local_planner.py`
+![Paf LP!](../../docs/imgs/planning_lp.png)
+
+Dabei wird durch alle Sektionen des GlobalPath iteriert und erlaubte Geschwindigkeit, sowie die bevorzugte Spur
+basierend auf der Hinderniserkennung (`obstacle planner`) ergänzt. Auf dieser Liste (`sparse local path`) an
+Pfadpunkten (je einer pro Segment) wird dann mithilfe von Bezier-, Tangenten- und Splineberechnungen eine
+Handlungsanweisung mit hoher Punktzahl und Zielgeschwindigkeit pro Pfadpunkt berechnet und an das Acting
+geschickt (`dense local path`).
+
+### paf_local_planner.py
+
+Parameter:
 
 - `UPDATE_HZ` Frequenz, in der die State-Machine abgefragt werden soll
 - `REPLAN_THROTTLE_SEC_GLOBAL` Maximale GlobalPath-Replanning Frequenz durch diesen Wert festgelegt
@@ -153,19 +165,92 @@ Parameter in `paf_local_planner.py`
 - `EUROPEAN_TRAFFIC_LIGHT_LIMITS` Beschreibung, wie europäische Ampeln aus dem Sensorbild gefiltert werden (Ampeln in
   der EU sind direkt neben der Stopplinie)
 
-Parameter in `LocalPath.py`
+Subscriber:
+
+- `carla/ego_vehicle/odometry` (`Odometry`)
+- `/paf/paf_local_planner/rules_enabled` (`Bool`)
+- `/paf/paf_global_planner/routing_response` (`PafLaneletRoute`) Asynchrone antwort auf eine Routenanfrage
+- `/paf/paf_perception/detected_traffic_lights` (`PafDetectedTrafficLights`) Ergebnis der Traffic Light Detection
+
+Publisher:
+
+- `/local_planner/ego_vehicle/emergency_break` (`Bool`) Aktiviere Vollbremsung (Handbremse und Rückwärtsfahren)
+- `/paf/paf_validation/score/start` (`Empty`)
+- `/paf/paf_validation/speed_text` (`PafSpeedMsg`) Debugging-Nachricht an TopDownView (Momentan- und
+  Zielgeschwindigkeit)
+- `/paf/paf_local_planner/activate_traffic_light_detection` (`Bool`)
+- `/paf/paf_validation/score/stop` (`Empty`) Scoreboard, beende aktuellen Lauf
+
+Aufgerufene Services:
+
+- `/paf/paf_local_planner/reroute` (`PafRoutingServiceResponse`)
+- `/paf/paf_local_planner/routing_request_standard_loop` (`PafRoutingServiceResponse`)
+- `/paf/paf_local_planner/routing_request_random` (`PafRoutingServiceResponse`)
+
+### LocalPath.py
+
+Parameter:
 
 - `DENSE_POINT_DISTANCE` Abstand zweier Punkte auf dem Local Path in Metern (0,25m)
 - `TRANSMIT_FRONT_MIN_M` Mindestlänge des Local Path in Metern ab der Fahrzeugposition
 - `TRANSMIT_FRONT_SEC` Mindestlänge des Local Path in Sekunden bei konstanter Fahrt mit der aktuellen Geschwindigkeit
 - `LANE_CHANGE_SECS` Sekunden benötigt für einen Spurwechsel (Streckenumrechnung mit erlaubter Geschwindigkeit)
-- `STRAIGHT_TO_TARGET_DIST` Ab dieser Distanz wird ein direkter Vektor zum Zielpunkt gefahren (falls der Zielpunkt nicht genau auf der Mitte einer Spur liegt)
+- `STRAIGHT_TO_TARGET_DIST` Ab dieser Distanz wird ein direkter Vektor zum Zielpunkt gefahren (falls der Zielpunkt nicht
+  genau auf der Mitte einer Spur liegt)
 - `END_OF_ROUTE_SPEED` Zielgeschwindigkeit beim Zielpunkt für sanftes Abbremsen am Ende
-- `SPLINE_IN_CURVE_RADIUS` Ab diesem Kurvenradius wird Spline-Berechnung statt Bezier-Berechnung verwendet (v.a. für die Kurven in Town02 notwendig)
-- `OFFSET_LIGHTS_EU_M` Ab die
-- `CLEARING_SIGN_DIST_LIGHT`
-- `CLEARING_SIGN_DIST`
-- `RESUME_COURSE_COLORS`
-- `PREFER_TARGET_LANES_DIST`
+- `SPLINE_IN_CURVE_RADIUS` Ab diesem Kurvenradius wird Spline-Berechnung statt Bezier-Berechnung verwendet (v.a. für die
+  Kurven in Town02 notwendig)
+- `OFFSET_LIGHTS_EU_M` Diese Distanz vor einer EU-Ampel anhalten (um diese im Kamerabild zu behalten)
+- `CLEARING_SIGN_DIST_LIGHT` Diese Distanz zu einer Ampel (wenn grün) markiert die Ampel als "irrelevant"
+- `CLEARING_SIGN_DIST` Diese Distanz zu anderen Signalen markiert dieses als "irrelevant"
+- `RESUME_COURSE_COLORS` Diese Ampelfarben zur Weiterfahrt akzeptieren
+- `PREFER_TARGET_LANES_DIST` Ab dieser Distanz zu einer Fahrbahnverengung/Ausfahrt/Abbiegung die Zielspur der
+  Geradeausspur bevorzugen.
 
-### Local Path
+Aufgerufene Services:
+
+- `/paf/paf_obstacle_planner/lane_info_service` (`PafLaneInfoServiceResponse`) Anfrage an den `obstacle planner` für die
+  Spurwahl.
+
+## Obstacle Planner
+
+Der Obstacle Planner ist dafür verantwortlich, die Hindernisse des `semantic_lidar`-Node zu verwalten und eine
+Handlungsempfehlung als `PafObstacleFollowInfo` für das Acting zu veröffentlichen, welche eine Distanz zum nächsten
+relevanten Hindernis und eine vermutete Geschwindigkeit enthält. Hierbei werden nur dynamische Hindernisse betrachtet,
+also nur Fußgänger und Fahrzeuge.
+
+Parameter:
+
+- `ON_LANELET_DISTANCE` Distanz, bei der Fahrzeuge als "auf der Fahrbahn" identifiziert werden
+- `ON_LANELET_DISTANCE_PEDESTRIANS` Distanz, bei der Fußgänger als "auf der Fahrbahn" identifiziert werden
+- `SHOW_TRACE_PTS` Punkte der Pfadvorhersage auf dem TopDownView anzeigen
+- `SHOW_FOLLOW_PTS` Punkte in TopDownView veröffentlichen, auf die das Acting mit der `PafObstacleFollowInfo` reagieren
+  soll.
+- `SAFETY_DISTANCE` Diesen Abstand vom detektierten Abstand als Sicherheitswert abziehen, um Kollision zu vermeiden.
+
+Subscriber:
+
+- `carla/ego_vehicle/odometry` (`Odometry`)
+- `/paf/paf_perception/obstacles` (`PafObstacleList`) Liste an erkannten Hindernissen
+- `/paf/paf_local_planner/path` (`PafLocalPath`) Aktueller Pfad
+
+Publisher:
+
+- `/paf/paf_obstacle_planner/following_info` (`PafObstacleFollowInfo`) Information ans Acting, um auf dynamische
+  Hindernisse zu reagieren
+
+Services:
+
+- `/paf/paf_obstacle_planner/lane_info_service` (`PafLaneInfoService`) Berechnung der `PafObstacleFollowInfo` begrenzt
+  auf einen bestimmten Pfad (Spurwechselabfrage)
+
+Für alle erkannten Fahrzeuge zudem eine Vorhersage getroffen, auf welchen Pfaden sich das Objekt auf dem Lanelet-Network
+bewegen wird. An Kreuzungen kann diese Vorhersage auch Verzweigungen enthalten.
+
+Alle Fahrzeuge und Fußgänger, die sich nicht auf dem Pfad oder direkt vor dem Fahrzeug befinden, werden ebenfalls
+verworfen. Lediglich Fahrzeuge, dessen Pfadvorhersage auf den Pfad des Ego Vehicles treffen, werden weiterhin
+zugelassen. Fußgänger werden zudem nur dann beachtet, wenn sie sich auf einer Fahrbahn befinden.
+
+Im Anschluss werden alle so gesammelten Informationen nach Distanz zum Fahrzeug gefiltert und das mit dem geringsten
+Abstand veröffentlicht. Falls keine relevanten Hindernisse erkannt wurden. Kann dies ebenfalls in der Nachricht vermerkt
+werden.
