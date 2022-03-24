@@ -1,6 +1,8 @@
 from time import perf_counter
 from typing import List, Tuple, Optional, Union
 
+from commonroad.scenario.traffic_sign import TrafficSignIDGermany
+
 import rospy
 from paf_messages.msg import (
     PafLocalPath,
@@ -939,13 +941,17 @@ class LocalPath:
     def visualize(
         town: str,
         rules: bool,
-        position: Tuple[float],
-        target: Union[Point2D, Point3D],
+        position: Tuple[float, float],
+        target: Union[Tuple[float, float], Point2D, Point3D],
         lanelet_ids: List[int],
         bounds: Tuple[Optional[float], Optional[float], Optional[float], Optional[float]] = None,
+        show_lp: bool = True,
+        show_gp: bool = True,
+        show_other: bool = True,
     ):
         """
-        Visualize a path based on logging information with matplotlib (debugging without ros)
+        Visualize a path based on logging information with matplotlib
+        (debugging without ros, CAN NOT be called within ROS!)
         :param town: name of the town to load
         :param rules: rules or no rules
         :param position: starting point
@@ -953,17 +959,119 @@ class LocalPath:
         :param lanelet_ids: list of lanelet ids in the given network (global route)
         :param bounds: canvas bounds with format (xmin, xmax, ymin, ymax),
                         None means outermost point is selected in this dimension
+        :param show_gp: show global path
+        :param show_lp: show local path
+        :param show_other: show sign positions and LocalPath.debug_pts
         """
+
+        def visualize_lp_and_gp(
+            local_path_obj,
+            cur_pt: Point,
+            xmin: float = None,
+            xmax: float = None,
+            ymin: float = None,
+            ymax: float = None,
+        ):
+            """
+            Visualize local and global path with matplotlib (for debugging planners).
+            :param xmin: Optional graph axis limit
+            :param xmax: Optional graph axis limit
+            :param ymin: Optional graph axis limit
+            :param ymax: Optional graph axis limit
+            :param local_path_obj: LocalPath object
+            :param cur_pt: location to start local plan on (x,y,z)
+            """
+            from matplotlib import pyplot as plt
+
+            def pts_to_x_y(_pts):
+                if len(_pts) == 0:
+                    return ([], []), (99999, 99999, -99999, -99999)
+                _x = [p.x for p in _pts]
+                _y = [p.y for p in _pts]
+                return (_x, _y), (np.min(_x), np.min(_y), np.max(_x), np.max(_y))
+
+            pts_gl_1 = []
+            pts_gl_2 = []
+
+            local_path_obj.global_path.as_msg()
+
+            for s in local_path_obj.global_path.route.sections:
+                pts_gl_1 += [p for i, p in enumerate(s.points) if i not in s.target_lanes]
+                pts_gl_2 += [p for i, p in enumerate(s.points) if i in s.target_lanes]
+
+            pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
+            pts_loc_1 = local_path_obj.sparse_local_path
+            sign_positions = [x[0].point for x in local_path_obj.traffic_signals]
+            local_path_obj.set_alternate_speed_next_sign(0)
+            minima1, minima2, minima3, minima4, minima5, minima6, minima7 = [None for _ in range(7)]
+            if show_gp:
+                xy1, minima1 = pts_to_x_y(pts_gl_1)
+                xy2, minima2 = pts_to_x_y(pts_gl_2)
+                plt.scatter(*xy2, label="Global Path (target)", s=1)
+                plt.scatter(*xy1, label="Global Path (other)", s=1)
+            if show_lp:
+                xy3, minima3 = pts_to_x_y(pts_loc_1)
+                xy4, minima4 = pts_to_x_y(pts_loc_2)
+                plt.plot(*xy3, label="Local Path (sparse)")
+                plt.plot(*xy4, label="Local Path (dense)")
+            if show_other:
+                xy5, minima5 = pts_to_x_y(sign_positions)
+                xy6, minima6 = pts_to_x_y(local_path_obj.debug_pts)
+                plt.scatter(*xy5, label="Traffic Signals (GP)", s=10)
+                if len(xy6[0]) > 0:
+                    plt.scatter(*xy6, label="Local Path (debug pts)", s=6)
+
+            if show_other:
+                pts = []
+                for i, (signal, index, distance, match) in enumerate(local_path_obj.get_signal_indices()):
+                    distance = np.round(distance, 1)
+                    try:
+                        name = TrafficSignIDGermany(signal.type).name
+                    except ValueError:
+                        name = signal.type
+                    if index < 0:
+                        plt.annotate(f"NOT{i}:{name}@{distance}m", (match.x, match.y))
+                        plt.annotate(f"NOT{i}:{name}@{distance}m", (signal.point.x, signal.point.y))
+                        continue
+                    pts.append(match)
+                    plt.annotate(f"{index}:{name}@{distance}m", (match.x, match.y))
+
+                xy7, minima7 = pts_to_x_y(pts)
+                plt.scatter(*xy7, label="Traffic Signals (LP)", s=10)
+
+            minima = [x for x in [minima1, minima2, minima3, minima4, minima5, minima6, minima7] if x is not None]
+
+            if len(minima) == 0:
+                raise RuntimeError("Unable to draw any paths")
+
+            _, _, x_max, y_max = np.max(minima, axis=0)
+            x_min, y_min, _, _ = np.min(minima, axis=0)
+
+            if xmin is not None:
+                x_min = xmin
+            if ymin is not None:
+                y_min = ymin
+            if xmax is not None:
+                x_max = xmax
+            if ymax is not None:
+                y_max = ymax
+
+            plt.xlim([x_min - 10, x_max + 10])
+            plt.ylim([y_min - 10, y_max + 10])
+            plt.legend()
+            plt.show()
+
+        if not hasattr(target, "x"):
+            target = Point2D(*target)
         sc = MapManager.get_current_scenario(rules, town)
-        MapManager.remove_u_turns(sc.lanelet_network)
         route_paf = GlobalPath(sc.lanelet_network, lanelet_ids, target)
         local = LocalPath(route_paf, rules)  # , plan_maximum_distance=True)
         if len(position) == 2:
             position = list(position) + [0]
         if bounds is not None:
-            MapManager.visualize_lp_and_gp(local, Point3D(*position), *bounds)
+            visualize_lp_and_gp(local, Point3D(*position), *bounds)
         else:
-            MapManager.visualize_lp_and_gp(local, Point3D(*position))
+            visualize_lp_and_gp(local, Point3D(*position))
 
     def __len__(self) -> int:
         """

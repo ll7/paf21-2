@@ -13,12 +13,15 @@ class SpeedCalculator:
     """Class for handling speed in the local plan (deceleration, curve speed, etc.)"""
 
     CITY_SPEED_LIMIT = 50 / 3.6
+    MERGE_SPEED_RESET = 50 / 3.6
+    APPLY_MERGING_RESET = True
     SPEED_LIMIT_MULTIPLIER = 1
     CURVE_RAD_MEASURE_STEP = 5
     FULL_VS_HALF_DECEL_FRACTION = 0.97
     MUST_STOP_EVENTS = [TrafficSignIDGermany.STOP.value]
     CAN_STOP_EVENT = ["LIGHT", TrafficSignIDGermany.YIELD.value]
 
+    # these values are set in set_limits function on init or gamemode change
     UNKNOWN_SPEED_LIMIT_SPEED, MAX_SPEED, MIN_SPEED, CURVE_FACTOR, MAX_DECELERATION = 100, 100, 10, 1, 10
 
     def __init__(self, step_size: float):

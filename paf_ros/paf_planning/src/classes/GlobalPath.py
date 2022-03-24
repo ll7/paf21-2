@@ -26,8 +26,6 @@ class GlobalPath:
     """Everything not handled by ROS or Commonroad for global route planning and conversion is handled here"""
 
     SPEED_KMH_TO_MS = 1 / 3.6
-    MERGE_SPEED_RESET = 50 / 3.6
-    APPLY_MERGING_RESET = True
     POINT_DISTANCE = 2.5
     TARGET_Z = 0
 
@@ -198,13 +196,13 @@ class GlobalPath:
         vertices = lanelet.center_vertices
 
         # lane merge events
-        if self.APPLY_MERGING_RESET and len(lanelet.predecessor) > 1:
+        if SpeedCalculator.APPLY_MERGING_RESET and len(lanelet.predecessor) > 1:
             merging_pt = vertices[0]
             paf_sign = PafTrafficSignal()
             paf_sign.type = "MERGE"
             idx = self._locate_obj_on_lanelet(vertices, merging_pt) / len(vertices) * len(new_vertices)
             paf_sign.index = int(idx)
-            paf_sign.value = self.MERGE_SPEED_RESET
+            paf_sign.value = SpeedCalculator.MERGE_SPEED_RESET
             paf_sign.point = Point2D(merging_pt[0], merging_pt[1])
             speed_limits += [paf_sign]
 
@@ -445,7 +443,7 @@ class GlobalPath:
                     last_limits = last_limits + [SpeedCalculator.UNKNOWN_SPEED_LIMIT_SPEED for _ in range(missing)]
 
             signals_per_lane, speed_limits_per_lane = [], []
-            on_bridge = MapManager.lanelet_on_bridge(lanelet_id_list[0])
+            is_on_bridge = MapManager.lanelet_on_bridge(lanelet_id_list[0])
 
             for lanelet_id, vertices in zip(lanelet_id_list, lanes):
                 signals, speed_limits = self._extract_traffic_signals(lanelet_id, vertices)
@@ -454,7 +452,7 @@ class GlobalPath:
 
             for j, section_points in enumerate(zip(*lanes)):
                 paf_section = PafRouteSection()
-                paf_section.on_bridge = on_bridge
+                paf_section.on_bridge = is_on_bridge
                 paf_section.points = [Point2D(p[0], p[1]) for p in section_points]
                 paf_section.speed_limits = [x for x in last_limits]
                 paf_section.signals = []

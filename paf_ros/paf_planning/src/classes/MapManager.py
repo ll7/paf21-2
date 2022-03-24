@@ -2,7 +2,6 @@ from typing import Tuple, List, Optional
 
 import numpy as np
 from commonroad.scenario.scenario import Scenario
-from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 import rospy
 from os.path import expanduser
@@ -14,7 +13,7 @@ from commonroad.visualization.mp_renderer import MPRenderer
 from commonroad_route_planner.route import Route
 from commonroad_route_planner.utility.visualization import obtain_plot_limits_from_reference_path, draw_state
 
-from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, Point
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
 from paf_messages.msg import Point2D
 from tf.transformations import quaternion_from_euler
 
@@ -23,6 +22,8 @@ class MapManager:
     """
     Class for loading and managing Commonroad Scenarios and Carla Maps at runtime
     """
+
+    last_map = None
 
     @staticmethod
     def get_current_scenario(rules: bool = None, map_name: str = None) -> Scenario:
@@ -43,6 +44,8 @@ class MapManager:
         if map_name is None:
             rospy.logerr("MapManager: Town parameter not set.")
             exit(1)
+
+        MapManager.last_map = map_name
         map_file_name = "DEU_" + map_name + "-1_1_T-1.xml"
         if rules:
             map_file_path = "Maps/Rules/" + map_file_name
@@ -74,7 +77,12 @@ class MapManager:
         Get current map from carla parameters
         :return: town name in format "TownX"
         """
-        return rospy.get_param("/carla/town", None)
+        try:
+            return rospy.get_param("/carla/town", None)
+        except ConnectionRefusedError:
+            print("WARN: unable to access '/carla/town'")
+            print(MapManager.last_map)
+            return MapManager.last_map
 
     @staticmethod
     def point_to_pose(pt: Tuple[float, float], yaw_deg: float, height=2) -> PoseWithCovarianceStamped:
@@ -172,7 +180,7 @@ class MapManager:
     def visualize_route(route: Route, draw_route_lanelets=False, draw_reference_path=False, size_x=10):
         """
         Visualizes the given commonroad route with matplotlib.
-        (NOT working for LocalPath and GlobalPath objects, use MapManager.visualize_lp_and_gp function instead)
+        (NOT working for LocalPath and GlobalPath objects, use LocalPath.visualize function instead)
 
         :param route: route object to be visualized
         :param draw_route_lanelets: flag to indicate if the lanelets should be visualized
@@ -258,90 +266,3 @@ class MapManager:
         if current_map not in on_bridge_lanelets:
             return False
         return let_id in on_bridge_lanelets[current_map]
-
-    @staticmethod
-    def visualize_lp_and_gp(
-        local_path_obj, cur_pt: Point, xmin: float = None, xmax: float = None, ymin: float = None, ymax: float = None
-    ):
-        """
-        Visualize local and global path with matplotlib (for debugging planners).
-        Call LocalPath.visualize(...) for automatic path creation, CAN NOT be called within ROS (!)
-        :param xmin: Optional graph axis limit
-        :param xmax: Optional graph axis limit
-        :param ymin: Optional graph axis limit
-        :param ymax: Optional graph axis limit
-        :param local_path_obj: LocalPath object
-        :param cur_pt: location to start local plan on (x,y,z)
-        """
-        from matplotlib import pyplot as plt
-
-        def pts_to_x_y(_pts):
-            if len(_pts) == 0:
-                return ([], []), (99999, 99999, -99999, -99999)
-            _x = [p.x for p in _pts]
-            _y = [p.y for p in _pts]
-            return (_x, _y), (np.min(_x), np.min(_y), np.max(_x), np.max(_y))
-
-        pts_gl_1 = []
-        pts_gl_2 = []
-
-        local_path_obj.global_path.as_msg()
-
-        for s in local_path_obj.global_path.route.sections:
-            pts_gl_1 += [p for i, p in enumerate(s.points) if i not in s.target_lanes]
-            pts_gl_2 += [p for i, p in enumerate(s.points) if i in s.target_lanes]
-
-        pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
-        pts_loc_1 = local_path_obj.sparse_local_path
-        sign_positions = [x[0].point for x in local_path_obj.traffic_signals]
-        local_path_obj.set_alternate_speed_next_sign(0)
-
-        xy1, minima1 = pts_to_x_y(pts_gl_1)
-        xy2, minima2 = pts_to_x_y(pts_gl_2)
-        xy3, minima3 = pts_to_x_y(pts_loc_1)
-        xy4, minima4 = pts_to_x_y(pts_loc_2)
-        xy5, minima5 = pts_to_x_y(sign_positions)
-        xy6, minima6 = pts_to_x_y(local_path_obj.debug_pts)
-
-        plt.scatter(*xy2, label="Global Path (target)", s=1)
-        plt.scatter(*xy1, label="Global Path (other)", s=1)
-        plt.plot(*xy3, label="Local Path (sparse)")
-        plt.plot(*xy4, label="Local Path (dense)")
-        plt.scatter(*xy5, label="Traffic Signals (GP)", s=10)
-
-        pts = []
-        for i, (signal, index, distance, match) in enumerate(local_path_obj.get_signal_indices()):
-            distance = np.round(distance, 1)
-            try:
-                name = TrafficSignIDGermany(signal.type).name
-            except ValueError:
-                name = signal.type
-            if index < 0:
-                plt.annotate(f"NOT{i}:{name}@{distance}m", (match.x, match.y))
-                plt.annotate(f"NOT{i}:{name}@{distance}m", (signal.point.x, signal.point.y))
-                continue
-            pts.append(match)
-            plt.annotate(f"{index}:{name}@{distance}m", (match.x, match.y))
-
-        xy7, minima7 = pts_to_x_y(pts)
-        plt.scatter(*xy7, label="Traffic Signals (LP)", s=10)
-        if len(xy6[0]) > 0:
-            plt.scatter(*xy6, label="Local Path (debug pts)", s=6)
-
-        minima = [minima1, minima2, minima3, minima4, minima5, minima6, minima7]
-        _, _, x_max, y_max = np.max(minima, axis=0)
-        x_min, y_min, _, _ = np.min(minima, axis=0)
-
-        if xmin is not None:
-            x_min = xmin
-        if ymin is not None:
-            y_min = ymin
-        if xmax is not None:
-            x_max = xmax
-        if ymax is not None:
-            y_max = ymax
-
-        plt.xlim([x_min - 10, x_max + 10])
-        plt.ylim([y_min - 10, y_max + 10])
-        plt.legend()
-        plt.show()
