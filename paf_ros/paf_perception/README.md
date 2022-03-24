@@ -49,6 +49,6 @@ Die TrafficLightDetection setzt sich aus den folgenden Komponenten zusammen:
 - [traffic_light_detector.py](./src/traffic_light_detector.py): Verwendet die Daten der FusionCamera, um Ampeln und deren Zustände zu erkennen
 - [perception_util.py](./src/perception_util.py): Hilfsfunktion für Bildanzeige
 
-Der Zusammenhang der Module ist in nachfolgendem Diagramm veranschaulicht:
+Das nachfolgende Diagramm gibt einen Überblick über den Zusammenhang der Module und über die Funktionsweise der Erkennung:
 
-![]()
+![](../../docs/imgs/trafficlightdetection_diagram.jpg)
