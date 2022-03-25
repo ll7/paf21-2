@@ -9,8 +9,10 @@ from cv_bridge.core import CvBridge
 
 
 class RGBCamera:
-    def __init__(self, role_name: str = "ego_vehicle", id: str = "front", queue_size=None):
+    """Source: PAF 2020/21 group 1"""
 
+    def __init__(self, role_name: str = "ego_vehicle", id: str = "front", queue_size=None):
+        """Source: PAF 2020/21 group 1"""
         self.image = None
         self.bridge = CvBridge()
         self.__subscriber = rospy.Subscriber(
@@ -22,6 +24,8 @@ class RGBCamera:
     def __update_image(self, image_msg: Image):
         """
         Internal method to update the position data
+        Source: PAF 2020/21 group 1
+
         :param image_msg: the message
         :return: None
         """
@@ -32,6 +36,8 @@ class RGBCamera:
     def get_image(self):
         """
         Return the current rgb image
+        Source: PAF 2020/21 group 1
+
         :return:the current image
         """
         return self.image
@@ -39,6 +45,8 @@ class RGBCamera:
     def set_on_image_listener(self, func: Callable[[numpy.ndarray, Time], None]):
         """
         Set function to be called with the rgb image as parameter
+        Source: PAF 2020/21 group 1
+
         :param func: the function
         :return: None
         """

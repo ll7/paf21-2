@@ -16,15 +16,15 @@ from RGBCamera import RGBCamera
 class FusionCamera:
     """
     Abstraction layer for a fusion camera
+    Source: PAF 2020/21 group 1, functionality altered and adapted.
     """
 
-    def __init__(
-        self,
-        role_name: str = "ego_vehicle",
-        camera_name: str = "front",
-        visible_tags: Set[SegmentationTag] = None,
-        queue_size=1,
-    ):
+    def __init__(self, visible_tags: Set[SegmentationTag] = None):
+        """
+        Source: PAF 2020/21 group 1
+        Added functionality for matching sensor images.
+        :param visible_tags: The SegmentationTags for which the segmentationimage should be filtered.
+        """
         # 2d image with distance in meters max 1000
 
         self.time_diff = rospy.Time.from_sec(0.05)
@@ -53,6 +53,14 @@ class FusionCamera:
         self.bridge = CvBridge()
 
     def __on_segmentation_image_callback(self, image, time_stamp):
+        """
+        Handles new segmentation images.
+        This method is called when the SegmentationCamera receives new image data.
+        Matches the segmentation image to the depth- and rgb-image with the lowest time-stamp difference.
+
+        :param image: The new segmentation image data.
+        :param time_stamp: The time-stamp of the image.
+        """
         self.segmentation_image = image
         self.segmentation_time = time_stamp
         min_time_diff_key_rgb = None
@@ -100,14 +108,30 @@ class FusionCamera:
                 del self.depth_image_list[k]
 
     def __on_rgb_image_callback(self, image, time_stamp):
+        """
+        This method is called when the RGBCamera receives new image data.
+        Saves the new image in the rgb image map.
+
+        :param image: The new rgb image data.
+        :param time_stamp: The time-stamp of the image.
+        """
         self.rgb_image_list[time_stamp] = image
 
     def __on_depth_image_callback(self, image, time_stamp):
+        """
+        This method is called when the DepthCamera receives new image data.
+        Saves the new image in the depth image map.
+
+        :param image: The new depth image data.
+        :param time_stamp: The time-stamp of the image.
+        """
         self.depth_image_list[time_stamp] = image
 
     def __update_image(self):
         """
         Internal method to update the distance data
+        Source: PAF 2020/21 group 1
+
         :return: None
         """
 
@@ -122,6 +146,8 @@ class FusionCamera:
     def get_image(self):
         """
         Return the current depth image
+        Source: PAF 2020/21 group 1
+
         :return:the current image
         """
         return self.position
@@ -129,6 +155,8 @@ class FusionCamera:
     def set_on_image_listener(self, func: Callable[[Time, numpy.ndarray, numpy.ndarray, numpy.ndarray], None]):
         """
         Set function to be called with the time, segmentation, rgb and depth image as parameter
+        Source: PAF 2020/21 group 1
+
         :param func: the function
         :return: None
         """
@@ -137,6 +165,7 @@ class FusionCamera:
 
 # Show case code
 def show_image(title, image):
+    """Source: PAF 2020/21 group 1"""
     max_width, max_height = 1200, 800
 
     limit = (max_height, max_width)
@@ -152,6 +181,7 @@ def show_image(title, image):
 
 
 if __name__ == "__main__":
+    """Source: PAF 2020/21 group 1"""
     rospy.init_node("FusionCameraService")
 
     def store_image(time_stamp, seg_image, rgb_image, depth_image):

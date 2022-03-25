@@ -12,11 +12,13 @@ class DepthCamera:
     """
     Abstraction layer for a depth camera
     It converts the distance values to meters and stores them in an numpy array
+    Source: PAF 2020/21 group 1
     """
 
     MAX_METERS = 1000  # maximum view distance
 
     def __init__(self, role_name: str = "ego_vehicle", id: str = "front", queue_size=None):
+        """Source: PAF 2020/21 group 1"""
         # 2d image with distance in meters max 1000
         self.image = None
         self.__subscriber = rospy.Subscriber(
@@ -29,6 +31,7 @@ class DepthCamera:
     def __update_image(self, image_msg: Image):
         """
         Internal method to update the distance data
+        Source: PAF 2020/21 group 1
         :param image_msg: the message
         :return: None
         """
@@ -41,6 +44,7 @@ class DepthCamera:
     def get_image(self):
         """
         Return the current depth image
+        Source: PAF 2020/21 group 1
         :return:the current image
         """
         return self.image
@@ -56,6 +60,7 @@ class DepthCamera:
 
 # Show case code
 if __name__ == "__main__":
+    """Source: PAF 2020/21 group 1"""
     rospy.init_node("DepthCameraTest")
 
     def show_image(image, _):

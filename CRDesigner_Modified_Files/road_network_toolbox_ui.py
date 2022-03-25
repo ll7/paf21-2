@@ -14,14 +14,18 @@ class RoadNetworkToolboxUI(Toolbox):
     """a dialog to which collapsible sections can be added;
     reimplement define_sections() to define sections and
     add them as (title, widget) tuples to self.sections
+    PAF INFO: Source is CRDesigner, Lanelet Editor Widget has been added
     """
 
     def __init__(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         super().__init__()
 
     def define_sections(self):
-        """reimplement this to define all your sections
+        """
+        reimplement this to define all your sections
         and add them as (title, widget) tuples to self.sections
+        PAF INFO: Lanelet Editor Widget has been added
         """
         self.sections.append(self.create_lanelet_widget())
         self.sections.append(self.create_lanelet_operations_widget())
@@ -31,6 +35,7 @@ class RoadNetworkToolboxUI(Toolbox):
         self.sections.append(self.create_lanelet_editor_widget())
 
     def create_lanelet_widget(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         label_general = QLabel("Lanelet Attributes")
         label_general.setFont(QFont("Arial", 11, QFont.Bold))
 
@@ -260,6 +265,7 @@ class RoadNetworkToolboxUI(Toolbox):
         return widget_title, widget_lanelets
 
     def create_lanelet_operations_widget(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         widget_lanelet_operations = QFrame(self.tree)
         layout_lanelet_operations = QVBoxLayout(widget_lanelet_operations)
 
@@ -352,6 +358,7 @@ class RoadNetworkToolboxUI(Toolbox):
         return widget_title, widget_lanelet_operations
 
     def create_traffic_sign_widget(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         widget_traffic_sign = QFrame(self.tree)
         layout_traffic_sign = QVBoxLayout(widget_traffic_sign)
 
@@ -414,6 +421,7 @@ class RoadNetworkToolboxUI(Toolbox):
         return title_traffic_sign, widget_traffic_sign
 
     def create_traffic_light_widget(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         widget_traffic_light = QFrame(self.tree)
         layout_traffic_light = QVBoxLayout(widget_traffic_light)
 
@@ -509,6 +517,7 @@ class RoadNetworkToolboxUI(Toolbox):
         return title_traffic_light, widget_traffic_light
 
     def create_intersection_widget(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         widget_intersection = QFrame(self.tree)
         layout_intersection = QVBoxLayout(widget_intersection)
 
@@ -612,6 +621,10 @@ class RoadNetworkToolboxUI(Toolbox):
         return title_intersection, widget_intersection
 
     def create_lanelet_editor_widget(self):
+        """
+        This function creates the ui elements for the lanelet editor widget.
+        Added for PAF 2021/22.
+        """
         widget_lanelet_editor = QFrame(self.tree)
         layout_lanelet_editor = QVBoxLayout(widget_lanelet_editor)
 
