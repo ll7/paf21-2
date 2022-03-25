@@ -252,5 +252,5 @@ verworfen. Lediglich Fahrzeuge, dessen Pfadvorhersage auf den Pfad des Ego Vehic
 zugelassen. Fußgänger werden zudem nur dann beachtet, wenn sie sich auf einer Fahrbahn befinden.
 
 Im Anschluss werden alle so gesammelten Informationen nach Distanz zum Fahrzeug gefiltert und das mit dem geringsten
-Abstand veröffentlicht. Falls keine relevanten Hindernisse erkannt wurden. Kann dies ebenfalls in der Nachricht vermerkt
+Abstand veröffentlicht. Falls keine relevanten Hindernisse erkannt wurden, kann dies ebenfalls in der Nachricht vermerkt
 werden.

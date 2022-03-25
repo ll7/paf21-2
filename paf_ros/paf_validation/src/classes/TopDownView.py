@@ -22,6 +22,8 @@ from paf_messages.msg import PafObstacleList, PafObstacle, PafTopDownViewPointSe
 
 
 class MaskPriority(IntEnum):
+    """Mask layer order. Must be continuous, the highest value is drawn last"""
+
     VEH_OBSTACLES = 12
     PED_OBSTACLES = 11
     PEDESTRIANS = 10
@@ -38,13 +40,19 @@ class MaskPriority(IntEnum):
 
     @staticmethod
     def top_to_bottom():
+        """
+        Get list
+        :return:
+        """
         return list(MaskPriority)
 
     @staticmethod
     def bottom_to_top():
+        """Get reversed list"""
         return list(reversed(MaskPriority.top_to_bottom()))
 
 
+# COLORS DISPLAYED
 RGB_BY_MASK = {  # (red, green, blue)
     MaskPriority.PEDESTRIANS: RGB.VIOLET,
     MaskPriority.RED_LIGHTS: RGB.RED,
@@ -63,6 +71,8 @@ RGB_BY_MASK = {  # (red, green, blue)
 
 
 class TopDownView(BirdViewProducer):
+    """Extension of the pip package 'carla bird view'"""
+
     def __init__(
         self,
         client: carla.Client,
@@ -176,6 +186,10 @@ class TopDownView(BirdViewProducer):
             return cropped_masks[ordered_indices]
 
     def _get_line_sets_masks(self):
+        """
+        Calculate a black and white mask for all lines in dict and return it
+        :return:
+        """
         lines_masks = []
         vals = list(self.line_sets.values())
         for line_set in vals:
@@ -190,6 +204,10 @@ class TopDownView(BirdViewProducer):
         return lines_masks
 
     def _get_pts_sets_masks(self):
+        """
+        Calculate a black and white mask for all point-sets in dict and return it
+        :return:
+        """
         pts_masks = []
         vals = list(self.point_sets.values())
         for point_set in vals:
@@ -223,7 +241,7 @@ class TopDownView(BirdViewProducer):
 
         # same as super class below
         crop_with_car_in_the_center = masks
-        masks_n, h, w = crop_with_car_in_the_center.shape
+        _, h, w = crop_with_car_in_the_center.shape
         rotation_center = Coord(x=w // 2, y=h // 2)
         crop_with_centered_car = np.transpose(crop_with_car_in_the_center, axes=(1, 2, 0))
         rotated = rotate(crop_with_centered_car, angle, center=rotation_center)

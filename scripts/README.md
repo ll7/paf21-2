@@ -7,6 +7,8 @@ Starts CARLA and the main launcher in two new terminals.
 bash scripts/runscript.sh TownXX [--build/-b] [--skip-carla-restart/-scr] [--npcs/-n] [--low-quality/-lq] [--manual-control/-mc] [--no-rules/-nr] [--validation/-val]
 ```
 
+Tensorboard kann mit `tensorboard.sh` gestartet werden.
+
 ### Build Script
 
 Builds the whole project (optional rosdep update and clean build)
