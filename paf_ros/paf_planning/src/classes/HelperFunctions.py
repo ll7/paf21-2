@@ -36,7 +36,7 @@ def dist(
     return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
 
-def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray]) -> List[Point2D]:
+def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray, List[np.ndarray]]) -> List[Point2D]:
     """
     Convert list of point tuples to list of point objects
     :param xy_list: list of tuples
@@ -196,7 +196,7 @@ def sparse_list_from_dense_pts(pts: np.ndarray, num_pts: int, distances: List[fl
     return path
 
 
-def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Union[Point2D, Tuple[float, float]]) -> List[int]:
+def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Union[Point2D, Tuple[float, float], Any]) -> List[int]:
     """
     find closest lanelets in network to a point (many possible on intersections)
     :param lanelet_network: current commonroad network
@@ -218,6 +218,12 @@ def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Union[Point2D, Tupl
 
 
 def on_bridge(pos: Point, lanelet_network: LaneletNetwork):
+    """
+    Calculates, if a 3D-Point is on a bridge based on height and position on the Commonroad Lanelet Network
+    :param pos: search point (x,y,z)
+    :param lanelet_network: current cr-network
+    :return: true if car is on a bridge or False
+    """
     if -2 < pos.z < 2:
         return False
     closest_lanelets = find_closest_lanelet(lanelet_network, pos)

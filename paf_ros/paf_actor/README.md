@@ -23,7 +23,7 @@ With these values, the actor calculates the optimal steering behaviour by using 
 
 These calculations occure every time and are send to Carla via a CarlaEgoVehicleControl-Message.
 
-![Default Routine](../../docs/paf_actor/imgs/ActorDefaultRoutine.png)
+![Default Routine](../../docs/paf_actor/imgs/ActorDefaultRoutine.svg)
 
 ## Unstuck Routine
 
