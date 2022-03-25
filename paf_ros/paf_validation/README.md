@@ -5,9 +5,8 @@ Nodes dieses Packages werden mit dem Flag `--validation` bzw `-val` aktiviert.
 
 ## TopDownView
 
-Diese Node ist dafür verantwortlich, eine Live-Karte zu generieren, und diese für RVIZ bereitzustellen. Diese stellt die
-Karte inklusive aller CARLA-Aktoren, den globalen und lokalen Pfad und beliebige Debug-Punkte dar. Karte und
-Aktorpositionen sind der CARLA-Simulation selbst entnommen und können so leicht mit den Sensordaten verglichen werden.
+Diese Node ist dafür verantwortlich, eine Live-Karte zu generieren, und diese für RVIZ bereitzustellen. Diese stellt alle CARLA-Aktoren, den globalen und lokalen Pfad und beliebige Debug-Punkte dar. Karte und
+Aktor-Positionen sind der CARLA-Simulation selbst entnommen und können so leicht mit den Sensordaten verglichen werden.
 Die Implementierung basiert auf dem pip-paket `carla_birdeye_view`. Die Hauptklasse dieses Pakets `BirdViewProducer`
 wird in `classes/TopDownView.py` geerbt und erweitert.
 
@@ -37,7 +36,7 @@ Publisher:
 
 - `/paf/paf_validation/top_down_view` (`Image`) resultierendes Bild für RVIZ
 
-## ScoreCalculation
+## Score Calculation
 
 Die Score Calculation Node ist verantwortlich für Zeitmessung von Start- zu Zielpunkt und Erfassung von Fail-States.
 Dabei sind allerdings nicht alle Fail-States aus der Aufgabenstellung erfasst. Das Ergebnis wird nach dem stop-Kommando auf der Konsole ausgegeben und auf dem Tensorboard veröffentlicht.

@@ -180,6 +180,7 @@ Publisher:
   Zielgeschwindigkeit)
 - `/paf/paf_local_planner/activate_traffic_light_detection` (`Bool`)
 - `/paf/paf_validation/score/stop` (`Empty`) Scoreboard, beende aktuellen Lauf
+- `/paf/paf_global_planner/routing_response_tdv` (`PafLaneletRoute`) senden einer Leeren Route an TopDownView
 
 Aufgerufene Services:
 

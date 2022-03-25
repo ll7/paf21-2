@@ -84,6 +84,9 @@ class LocalPlanner:
         self._srv_global_reroute = "/paf/paf_local_planner/reroute"
         self._srv_global_random = "/paf/paf_local_planner/routing_request_random"
         self._srv_global_standard_loop = "/paf/paf_local_planner/routing_request_standard_loop"
+        self._tdv_routing_pub = rospy.Publisher(
+            "/paf/paf_global_planner/routing_response_tdv", PafLaneletRoute, queue_size=1
+        )
         self._speed_msg_publisher = rospy.Publisher("/paf/paf_validation/speed_text", PafSpeedMsg, queue_size=1)
         self._score_pub = rospy.Publisher("/paf/paf_validation/score/stop", Empty, queue_size=1)
         self._traffic_light_detector_toggle_pub = rospy.Publisher(
@@ -158,8 +161,8 @@ class LocalPlanner:
         self._publish_speed_msg()  # speed message on topdown view image
 
         # no LP and no GP: stop acting from driving
-        if len(self._global_path) == 0 or len(self._local_path) == 0:
-            rospy.loginfo_throttle(5, "[local planner] publishing empty path.")
+        if len(self._local_path) == 0:
+            rospy.loginfo_throttle(5, "[local planner] publishing empty path because lp or gp empty.")
             self._publish_local_path_msg(send_empty=True)
 
         # empty GP
@@ -173,6 +176,7 @@ class LocalPlanner:
             rospy.logwarn_throttle(5, "[local planner] end of route reached, end of route handling activated")
             self._reset_detected_signs()
             self._global_path = GlobalPath()
+            self._tdv_routing_pub.publish(PafLaneletRoute())
             self._local_path = LocalPath(self._global_path)
             self._emergency_break_pub.publish(Bool(True))
             self._end_of_route_handling(sleep=5)
@@ -294,7 +298,7 @@ class LocalPlanner:
 
         if and_publish:
             self._local_path.publish()
-            rospy.loginfo_throttle(5, "[local planner] publishing original path after clearing path")
+            rospy.loginfo_throttle(5, "[local planner] publishing original path after clearing path from signs")
 
     def _check_for_signs_on_path(self):
         """
@@ -540,12 +544,12 @@ class LocalPlanner:
         Handle end of route event: Stop score calculation, enable emergency break
         :param sleep:
         """
-        self._global_path = GlobalPath()
         self._score_pub.publish(Empty())
         if self._current_speed < 5 / 3.6:
             self._emergency_break_pub.publish(Bool(False))
 
         if rospy.get_param("/validation"):
+            self._global_path = GlobalPath()
             if self._current_speed < 0.01:
                 if sleep > 0:
                     rospy.sleep(sleep)

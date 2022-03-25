@@ -58,6 +58,7 @@ class GlobalPlanner:
         role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         rospy.Subscriber("/paf/paf_local_planner/routing_request", PafRoutingRequest, self._routing_provider_single)
+        rospy.Subscriber("/paf/paf_local_planner/reroute", Empty_msg, self._process_rerouting)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_provider)
         rospy.Subscriber("/paf/paf_local_planner/rules_enabled", Bool, self._change_rules, queue_size=1)
 
@@ -90,6 +91,9 @@ class GlobalPlanner:
             f"[global planner] Rules are now {'en' if msg.data else 'dis'}abled! "
             f"Speed limits will change after starting a new route."
         )
+
+    def _process_rerouting(self, _: Empty_msg):
+        self._routing_pub.publish(self._routing_provider_waypoints(reroute=True))
 
     def _reroute_provider(self, _: Empty_srv = None) -> PafRoutingServiceResponse:
         """
