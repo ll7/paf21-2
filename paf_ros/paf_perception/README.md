@@ -59,6 +59,24 @@ Bei der Initialisierung der `TrafficLightDetector`-Klasse werden unter Anderem d
 
 Die `FusionCamera` speichert die erhaltenen RGB- und Tiefenbilder gemeinsam mit deren Zeitstempeln ab. Sobald ein Bild der SegmentationCamera empfangen wird, matcht die FusionCamera dieses Bild mit den RGB- und Tiefenbildern, welche den geringsten zeitlichen Unterschied zum Segmentationbild aufweisen. Die synchronisierten Bilder werden an den `TrafficLightDetector` weitergegeben. Zuvor wird das Segmentationbild nach den gewünschten Tags gefiltert. Somit beinhaltet das Segmentationbild zu diesem Zeitpunkt nur noch die Bereiche des Bilds, in welchen eine Ampel zu sehen ist.
 
-![Ergebnis der Synchronisation der FusionCamera](../../docs/imgs/fusioncamera.JPG)
+<img src="../../docs/imgs/fusioncamera.JPG" width="400">
 
-Sobald der `TrafficLightDetector` neue Bilddaten empfängt, werden die einzelnen Bildausschnitte, welche Ampeln enthalten, extrahiert und klassifiziert, insofern die Detection aktiviert ist. Die Detection kann über das Topic `/paf/paf_local_planner/activate_traffic_light_detection` aktiviert oder deaktiviert werden. Für die Extraktion der Bildausschnitte wird der Canny-Algorithmus auf das Segmentationbild angewendet, wodurch Konturen im Bild erkannt werden. Für alle erkannten Konturen wird eine Bounding-Box erstellt und die entsprechende Bildbereiche des RGB- und Tiefenbildes werden ausgeschnitten. Über die Informationen des Tiefenbilds werden Ampeln mit einer Distanz von 100m oder mehr ausgeschlossen. Anschließend werden ein Label (`red`, `green`, `yellow` oder `back`) und eine zugehörige Confidence durch Auswertung des RGB-Bildausschnitts mithilfe des Klassifikationsnetzes ermittelt.
+Sobald der `TrafficLightDetector` neue Bilddaten empfängt, werden die einzelnen Bildausschnitte, welche Ampeln enthalten, extrahiert und klassifiziert, insofern die Detection aktiviert ist. Die Detection kann über das Topic `/paf/paf_local_planner/activate_traffic_light_detection` aktiviert oder deaktiviert werden. Für die Extraktion der Bildausschnitte wird der Canny-Algorithmus auf das Segmentationbild angewendet, wodurch Konturen im Bild erkannt werden. Für alle erkannten Konturen wird eine Bounding-Box erstellt und die entsprechende Bildbereiche des RGB- und Tiefenbildes werden ausgeschnitten. Über die Informationen des Tiefenbilds werden Ampeln mit einer Distanz von 100m oder mehr ausgeschlossen. Anschließend werden ein Label (`red`, `green`, `yellow` oder `back`) und eine zugehörige Confidence durch Auswertung des RGB-Bildausschnitts mithilfe des Klassifikationsnetzes ermittelt. Auf die erkannten Bildausschnitte wird daraufhin eine Non-maximum Suppression (NMS) angewendet, um einzelne erkannte Objekte aus sich überschneidenden Bounding-Boxes zu ermitteln. Abschließend wird für alle erkannten Ampeln, welche die minimale Confidence überschreiten, ein `DetectedObject` erstellt. Die DetectedObjects werden dann als `PafDetectedTrafficLights`-Message gepublisht. Das Ergebnis der Detection ist im nachfolgenden Bild dargestellt:
+
+![](../../docs/imgs/traffic_light_detection.JPG)
+
+### Problembehandlung in Town04:
+
+TODO
+
+### Problembehandlung in Town10HD:
+
+TODO
+
+### Hinweise zur Verwendung:
+
+TODO
+
+### Bekannte Probleme:
+
+TODO
