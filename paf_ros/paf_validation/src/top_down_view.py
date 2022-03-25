@@ -97,19 +97,19 @@ class TopDownRosNode(object):
         leftmost, rightmost lane and leftmost, rightmost target-lane
         :param msg: current route from paf_global_planner
         """
-        paths = [[] for _ in range(1)]
+        paths = [[] for _ in range(4)]
         section: PafRouteSection
         nan = 0
         for section in msg.sections:
             try:
                 point = section.points[section.target_lanes[0]]
                 paths[0].append([point.x, -point.y])
-                # point = section.points[section.target_lanes[-1]]
-                # paths[1].append([point.x, -point.y])
-                # point = section.points[0]
-                # paths[3].append([point.x, -point.y])
-                # point = section.points[-1]
-                # paths[4].append([point.x, -point.y])
+                point = section.points[section.target_lanes[-1]]
+                paths[1].append([point.x, -point.y])
+                point = section.points[0]
+                paths[3].append([point.x, -point.y])
+                point = section.points[-1]
+                paths[4].append([point.x, -point.y])
             except IndexError:
                 nan += 1
                 continue

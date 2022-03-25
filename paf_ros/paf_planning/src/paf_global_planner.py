@@ -53,6 +53,7 @@ class GlobalPlanner:
         self._waypoints = deque()
         self._standard_loop = MapManager.get_demo_route()
         self._rerouting_target = None
+        self._last_target = None
 
         rospy.init_node("paf_global_planner", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
@@ -222,16 +223,28 @@ class GlobalPlanner:
             for p in msgs.points:
                 self._waypoints.append(p)
 
+        if len(self._waypoints) >= 1:
+            self._last_target = self._waypoints[0]
+        elif reroute and self._last_target is not None:
+            self._waypoints.append(self._last_target)  # fixed issue: target is on current lanelet while routing.
+
         if position is None or yaw is None:
             try:
                 position, yaw = self._find_closest_position_on_lanelet_network()
-            except IndexError:
+            except Exception:
                 rospy.logerr_throttle(1, "[global planner] unable to find current lanelet")
                 return failure()
         if len(self._waypoints) == 0:
             if reroute:
-                rospy.logwarn_throttle(1, "[global planner] waypoints are empty, rerouting to random location...")
-                return self._routing_provider_random()
+                if not rospy.get_param("/validation"):
+                    rospy.loginfo_throttle(
+                        1,
+                        "[global planner] waypoints are empty, no reroute possible, " "waiting for routing request...",
+                    )
+                    return failure()
+                else:
+                    rospy.logwarn_throttle(1, "[global planner] waypoints are empty, rerouting to random location...")
+                    return self._routing_provider_random()
             else:
                 rospy.loginfo_throttle(1, "[global planner] route planning waiting for route input...")
                 return failure()

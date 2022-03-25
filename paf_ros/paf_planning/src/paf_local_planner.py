@@ -154,6 +154,15 @@ class LocalPlanner:
         """
         self._local_path.publish(send_empty=send_empty)
 
+    def _at_target(self):
+        """
+        Tests, if target is reached
+        :return:
+        """
+        if self._global_path.target is None:
+            return True
+        return dist(self._global_path.target, self._current_pose.position) <= self.END_OF_ROUTE_REACHED_DIST
+
     def _loop_handler(self):
         """
         Main Loop
@@ -161,25 +170,31 @@ class LocalPlanner:
         self._publish_speed_msg()  # speed message on topdown view image
 
         # no LP and no GP: stop acting from driving
-        if len(self._local_path) == 0:
-            rospy.loginfo_throttle(5, "[local planner] publishing empty path because lp or gp empty.")
+        if len(self._local_path) == 0 and len(self._global_path) == 0:
+            rospy.loginfo_throttle(5, "[local planner] publishing empty path because lp and gp empty.")
             self._publish_local_path_msg(send_empty=True)
 
         # empty GP
         if len(self._global_path) == 0:
-            rospy.logwarn_throttle(5, "[local planner] no route, end of route handling activated")
             self._reset_detected_signs()
-            self._end_of_route_handling()
+            if self._global_path.target is not None:
+                rospy.logwarn_throttle(5, "[local planner] no route, end of route handling activated")
+                self._end_of_route_handling(reroute=not self._at_target())
 
-        # end of GP
-        elif self._planner_at_end_of_global_path():
-            rospy.logwarn_throttle(5, "[local planner] end of route reached, end of route handling activated")
+        # at target
+        elif self._at_target():
+            rospy.logwarn_throttle(5, "[local planner] end of global path reached, end of route handling activated")
             self._reset_detected_signs()
             self._global_path = GlobalPath()
             self._tdv_routing_pub.publish(PafLaneletRoute())
             self._local_path = LocalPath(self._global_path)
             self._emergency_break_pub.publish(Bool(True))
             self._end_of_route_handling(sleep=5)
+
+        # end of GP
+        elif self._planner_at_end_of_global_path():
+            rospy.logwarn_throttle(5, "[local planner] end of route reached, rerouting..")
+            self._end_of_route_handling(reroute=True)
 
         # off route (reroute)
         elif not self._on_global_path():
@@ -439,11 +454,10 @@ class LocalPlanner:
         :return:
         """
         if len(self._global_path) == 0:
-            return False
+            return True
         return (
             len(self._global_path) > 0
-            and dist(self._global_path.target, self._current_pose.position) <= self.END_OF_ROUTE_REACHED_DIST
-            or dist(self._global_path.route.sections[-1].points[0], self._current_pose.position)
+            and dist(self._global_path.route.sections[-1].points[0], self._current_pose.position)
             <= self.END_OF_ROUTE_REACHED_DIST * 2
         )
 
@@ -539,7 +553,7 @@ class LocalPlanner:
             rospy.loginfo("[local planner] requesting new random global route")
             self._routing_service_call(self._srv_global_random)
 
-    def _end_of_route_handling(self, sleep=0):
+    def _end_of_route_handling(self, sleep=0, reroute=False):
         """
         Handle end of route event: Stop score calculation, enable emergency break
         :param sleep:
@@ -547,6 +561,8 @@ class LocalPlanner:
         self._score_pub.publish(Empty())
         if self._current_speed < 5 / 3.6:
             self._emergency_break_pub.publish(Bool(False))
+            if reroute:
+                self._send_global_reroute_request()
 
         if rospy.get_param("/validation"):
             self._global_path = GlobalPath()

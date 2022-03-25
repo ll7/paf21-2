@@ -52,7 +52,7 @@ class MapManager:
         else:
             map_file_path = "Maps/No Rules/" + map_file_name
         scenario, _ = CommonRoadFileReader(expanduser(f"~/.ros/{map_file_path}")).open()
-        # scenario.lanelet_network = MapManager.remove_u_turns(scenario.lanelet_network)
+        scenario.lanelet_network = MapManager.remove_u_turns(scenario.lanelet_network)
         return scenario
 
     @staticmethod

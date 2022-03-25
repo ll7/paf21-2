@@ -148,7 +148,11 @@ class LocalPath:
                 break
             idx0, distance = closest_index_of_point_list(self.message.points[last_idx:], p.point, accuracy)
             idx = idx0 + last_idx
-            match = self.message.points[idx]
+            try:
+                match = self.message.points[idx]
+            except IndexError:
+                rospy.logerr("[local planner] index error fetching sign information")
+                match = None
             if "LC" in p.type:  # lane changes
                 out.append((p, idx, distance, match))
                 continue

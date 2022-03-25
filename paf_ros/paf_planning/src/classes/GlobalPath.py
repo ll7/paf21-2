@@ -3,7 +3,7 @@ from collections import deque
 from warnings import catch_warnings
 
 import numpy as np
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 
 from commonroad.scenario.lanelet import LaneletNetwork
 from commonroad.scenario.traffic_sign import (
@@ -60,9 +60,15 @@ class GlobalPath:
             if not hasattr(target, "x"):
                 target = Point(*target) if len(target) == 3 else Point2D(*target)
             self.target = target if hasattr(target, "z") else Point(target.x, target.y, self.TARGET_Z)
+
+            if len(self.lanelet_ids) == 1:  # if target is on current lanelet, continue randomly forward, replan later
+                while len(self.lanelet_ids) <= 2:
+                    successors = self.lanelet_network.find_lanelet_by_id(self.lanelet_ids[-1]).successor
+                    self.lanelet_ids.append(np.random.choice(successors))
             self._adjacent_lanelets = self._calc_adjacent_lanelet_routes()
         else:
             self.route = PafLaneletRoute()
+            self.target = None
         self.signals_on_path = self.route.signals if self.route is not None else []
         if self.lanelet_network is None:
             self.lanelet_network = MapManager.get_current_scenario().lanelet_network
@@ -98,17 +104,22 @@ class GlobalPath:
 
     def get_section_and_lane_indices(
         self,
-        position: Point,
+        position: Optional[Point],
         not_found_threshold_meters: float = 100.0,
         min_section: int = None,
+        max_section: int = None,
     ) -> Tuple[int, int]:
         """
         Calculate the closest section and lane index on the global path
         :param position: searching position
         :param not_found_threshold_meters: (-1,-1) is returned if this distance is exceeded
         :param min_section: start search from this section forward
+        :param max_section: end search at this section forward
         :return: (section index, lane index)
         """
+        if position is None:
+            return -1, -1
+
         ref = (position.x, position.y)
 
         if not hasattr(position, "z"):
@@ -119,11 +130,17 @@ class GlobalPath:
 
         if min_section is None:
             min_section = self.sections_visited
+        if max_section is None:
+            max_section = len(self.route.sections) - 1
+        elif max_section < 0:
+            max_section = len(self.route.sections) - max_section
 
         car_on_bridge = on_bridge(position, self.lanelet_network)
 
         relevant = [
-            (i, s) for i, s in enumerate(self.route.sections) if car_on_bridge == s.on_bridge and i >= min_section
+            (i, s)
+            for i, s in enumerate(self.route.sections)
+            if car_on_bridge == s.on_bridge and min_section <= i <= max_section
         ]
         relevant_indices, relevant_sections = zip(*relevant)
 
