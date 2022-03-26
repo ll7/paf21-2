@@ -41,7 +41,10 @@ ZOOM_FACTOR = 1.2
 
 
 def _merge_dict(source, destination):
-    """deeply merges two dicts"""
+    """
+    deeply merges two dicts
+    PAF INFO: Source is CRDesigner, no changes.
+    """
     for key, value in source.items():
         if isinstance(value, dict):
             # get node or create one
@@ -53,10 +56,13 @@ def _merge_dict(source, destination):
 
 
 class DynamicCanvas(FigureCanvas):
-    """this canvas provides zoom with the mouse wheel"""
+    """
+    this canvas provides zoom with the mouse wheel
+    PAF INFO: Source is CRDesigner, no changes.
+    """
 
     def __init__(self, parent=None, width=5, height=5, dpi=100):
-
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.ax = None
         self.drawer = Figure(figsize=(width, height), dpi=dpi)
         self.rnd = MPRenderer(ax=self.ax)
@@ -121,7 +127,7 @@ class DynamicCanvas(FigureCanvas):
         self.clear_axes()
 
     def clear_axes(self, keep_limits=False, clear_artists=False):
-        """ """
+        """PAF INFO: Source is CRDesigner, no changes."""
         if clear_artists:
             self.rnd.clear()
 
@@ -140,26 +146,36 @@ class DynamicCanvas(FigureCanvas):
 
     def get_axes(self):
         """Gives the plots Axes
+        PAF INFO: Source is CRDesigner, no changes.
 
         :return: matplotlib axis
         """
         return self.ax
 
     def get_limits(self) -> List[float]:
-        """return the current limits of the canvas"""
+        """
+        return the current limits of the canvas
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         x_lim = self.ax.get_xlim()
         y_lim = self.ax.get_ylim()
         return [x_lim[0], x_lim[1], y_lim[0], y_lim[1]]
 
     def update_plot(self, limits: List[float] = None):
-        """draw the canvas. optional with new limits"""
+        """
+        draw the canvas. optional with new limits
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         if limits:
             self.ax.set(xlim=limits[0:2])
             self.ax.set(ylim=limits[2:4])
         self.draw_idle()
 
     def zoom(self, event):
-        """zoom in / out function in GUI by using mouse wheel"""
+        """
+        zoom in / out function in GUI by using mouse wheel
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         x_min, x_max = self.ax.get_xlim()
         y_min, y_max = self.ax.get_ylim()
         center = ((x_min + x_max) / 2, (y_min + y_max) / 2)
@@ -211,6 +227,7 @@ class DynamicCanvas(FigureCanvas):
         draw_dynamic_only=False,
     ):
         """[summary]
+        PAF INFO: Source is CRDesigner, no changes.
 
         :param scenario: [description]
         :param pps: PlanningProblemSet of the scenario,defaults to None
@@ -255,6 +272,7 @@ class DynamicCanvas(FigureCanvas):
     def update_obstacles(self, scenario: Scenario, draw_params=None, plot_limits=None):
         """
         Redraw only the dynamic obstacles. This gives a large performance boost, when playing an animation
+        PAF INFO: Source is CRDesigner, no changes.
 
         :param scenario: The scenario containing the dynamic obstacles
         :param draw_params: CommonRoad DrawParams for visualization
@@ -278,6 +296,7 @@ class DynamicCanvas(FigureCanvas):
 
 
 def draw_lanelet_polygon(lanelet, ax, color, alpha, zorder, label) -> Tuple[float, float, float, float]:
+    """PAF INFO: Source is CRDesigner, no changes."""
     # TODO efficiency
     verts = []
     codes = [Path.MOVETO]
@@ -317,8 +336,9 @@ def draw_lanelet_polygon(lanelet, ax, color, alpha, zorder, label) -> Tuple[floa
 
 
 class AnimatedViewer:
+    """PAF INFO: Source is CRDesigner"""
     def __init__(self, parent, callback_function):
-
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.current_scenario = None
         self.current_pps = None
         self.dynamic = DynamicCanvas(parent, width=5, height=10, dpi=100)
@@ -340,6 +360,7 @@ class AnimatedViewer:
         self, scenario: Scenario, config: Observable = None, planning_problem_set: PlanningProblemSet = None
     ):
         """[summary]
+        PAF INFO: Source is CRDesigner, no changes.
 
         :param scenario: [description]
         :type scenario: [type]
@@ -370,6 +391,7 @@ class AnimatedViewer:
         self.update_plot(focus_on_network=True, clear_artists=True)
 
     def _init_animation(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         if not self.current_scenario:
             return
 
@@ -423,7 +445,10 @@ class AnimatedViewer:
         self.animation = FuncAnimation(self.dynamic.figure, draw_frame, blit=False, interval=interval, repeat=True)
 
     def play(self):
-        """plays the animation if existing"""
+        """
+        plays the animation if existing
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         if not self.animation:
             self._init_animation()
 
@@ -431,7 +456,10 @@ class AnimatedViewer:
         self.animation.event_source.start()
 
     def pause(self):
-        """pauses the animation if playing"""
+        """
+        pauses the animation if playing
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         if not self.animation:
             self._init_animation()
             return
@@ -439,7 +467,10 @@ class AnimatedViewer:
         self.animation.event_source.stop()
 
     def set_timestep(self, timestep: int):
-        """sets the animation to the current timestep"""
+        """
+        sets the animation to the current timestep
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         print("set timestep: ", timestep)
         if not self.animation:
             self._init_animation()
@@ -448,6 +479,7 @@ class AnimatedViewer:
         self.time_step.silent_set(timestep)
 
     def save_animation(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         path, _ = QFileDialog.getSaveFileName(
             caption="QFileDialog.getSaveFileName()",
             directory=self.current_scenario.scenario_id.__str__() + ".mp4",
@@ -477,7 +509,10 @@ class AnimatedViewer:
             return
 
     def _calc_max_timestep(self):
-        """calculate maximal time step of current scenario"""
+        """
+        calculate maximal time step of current scenario
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         if self.current_scenario is None:
             return 0
         timesteps = [
@@ -490,6 +525,7 @@ class AnimatedViewer:
         """
         Select lanelets by clicking on the canvas. Selects only one of the
         lanelets that contains the click position.
+        PAF INFO: Source is CRDesigner, changes were made to enable console output of clicked lights/signs.
         """
         mouse_pos = np.array([mouse_clicked_event.xdata, mouse_clicked_event.ydata])
         click_shape = Circle(radius=0.01, center=mouse_pos)
@@ -569,6 +605,7 @@ class AnimatedViewer:
         clear_artists=False,
     ):
         """Update the plot accordinly to the selection of scenario elements
+        PAF INFO: Source is CRDesigner, no changes.
         :param sel_lanelet: selected lanelet, defaults to None
         :param sel_intersection: selected intersection, defaults to None
         :param clear_artists: deletes artists from renderer (only required when opening new scenarios)
@@ -633,6 +670,7 @@ class AnimatedViewer:
     def get_paint_parameters(self, lanelet: Lanelet, selected_lanelet: Lanelet, selected_intersection: Intersection):
         """
         Return the parameters for painting a lanelet regarding the selected lanelet.
+        PAF INFO: Source is CRDesigner, no changes.
         """
 
         if selected_lanelet:
@@ -722,6 +760,7 @@ class AnimatedViewer:
         return color, alpha, zorder, label
 
     def draw_lanelet_vertices(self, lanelet, ax):
+        """PAF INFO: Source is CRDesigner, no changes."""
         ax.plot(
             [x for x, y in lanelet.left_vertices],
             [y for x, y in lanelet.left_vertices],
