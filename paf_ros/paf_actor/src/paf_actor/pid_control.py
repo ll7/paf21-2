@@ -1,3 +1,7 @@
+"""
+A file that describes the PID-Controller that is used to drive the vehicle forward
+inspired by: PSAF 2 WS 20/21 (Acting package)
+"""
 from collections import deque
 from typing import Deque
 

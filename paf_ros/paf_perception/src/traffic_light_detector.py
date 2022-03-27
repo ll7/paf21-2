@@ -23,9 +23,11 @@ from FusionCamera import FusionCamera, SegmentationTag
 class Labels(Enum):
     """
     Enum that stores the possible traffic light states
+    Source: PAF 2020/21 group 1 (AbstractDetector.py), adapted
     """
 
     def __init__(self, nr: int, label: str):
+        """Source: PAF 2020/21 group 1"""
         self._value_ = nr
         self._label = label
 
@@ -33,11 +35,14 @@ class Labels(Enum):
     def label_text(self) -> str:
         """
         Returns the label name
-        :return:
+        Source: PAF 2020/21 group 1
+
+        :return: Label name
         """
         return self._label
 
     def __str__(self):
+        """Source: PAF 2020/21 group 1"""
         return self.label_text
 
     TrafficLightUnknown = (20, "unknown")
@@ -51,6 +56,7 @@ class Labels(Enum):
 class DetectedObject:
     """
     Data class for detected elements
+    Source: PAF 2020/21 group 1 (AbstractDetector.py), adapted
     """
 
     def __init__(
@@ -64,6 +70,8 @@ class DetectedObject:
         confidence: float = 0.01,
     ):
         """
+        Source: PAF 2020/21 group 1
+
         :param x: relative x coord in image
         :param y: relative y coord in image
         :param height: relative height of bounding box
@@ -81,18 +89,22 @@ class DetectedObject:
         self.confidence = confidence
 
     def __str__(self):
+        """Source: PAF 2020/21 group 1"""
         return f"x={self.x},y={self.y},label={self.label}"
 
 
 class TrafficLightDetector:
     """
     Detector for traffic lights
+    Source: PAF 2020/21 group 1, altered and adapted
     """
 
     def __init__(self, use_gpu: bool = True):
         """
         Init the speed traffic light detector
-        :param role_name: the name of the vehicle to access the cameras
+        Source: PAF 2020/21 group 1, altered to be independet rosnode and
+        added functionalities (Publisher/Subscriber/(De-)Activation)
+
         :param use_gpu: whether the classification model should be loaded to the gpu
         """
 
@@ -103,8 +115,6 @@ class TrafficLightDetector:
                 self.map_name = rospy.get_param("/carla/town")
             except ConnectionRefusedError:
                 self.map_name = "Town03"
-
-        role_name = rospy.get_param("~role_name", "ego_vehicle")
 
         self.traffic_light_publisher: rospy.Publisher = rospy.Publisher(
             "/paf/paf_perception/detected_traffic_lights", PafDetectedTrafficLights, queue_size=1
@@ -168,12 +178,17 @@ class TrafficLightDetector:
         rospy.Subscriber(activation_topic, Bool, self._activation_toggled, queue_size=1)
 
         # init image source = combination of segmentation, rgb and depth camera
-        self.combinedCamera = FusionCamera(role_name=role_name, visible_tags={SegmentationTag.TrafficLight})
+        self.combinedCamera = FusionCamera(visible_tags={SegmentationTag.TrafficLight})
         self.combinedCamera.set_on_image_listener(self.__on_new_image_data)
 
         rospy.loginfo("[traffic light detector] initialization successful")
 
     def _activation_toggled(self, activate: Bool):
+        """
+        Turns traffic light detection on/off.
+
+        :param activate: Bool that determines whether detection is activated or deactivated.
+        """
         self.detection_activated = activate.data
         if activate.data:
             rospy.loginfo_throttle(10, "[traffic light detector] Detection activated")
@@ -183,6 +198,8 @@ class TrafficLightDetector:
     def __extract_label(self, image) -> Tuple[Labels, float]:
         """
         Analyze the given image of the traffic light and returns the corresponding label
+        Source: PAF 2020/21 group 1
+
         :param image: the important part of the camera image
         :return: the Label
         """
@@ -203,7 +220,11 @@ class TrafficLightDetector:
 
     def __on_new_image_data(self, time, segmentation_image, rgb_image, depth_image):
         """
-        Handles the new image data from the cameras
+        Handles the new image data from the cameras.
+        Detects and classifies traffic lights in the image and
+        publishes the results as PafDetectedTrafficLights-Message.
+        Source: PAF 2020/21 group 1, altered for (de-)activation, handling of town04 and town 10 and more.
+
         :param segmentation_image: the segmentation image
         :param rgb_image: the rgb image
         :param depth_image: the depth data
@@ -297,6 +318,7 @@ class TrafficLightDetector:
                         gray_masked = cv2.bitwise_and(crop_rgb_grayscale, crop_rgb_grayscale, mask=255 - full_mask)
                         colors = cv2.bitwise_and(crop_rgb_hsv, crop_rgb_hsv, mask=full_mask)
                         crop_rgb = cv2.cvtColor(gray_masked + colors, cv2.COLOR_HSV2RGB)
+                        # To display the various steps with the code below, the debug screen needs to be deactivated!
                         # cv2.imshow("crop_rgb_hsv", cv2.cvtColor(crop_rgb_hsv, cv2.COLOR_HSV2BGR))
                         # cv2.waitKey(1)
                         # cv2.imshow("full_mask", full_mask)
@@ -398,6 +420,8 @@ class TrafficLightDetector:
     def inform_listener(self, time_stamp, detected_list):
         """
         Informs all listeners about the new list of detected objects
+        Source: PAF 2020/21 group 1
+
         :param detected_list: the list of detected objects
         :param time_stamp: time stamp of the detection
         :return: None
@@ -408,6 +432,8 @@ class TrafficLightDetector:
     def set_on_detection_listener(self, func: Callable[[List[DetectedObject], rospy.Time], None]):
         """
         Set function to be called with detected objects
+        Source: PAF 2020/21 group 1
+
         :param func: the function
         :return: None
         """
@@ -422,6 +448,9 @@ class TrafficLightDetector:
 
 
 def debug_screen():
+    """
+    Source: PAF 2020/21 group 1, adapted
+    """
     from RGBCamera import RGBCamera
     from perception_util import show_image
 
@@ -465,6 +494,9 @@ def debug_screen():
 
 
 def dummy_detector():
+    """
+    Publishes dummy traffic light data
+    """
     try:
         dummy_i = 0
         publisher: rospy.Publisher = rospy.Publisher(
@@ -487,6 +519,9 @@ def dummy_detector():
 
 
 if __name__ == "__main__":
+    """
+    Source: PAF 2020/21 group 1, adapted
+    """
     rospy.init_node("traffic_light_detector", anonymous=True)
 
     detected_r: Optional[list] = None
