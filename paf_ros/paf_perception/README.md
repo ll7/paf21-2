@@ -1,3 +1,5 @@
+# Perception
+
 ## Credits:
 
 PSAF 2: WS 20/21 (perception package)
@@ -19,13 +21,7 @@ Launchers:
 - roslaunch paf_perception semantic_lidar.launch
 ```
 
-## TrafficLightDetector:
-
-Credits: psaf1 WS 20/21
-
-Benötigt PyTorch:
-"Ebenso muss pytorch entsprechen der Anleitung auf (Pytorch.org)[https://pytorch.org/] installiert werden. Dabei ist auf die lokal verwendete Treiberversion zu achten. Für eine optimale Nutzung wird eine Nvidia-Grafikarte in Verbindung mit dem ensprechenden Cuda-Treiber benötigt."
-(pip3 install torch==1.10.1+cu113 torchvision==0.11.2+cu113 torchaudio==0.10.1+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html)
+## TrafficLightDetection:
 
 ```
 Subscribed Topics:
@@ -37,3 +33,22 @@ Published Topics:
 Launchers:
 - roslaunch paf_perception traffic_light_detector.launch
 ```
+
+Die TrafficLightDetection dient dem Erkennen des Zustands von Ampeln. Die Kartendaten für den Modus mit Verkehrsregeln enthalten bereits alle Punkte, an welchen gegebenenfalls für eine Ampel angehalten werden muss. Die Aufgabe der Perception beschränkt sich somit auf das Filtern von Ampeln aus dem RGB-Kamera-Bild und das Klassifizieren dieser Ampeln. Stoplinien oder Ähnliches müssen für das korrekte Anhalten nicht erkannt werden. Die Komponenten der TrafficLightDetection wurden von Gruppe 1 des PAF 2020/21 übernommen, angepasst, vereinfacht und erweitert. Die Funktionalität basiert auf der Auswertung eines [ResNet18](https://pytorch.org/hub/pytorch_vision_resnet/)-Klassifikationsnetzes.
+
+**Hinweis**: Für die Klassifizierung wird PyTorch benötigt. Für die Installation kann das [\_setup_cuda_torch.sh-Skript](../../scripts/subscripts/_setup_cuda_torch.sh) ausgeführt werden. Alternativ kann PyTorch entsprechend der Anleitung auf [Pytorch.org](https://pytorch.org/) installiert werden. Dabei ist auf die lokal verwendete Treiberversion zu achten. Für eine optimale Nutzung wird eine Nvidia-Grafikkarte in Verbindung mit dem ensprechenden Cuda-Treiber benötigt.
+
+### Module:
+
+Die TrafficLightDetection setzt sich aus den folgenden Komponenten zusammen:
+
+- [DepthCamera.py](./src/DepthCamera.py): Subscriber auf das Bild der Tiefenkamera
+- [SegmentationCamera.py](./src/SegmentationCamera.py): Subscriber auf das Bild der Segmentationskamera, ermöglicht Filtern des Bilds nach den unterschiedlichen Tags
+- [RGBCamera.py](./src/RGBCamera.py): Subscriber auf das Bild der RGB-Kamera
+- [FusionCamera.py](./src/FusionCamera.py): Synchronisiert die Bilder der zuvor genannten Kameras
+- [traffic_light_detector.py](./src/traffic_light_detector.py): Verwendet die Daten der FusionCamera, um Ampeln und deren Zustände zu erkennen
+- [perception_util.py](./src/perception_util.py): Hilfsfunktion für Bildanzeige
+
+Der Zusammenhang der Module ist in nachfolgendem Diagramm veranschaulicht:
+
+![]()

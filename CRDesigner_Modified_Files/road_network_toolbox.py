@@ -23,7 +23,11 @@ if SUMO_AVAILABLE:
 
 
 class RoadNetworkToolbox(QDockWidget):
+    """
+    Source is CRDesigner, functionality for lanelet editor widget has been added for PAF 2021/22.
+    """
     def __init__(self, current_scenario: Scenario, text_browser, callback, tmp_folder: str, selection_changed_callback):
+        """PAF INFO: Source is CRDesigner, added initializations for lanelet editor widget"""
         super().__init__("Road Network Toolbox")
         self.road_network_toolbox = RoadNetworkToolboxUI()
         self.adjust_ui()
@@ -50,7 +54,10 @@ class RoadNetworkToolbox(QDockWidget):
         self.highest_lanelet_id = -1
 
     def adjust_ui(self):
-        """Updates GUI properties like width, etc."""
+        """
+        Updates GUI properties like width, etc.
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         self.setFloating(True)
         self.setFeatures(QDockWidget.AllDockWidgetFeatures)
         self.setAllowedAreas(Qt.LeftDockWidgetArea)
@@ -58,6 +65,7 @@ class RoadNetworkToolbox(QDockWidget):
         self.road_network_toolbox.setMinimumWidth(375)
 
     def connect_gui_elements(self):
+        """PAF INFO: Source is CRDesigner, added connects for lanelet editor widget"""
         self.initialized = False
         self.road_network_toolbox.button_add_lanelet.clicked.connect(lambda: self.add_lanelet())
         self.road_network_toolbox.button_update_lanelet.clicked.connect(lambda: self.update_lanelet())
@@ -117,17 +125,20 @@ class RoadNetworkToolbox(QDockWidget):
         )
 
     def refresh_toolbox(self, scenario: Scenario):
+        """PAF INFO: Source is CRDesigner, no changes."""
         self.current_scenario = scenario
         # refresh toolboxes based on the scenario
         self.set_default_road_network_list_information()
 
     def lanelet_selection_changed(self):
+        """PAF INFO: Source is CRDesigner, no changes."""
         selected_lanelet = self.selected_lanelet()
         if selected_lanelet is not None:
             self.selection_changed_callback(sel_lanelet=selected_lanelet)
             self.update_lanelet_information(selected_lanelet)
 
     def initialize_toolbox(self):
+        """PAF INFO: Source is CRDesigner, added lanelet editor initialization"""
         self.initialize_lanelet_information()
         self.initialize_traffic_light_information()
         self.initialize_intersection_information()
@@ -139,8 +150,9 @@ class RoadNetworkToolbox(QDockWidget):
     def get_x_position_lanelet_start(self) -> float:
         """
         Extracts lanelet x-position of first center vertex.
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @return: x-position [m]
+        :return: x-position [m]
         """
         if self.road_network_toolbox.x_position_lanelet_start.text():
             return float(self.road_network_toolbox.x_position_lanelet_start.text())
@@ -150,8 +162,9 @@ class RoadNetworkToolbox(QDockWidget):
     def get_y_position_lanelet_start(self) -> float:
         """
         Extracts lanelet y-position of first center vertex.
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @return: y-position [m]
+        :return: y-position [m]
         """
         if self.road_network_toolbox.y_position_lanelet_start.text():
             return float(self.road_network_toolbox.y_position_lanelet_start.text())
@@ -161,7 +174,9 @@ class RoadNetworkToolbox(QDockWidget):
     def collect_lanelet_ids(self) -> List[int]:
         """
         Collects IDs of all lanelets within a CommonRoad scenario.
-        @return: List of lanelet IDs.
+        PAF INFO: Source is CRDesigner, no changes.
+
+        :return: List of lanelet IDs.
         """
         if self.current_scenario is not None:
             return sorted([la.lanelet_id for la in self.current_scenario.lanelet_network.lanelets])
@@ -171,7 +186,9 @@ class RoadNetworkToolbox(QDockWidget):
     def collect_traffic_sign_ids(self) -> List[int]:
         """
         Collects IDs of all traffic signs within a CommonRoad scenario.
-        @return: List of traffic sign IDs.
+        PAF INFO: Source is CRDesigner, no changes.
+
+        :return: List of traffic sign IDs.
         """
         if self.current_scenario is not None:
             return sorted([ts.traffic_sign_id for ts in self.current_scenario.lanelet_network.traffic_signs])
@@ -180,7 +197,9 @@ class RoadNetworkToolbox(QDockWidget):
     def collect_traffic_light_ids(self) -> List[int]:
         """
         Collects IDs of all traffic lights within a CommonRoad scenario.
-        @return: List of traffic light IDs.
+        PAF INFO: Source is CRDesigner, no changes.
+
+        :return: List of traffic light IDs.
         """
         if self.current_scenario is not None:
             return sorted([tl.traffic_light_id for tl in self.current_scenario.lanelet_network.traffic_lights])
@@ -189,7 +208,9 @@ class RoadNetworkToolbox(QDockWidget):
     def collect_intersection_ids(self) -> List[int]:
         """
         Collects IDs of all intersection within a CommonRoad scenario.
-        @return: List of intersection IDs.
+        PAF INFO: Source is CRDesigner, no changes.
+
+        :return: List of intersection IDs.
         """
         if self.current_scenario is not None:
             return sorted([inter.intersection_id for inter in self.current_scenario.lanelet_network.intersections])
@@ -198,7 +219,9 @@ class RoadNetworkToolbox(QDockWidget):
     def collect_incoming_lanelet_ids_from_intersection(self) -> List[int]:
         """
         Collects IDs of all incoming lanelets of a given intersection.
-        @return: List of lanelet IDs.
+        PAF INFO: Source is CRDesigner, no changes.
+
+        :return: List of lanelet IDs.
         """
         lanelets = []
         if self.road_network_toolbox.selected_intersection.currentText() not in ["", "None"]:
@@ -211,6 +234,7 @@ class RoadNetworkToolbox(QDockWidget):
     def initialize_lanelet_information(self):
         """
         Initializes lanelet GUI elements with lanelet information.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         self.road_network_toolbox.x_position_lanelet_start.setText("0.0")
         self.road_network_toolbox.y_position_lanelet_start.setText("0.0")
@@ -225,6 +249,7 @@ class RoadNetworkToolbox(QDockWidget):
     def initialize_traffic_sign_information(self):
         """
         Initializes traffic sign GUI elements with traffic sign information.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         self.road_network_toolbox.x_position_traffic_sign.setText("0.0")
         self.road_network_toolbox.y_position_traffic_sign.setText("0.0")
@@ -232,6 +257,7 @@ class RoadNetworkToolbox(QDockWidget):
     def initialize_traffic_light_information(self):
         """
         Initializes traffic light GUI elements with traffic light information.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         self.road_network_toolbox.x_position_traffic_light.setText("0.0")
         self.road_network_toolbox.y_position_traffic_light.setText("0.0")
@@ -246,6 +272,7 @@ class RoadNetworkToolbox(QDockWidget):
     def initialize_intersection_information(self):
         """
         Initializes GUI elements with intersection information.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         self.road_network_toolbox.intersection_diameter.setText("10")
         self.road_network_toolbox.intersection_lanelet_width.setText("3.0")
@@ -254,6 +281,7 @@ class RoadNetworkToolbox(QDockWidget):
     def initialize_lanelet_editor_information(self):
         """
         Initializes GUI elements with lanelet editor information.
+        Added for PAF 2021/22.
         """
         self.road_network_toolbox.x_position_split.setText("0.0")
         self.road_network_toolbox.y_position_split.setText("0.0")
@@ -262,6 +290,7 @@ class RoadNetworkToolbox(QDockWidget):
     def set_default_road_network_list_information(self):
         """
         Initializes Combobox GUI elements with lanelet information.
+        PAF INFO: Source is CRDesigner, added functionality for split tool.
         """
         self.update = True
         self.road_network_toolbox.predecessors.clear()
@@ -377,11 +406,12 @@ class RoadNetworkToolbox(QDockWidget):
     ):
         """
         Adds a lanelet to the scenario based on the selected parameters by the user.
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @param lanelet_id: Id which the new lanelet should have.
-        @param update: Boolean indicating whether lanelet is updated or newly created.
-        @param left_vertices: Left boundary of lanelet which should be updated.
-        @param right_vertices: Right boundary of lanelet which should be updated.
+        :param lanelet_id: Id which the new lanelet should have.
+        :param update: Boolean indicating whether lanelet is updated or newly created.
+        :param left_vertices: Left boundary of lanelet which should be updated.
+        :param right_vertices: Right boundary of lanelet which should be updated.
         """
         if self.current_scenario is None:
             self.text_browser.append("Please create first a new scenario.")
@@ -565,7 +595,9 @@ class RoadNetworkToolbox(QDockWidget):
     def selected_lanelet(self) -> Union[Lanelet, None]:
         """
         Extracts the selected lanelet one
-        @return: Selected lanelet object.
+        PAF INFO: Source is CRDesigner, no changes.
+
+        :return: Selected lanelet object.
         """
         if not self.initialized:
             return
@@ -584,6 +616,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_lanelet(self):
         """
         Updates a given lanelet based on the information configured by the user.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         selected_lanelet = self.selected_lanelet()
         if selected_lanelet is None:
@@ -632,8 +665,9 @@ class RoadNetworkToolbox(QDockWidget):
     def update_lanelet_information(self, lanelet: Lanelet = None):
         """
         Updates properties of a selected lanelet.
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @param lanelet: Currently selected lanelet.
+        :param lanelet: Currently selected lanelet.
         """
         self.road_network_toolbox.x_position_lanelet_start.setText(str(lanelet.center_vertices[0][0]))
         self.road_network_toolbox.y_position_lanelet_start.setText(str(lanelet.center_vertices[0][1]))
@@ -690,6 +724,7 @@ class RoadNetworkToolbox(QDockWidget):
     def create_adjacent(self):
         """
         Create adjacent lanelet given a selected lanelet
+        PAF INFO: Source is CRDesigner, no changes.
         """
         selected_lanelet = self.selected_lanelet()
         if selected_lanelet is None:
@@ -791,6 +826,7 @@ class RoadNetworkToolbox(QDockWidget):
     def remove_lanelet(self):
         """
         Removes a selected lanelet from the scenario.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         selected_lanelet = self.selected_lanelet()
         if selected_lanelet is None:
@@ -807,6 +843,7 @@ class RoadNetworkToolbox(QDockWidget):
     def add_four_way_intersection(self):
         """
         Adds a four-way intersection to the scenario.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -841,6 +878,7 @@ class RoadNetworkToolbox(QDockWidget):
     def add_three_way_intersection(self):
         """
         Adds a three-way intersection to the scenario.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -875,6 +913,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_incomings(self):
         """
         Updates incoming table information.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         selected_intersection = self.current_scenario.lanelet_network.find_intersection_by_id(
             int(self.road_network_toolbox.selected_intersection.currentText())
@@ -886,6 +925,7 @@ class RoadNetworkToolbox(QDockWidget):
         """
         Adds traffic sign element to traffic sign.
         Only a default entry is created the user has to specify the traffic sign ID manually afterward.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -907,6 +947,7 @@ class RoadNetworkToolbox(QDockWidget):
     def remove_traffic_sign_element(self):
         """
         Removes last entry in traffic sign element table of a traffic sign.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         num_rows = self.road_network_toolbox.traffic_sign_element_table.rowCount()
         self.road_network_toolbox.traffic_sign_element_table.removeRow(num_rows - 1)
@@ -914,8 +955,9 @@ class RoadNetworkToolbox(QDockWidget):
     def add_traffic_sign(self, traffic_sign_id: int = None):
         """
         Adds a traffic sign to a CommonRoad scenario.
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @param traffic_sign_id: Id which the new traffic sign should have.
+        :param traffic_sign_id: Id which the new traffic sign should have.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -961,6 +1003,7 @@ class RoadNetworkToolbox(QDockWidget):
     def remove_traffic_sign(self):
         """
         Removes selected traffic sign from scenario.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -977,6 +1020,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_traffic_sign(self):
         """
         Updates information of selected traffic sign.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -994,6 +1038,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_traffic_sign_information(self):
         """
         Updates information of traffic sign widget based on traffic sign ID selected by the user.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.road_network_toolbox.selected_traffic_sign.currentText() not in ["", "None"]:
             country_signs = globals()[
@@ -1034,8 +1079,9 @@ class RoadNetworkToolbox(QDockWidget):
     def add_traffic_light(self, traffic_light_id: int = None):
         """
         Adds a new traffic light to the scenario based on the user selection.
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @param traffic_light_id: Id which the new traffic sign should have.
+        :param traffic_light_id: Id which the new traffic sign should have.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -1096,6 +1142,7 @@ class RoadNetworkToolbox(QDockWidget):
     def remove_traffic_light(self):
         """
         Removes a traffic light from the scenario.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -1112,6 +1159,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_traffic_light(self):
         """
         Updates a traffic light from the scenario based on the user selection.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -1129,6 +1177,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_traffic_light_information(self):
         """
         Updates information of traffic light widget based on traffic light ID selected by the user.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.road_network_toolbox.selected_traffic_light.currentText() not in ["", "None"]:
             selected_traffic_light_id = int(self.road_network_toolbox.selected_traffic_light.currentText())
@@ -1169,6 +1218,9 @@ class RoadNetworkToolbox(QDockWidget):
             self.road_network_toolbox.referenced_lanelets_traffic_light.set_checked_items(referenced_lanelets)
 
     def create_traffic_lights(self):
+        """
+        PAF INFO: Source is CRDesigner, no changes.
+        """
         if not SUMO_AVAILABLE:
             self.text_browser.append("SUMO is not installed correctly!")
             return
@@ -1218,9 +1270,10 @@ class RoadNetworkToolbox(QDockWidget):
         """
         Adds a row to the intersection incoming table.
         Only a default entry is created the user has to specify the incoming afterward manually.
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @param new_incoming: Boolean indicating whether this will be an new incoming or from a new intersection
-        @param incoming_ids: List of available incoming IDs.
+        :param new_incoming: Boolean indicating whether this will be an new incoming or from a new intersection
+        :param incoming_ids: List of available incoming IDs.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -1250,8 +1303,9 @@ class RoadNetworkToolbox(QDockWidget):
     def update_left_of_combobox(self, incoming_ids: List[str] = None):
         """
         Collects all incoming IDs in incoming table and updates left of combobox
+        PAF INFO: Source is CRDesigner, no changes.
 
-        @param incoming_ids: List of available incoming IDs.
+        :param incoming_ids: List of available incoming IDs.
         """
         if incoming_ids is None:
             incoming_ids = [
@@ -1275,6 +1329,7 @@ class RoadNetworkToolbox(QDockWidget):
     def remove_intersection(self):
         """
         Removes selected intersection from lanelet network.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -1290,6 +1345,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_intersection(self):
         """
         Updates a selected intersection from the scenario.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -1306,6 +1362,7 @@ class RoadNetworkToolbox(QDockWidget):
     def add_intersection(self, intersection_id: int = None):
         """
         Adds an intersection to the scenario.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.current_scenario is None:
             self.text_browser.append("_Warning:_ Create a new file")
@@ -1371,6 +1428,7 @@ class RoadNetworkToolbox(QDockWidget):
     def remove_incoming(self):
         """
         Removes a row from the intersection incoming table.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         num_rows = self.road_network_toolbox.intersection_incomings_table.rowCount()
         self.road_network_toolbox.intersection_incomings_table.removeRow(num_rows - 1)
@@ -1379,6 +1437,7 @@ class RoadNetworkToolbox(QDockWidget):
     def update_intersection_information(self):
         """
         Updates information of intersection widget based on intersection ID selected by the user.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if self.road_network_toolbox.selected_intersection.currentText() not in ["", "None"]:
             selected_intersection_id = int(self.road_network_toolbox.selected_intersection.currentText())
@@ -1422,6 +1481,7 @@ class RoadNetworkToolbox(QDockWidget):
     def connect_lanelets(self):
         """
         Connects two lanelets by adding a new lanelet using cubic spline interpolation.
+        PAF INFO: Source is CRDesigner, lanelet id generating method has been changed to our implementation.
         """
         selected_lanelet_one = self.selected_lanelet()
         if selected_lanelet_one is None:
@@ -1445,7 +1505,8 @@ class RoadNetworkToolbox(QDockWidget):
     def attach_to_other_lanelet(self):
         """
         Attaches a lanelet to another lanelet.
-        @return:
+        PAF INFO: Source is CRDesigner, no changes.
+        :return:
         """
         selected_lanelet_one = self.selected_lanelet()
         if selected_lanelet_one is None:
@@ -1464,6 +1525,7 @@ class RoadNetworkToolbox(QDockWidget):
     def rotate_lanelet(self):
         """
         Rotates lanelet by a user-defined angle.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         selected_lanelet_one = self.selected_lanelet()
         if selected_lanelet_one is None:
@@ -1477,6 +1539,7 @@ class RoadNetworkToolbox(QDockWidget):
     def translate_lanelet(self):
         """
         Translates lanelet by user-defined x- and y-values.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         selected_lanelet_one = self.selected_lanelet()
         if selected_lanelet_one is None:
@@ -1489,6 +1552,7 @@ class RoadNetworkToolbox(QDockWidget):
     def merge_with_successor(self):
         """
         Merges a lanelet with its successor. If several successors exist, a new lanelet is created for each successor.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         selected_lanelet_one = self.selected_lanelet()
         if selected_lanelet_one is None:
@@ -1511,6 +1575,7 @@ class RoadNetworkToolbox(QDockWidget):
     def fit_intersection(self):
         """
         Rotates and translates a complete intersection so that it is attached to a user-defined lanelet.
+        PAF INFO: Source is CRDesigner, no changes.
         """
         if (
             self.road_network_toolbox.selected_intersection.currentText() not in ["", "None"]
@@ -1532,6 +1597,10 @@ class RoadNetworkToolbox(QDockWidget):
             self.callback(self.current_scenario)
 
     def optimize_vertices(self):
+        """
+        Alters the center vertices for creating a new lanelet based on cubic bezier curves.
+        Added for PAF 2021/22.
+        """
         for i in range(3, len(self.center_vertices)):
             t1 = 1.0 / 3.0
             t2 = 2.0 / 3.0
@@ -1567,6 +1636,13 @@ class RoadNetworkToolbox(QDockWidget):
             self.center_vertices[i - 1] = [v2x, v2y]
 
     def update_create_lane_table(self, pos_x: float, pos_y: float):
+        """
+        Adds new center vertex to the table of center vertices in the lanelet editor widget.
+        Added for PAF 2021/22.
+
+        :param pos_x: X-Position of the new center vertex.
+        :param pos_y: Y-Position of the new center vertex.
+        """
         if self.road_network_toolbox.create_lanelet_vertices_click.isChecked():
             num_rows = self.road_network_toolbox.center_vertices_table.rowCount()
             x_pos = QLineEdit()
@@ -1586,6 +1662,10 @@ class RoadNetworkToolbox(QDockWidget):
             self.road_network_toolbox.center_vertices_table.resizeRowsToContents()
 
     def create_lanelet_from_vertices(self):
+        """
+        Creates new lanelet from the center vertices given by the table in the lanelet editor widget and adds the lanelet to the commonroad scenario.
+        Added for PAF 2021/22.
+        """
         num_vertices = self.road_network_toolbox.center_vertices_table.rowCount()
         if num_vertices < 2:
             print("Can't create lanelet: Not enough center vertices specified.")
@@ -1657,6 +1737,10 @@ class RoadNetworkToolbox(QDockWidget):
         self.callback(self.current_scenario)
 
     def remove_selected_vertex(self):
+        """
+        Removes the selected entry from the center vertices table of the lanelet editor widget.
+        Added for PAF 2021/22.
+        """
         sel_row = -1
         sel_row = self.road_network_toolbox.center_vertices_table.currentRow()
         if sel_row == -1:
@@ -1664,6 +1748,10 @@ class RoadNetworkToolbox(QDockWidget):
         self.road_network_toolbox.center_vertices_table.removeRow(sel_row)
 
     def split_selected_lanelet(self):
+        """
+        Splits the selected lanelet at the given position.
+        Added for PAF 2021/22.
+        """
         if self.road_network_toolbox.selected_lanelet_split.currentText() in ["", "None"]:
             return
         if self.road_network_toolbox.x_position_split.text() == "":
@@ -1683,6 +1771,20 @@ class RoadNetworkToolbox(QDockWidget):
         self.callback(self.current_scenario)
 
     def _split_lanelet_internal(self, lanelet_id: int, split_pos_x: float, split_pos_y: float) -> Tuple[int, int]:
+        """
+        Creates two new lanelets for the lanelet given by lanelet_id and adds them to the commonroad scenario.
+        Removes the lanelet given by lanelet_id from the commonroad scenario.
+        The first new lanelet reaches from the start of the original lanelet to the given position.
+        The second lanelet reaches from the given position to the end of the original lanelet.
+        Note: Code is taken from PAF 2020/21 group 1 and has been altered to fit our use case.
+        Added for PAF 2021/22.
+
+        :param lanelet_id: The id of the lanelet that will be split.
+        :param split_pos_x: The x-position of the point where the lanelet is split.
+        :param split_pos_y: The y-position of the point where the lanelet is split.
+
+        :return: A tuple containing the two new lanelet ids.
+        """
         self.neighbourhood = self._analyze_neighbourhood(self.current_scenario)
 
         id_lane_1 = self._get_new_lanelet_id()
@@ -1849,7 +1951,13 @@ class RoadNetworkToolbox(QDockWidget):
 
     def _split_lanelet(self, matching_lanelet_id: int, split_point_x: float, split_point_y: float):
         """
-        Splits a lanelet and it's neighbouring lanelets in half at a certain point and updates the reference graph
+        Splits a lanelet and all of it's neighbouring lanelets in half at a certain point.
+        Note: Code is taken from PAF 2020/21 group 1 and has been altered to fit our use case.
+        Added for PAF 2021/22.
+
+        :param matching_lanelet_id: The id of the lanelet that will be split.
+        :param split_point_x: The x-position of the point where the lanelet is split.
+        :param split_point_y: The y-position of the point where the lanelet is split.
         """
         # new neighbourhood
         right_1 = None
@@ -2019,8 +2127,10 @@ class RoadNetworkToolbox(QDockWidget):
 
     def _get_new_lanelet_id(self) -> int:
         """
-        generates new unique lanelet id
-        :return: new unique lanelet id
+        Generates new unique lanelet id.
+        Added for PAF 2021/22.
+
+        :return: New unique lanelet id
         """
         max_id = 0
         for lane in self.current_scenario.lanelet_network.lanelets:
@@ -2037,6 +2147,17 @@ class RoadNetworkToolbox(QDockWidget):
         return self.highest_lanelet_id
 
     def _find_closest_path_index(self, center_point_list: ndarray, point_x: float, point_y: float):
+        """
+        Finds the index of the element in center_point_list that is closest to the given point.
+        Source: PAF 2020/21 group 1
+        Added for PAF 2021/22.
+
+        :param center_point_list: A list of points.
+        :param point_x: X-Position of the point for which the closest index will be searched.
+        :param point_y: Y-Position of the point for which the closest index will be searched.
+
+        :return: The index of the closest element.
+        """
         min_dist = float("inf")
         min_index = 0
 
@@ -2053,10 +2174,12 @@ class RoadNetworkToolbox(QDockWidget):
 
     def _add_to_neighbourhood(self, lanelet_id: int, entry: list):
         """
-        Sets the given entry as the neighbourhood of the given lanelet
+        Sets the given entry as the neighbourhood of the given lanelet.
+        Source: PAF 2020/21 group 1
+        Added for PAF 2021/22.
+
         :param lanelet_id: id of the given lanelet
         :param entry: given entry of the neighbourhood dict
-        :return:
         """
         if len(entry) != 2:
             print("Invalid neighbourhood update!")
@@ -2064,10 +2187,13 @@ class RoadNetworkToolbox(QDockWidget):
 
     def _analyze_neighbourhood(self, scenario_map: Scenario) -> Dict:
         """
-        Analyze the neighbourhood of the given lanelet_network stored in the given map
-        Therefore creating a dict, which stores for every lanelet all lanelets that know their relationship
-        to the original lanelet
-        :param scenario_map: commonroads scenario file
+        Analyze the neighbourhood of the given lanelet_network stored in the given map.
+        Therefore creating a dict, which stores for every lanelet all lanelets that know their relationship to the original lanelet.
+        Source: PAF 2020/21 group 1
+        Added for PAF 2021/22.
+
+        :param scenario_map: Commonroad scenario
+        :return: Dict containing neighbourhood information
         """
         # init reference dict
         neighbourhood = {}

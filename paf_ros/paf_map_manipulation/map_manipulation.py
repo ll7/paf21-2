@@ -12,7 +12,16 @@ from commonroad.common.file_writer import CommonRoadFileWriter, OverwriteExistin
 
 
 class MapManipulator:
+    """
+    The purpose of this class is to load, alter and save commonroad scenario files.
+    How to manipulate a map: Implement your manipulation as a method in this class,
+    then load the scenario file, call the implemented method and save the xml file in the main()-function below.
+    """
+
     def __init__(self) -> None:
+        """
+        Initialize member variables here.
+        """
         self.scenario: Scenario = None
         self.inverse_scenario: Scenario = None
         self.bidirectional_scenario: Scenario = None
@@ -21,6 +30,9 @@ class MapManipulator:
         self.corresponding_lanelets_new_old = {}
 
     def generate_no_rules_map(self):
+        """
+        Loads a scenario, creates a bidirectional scenario from it and saves the bidirectional scenario as new file.
+        """
         self._load_scenario()
         self._delete_signs_and_lights()
         self._create_inverse_scenario()
@@ -29,9 +41,15 @@ class MapManipulator:
         self._generate_bidirectional_cr_file()
 
     def _load_scenario(self):
+        """
+        Loads a commonroad scenario from a .xml-file. Uses the MapManager-Class from the paf_planning package.
+        """
         self.scenario = MapManager.get_current_scenario(rules=False, map_name="Town03")
 
     def _generate_cr_file(self):
+        """
+        Saves the current scenario (self.scenario) as .xml-file in the directory given by self.save_path_prefix.
+        """
         if self.scenario is not None:
             map_file_path = self.save_path_prefix + "REM_" + "DEU_" + "Town03" + "-1_1_T-1.xml"
             writer = CommonRoadFileWriter(
@@ -48,6 +66,10 @@ class MapManipulator:
             rospy.logerr("MapManipulator: Error while generating XML-File: Scenario is None.")
 
     def _generate_inverse_cr_file(self):
+        """
+        Saves the current inverse scenario (self.inverse_scenario) as .xml-file in the
+        directory given by self.save_path_prefix.
+        """
         if self.scenario is not None:
             map_file_path = self.save_path_prefix + "INV_" + "DEU_" + rospy.get_param("/carla/town") + "-1_1_T-1.xml"
             writer = CommonRoadFileWriter(
@@ -64,6 +86,10 @@ class MapManipulator:
             rospy.logerr("MapManipulator: Error while generating XML-File: Scenario is None.")
 
     def _generate_bidirectional_cr_file(self):
+        """
+        Saves the current bidirectional scenario (self.bidirectional_scenario) as .xml-file in the
+        directory given by self.save_path_prefix.
+        """
         if self.scenario is not None:
             map_file_path = self.save_path_prefix + "BIDIR_" + "DEU_" + rospy.get_param("/carla/town") + "-1_1_T-1.xml"
             writer = CommonRoadFileWriter(
@@ -80,6 +106,9 @@ class MapManipulator:
             rospy.logerr("MapManipulator: Error while generating XML-File: Scenario is None.")
 
     def _delete_signs_and_lights(self):
+        """
+        Deletes all traffic signs and traffic lights from the current scenario (self.scenario).
+        """
         if self.scenario is not None:
             for sign in self.scenario.lanelet_network.traffic_signs:
                 self.scenario.lanelet_network.remove_traffic_sign(sign.traffic_sign_id)
@@ -92,6 +121,11 @@ class MapManipulator:
             rospy.logerr("MapManipulator: Error while deleting signs and lights: Scenario is None.")
 
     def _create_inverse_scenario(self):
+        """
+        Creates a scenario that is inverse to self.scenario by swapping successors, predecessors
+        and adjacent lanelets and inverting the left-, right- and center-vertices for every lanelet.
+        The inverse scenario is stored in self.inverse_scenario.
+        """
         if self.scenario is not None:
             rospy.loginfo("MapManipulator: Creating inverse scenario...")
             self._delete_signs_and_lights()
@@ -130,6 +164,10 @@ class MapManipulator:
             rospy.logerr("MapManipulator: Error while creating inverse scenario: Scenario is None.")
 
     def _create_bidirectional_scenario(self):
+        """
+        Creates bidirectional scenario by adding the lanelets of self.scenario and
+        self.inverse_scenario to self.bidirectional_scenario.
+        """
         if self.scenario is not None and self.inverse_scenario is not None:
             rospy.loginfo("MapManipulator: Creating bidirectional scenario...")
             self.bidirectional_scenario = Scenario(dt=self.scenario.dt)
@@ -146,6 +184,11 @@ class MapManipulator:
             )
 
     def _connect_normal_and_inverse_lanelets(self):
+        """
+        Connects the lanelets of the normal scenario with the lanelets of the
+        inverse scenario in self.bidirectional_scenario
+        by creating adjacence references between the normal and the inverse lanelets.
+        """
         if self.bidirectional_scenario is not None:
             rospy.loginfo("MapManipulator: Connecting normal and inverse lanelets...")
             for lane in self.scenario.lanelet_network.lanelets:
@@ -185,6 +228,12 @@ class MapManipulator:
             )
 
     def _get_max_id_of_lanelet_network(self, network: LaneletNetwork) -> int:
+        """
+        Finds and returns the highest lanelet id in a given lanelet network.
+
+        :param network: The LaneletNetwork for which the highest lanelet id will be searched.
+        :return: The id of the lanelet with the highest lanelet id in network.
+        """
         highest_id = 0
         for lane in network.lanelets:
             current_id = lane.lanelet_id
@@ -193,6 +242,11 @@ class MapManipulator:
         return highest_id
 
     def _change_lanelet_ids_of_inverse_scenario(self):
+        """
+        Assigns a new unique lanelet id to every lanelet in self.inverse_scenario that is not already taken by
+        a lanelet in self.bidirectional_scenario.
+        The old and the new id of every lanelet are being mapped onto each other in two maps and stored for later use.
+        """
         highest_id = self._get_max_id_of_lanelet_network(network=self.bidirectional_scenario.lanelet_network)
         for lane in self.inverse_scenario.lanelet_network.lanelets:
             old_id = lane.lanelet_id
@@ -203,6 +257,12 @@ class MapManipulator:
             self.corresponding_lanelets_new_old[new_id] = old_id
 
     def _update_lanelet_refs(self, old_lanelet_id, new_lanelet_id):
+        """
+        Changes all references of a lanelet_id in self.inverse_scenario to a new id.
+
+        :param old_lanelet_id: The lanelet id to be updated.
+        :param new_lanelet_id: The id the old lanelet id will be updated to.
+        """
         for lane in self.inverse_scenario.lanelet_network.lanelets:
             if old_lanelet_id in lane.predecessor:
                 lane.remove_predecessor(old_lanelet_id)
@@ -219,6 +279,10 @@ class MapManipulator:
                 lane._adj_right = new_lanelet_id
 
     def _remove_unconnected_refs(self):
+        """
+        Removes all wrong successor and predecessor references in self.scenario
+        by checking the distance between the first/last center-vertices.
+        """
         for lane in self.scenario.lanelet_network.lanelets:
             for succ in lane.successor:
                 successor = self.scenario.lanelet_network.find_lanelet_by_id(succ)
@@ -233,14 +297,19 @@ class MapManipulator:
 
 
 def main():
+    """
+    Function that will be executed if the python script is launched.
+    """
     manipulator = MapManipulator()
 
     manipulator._load_scenario()
-    manipulator._remove_unconnected_refs()
+    # Call your manipulation methods here
+
     manipulator._generate_cr_file()
 
 
 if __name__ == "__main__":
+    """Main function, calls main()."""
     try:
         main()
     except rospy.ROSInterruptException:

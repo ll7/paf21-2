@@ -9,11 +9,16 @@ from std_msgs.msg import Empty
 
 
 class ScoreCalculationNode:
+    """Calculation of penalty-scores and times for Validation"""
+
     EVENT_THRESHOLD_SECS = 2
     MIN_RUN_TIME = 15
     MAX_RUN_TIME = 300
 
     def __init__(self):
+        """
+        Init subscribers and node
+        """
         rospy.init_node("semantic_lidar", anonymous=True)
         role_name = rospy.get_param("~role_name", "ego_vehicle")
         self._running = False
@@ -25,28 +30,15 @@ class ScoreCalculationNode:
         rospy.Subscriber("/paf/paf_validation/score/start", Empty, self._start, queue_size=1)
         rospy.Subscriber("/paf/paf_validation/score/stop", Empty, self._stop, queue_size=1)
         rospy.Subscriber(f"carla/{role_name}/odometry", Odometry, self._odometry_updated, queue_size=1)
-
-        self._score_actor_collisions_pub = rospy.Publisher(
-            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
-        )
-        self._score_other_collisions_pub = rospy.Publisher(
-            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
-        )
-        self._score_red_traffic_light_pub = rospy.Publisher(
-            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
-        )
-        self._score_speed_limit_overridden_pub = rospy.Publisher(
-            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
-        )
-        self._score_wrong_side_of_road_pub = rospy.Publisher(
-            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
-        )
-        self._score_crossed_solid_line_pub = rospy.Publisher(
-            "/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1
-        )
-        self._score_total_pub = rospy.Publisher("/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1)
+        self._score_pub = rospy.Publisher("/paf/paf_validation/tensorboard/scalar", PafLogScalar, queue_size=1)
 
     def _start(self, _: Empty = None, init=False):
+        """
+        Start a timed run. Do nothing if already running.
+        :param _:
+        :param init: if false, run is resetting only to the current time (initialize variables)
+        :return:
+        """
         if self._running:
             return
         rospy.logerr("[score calculation] start recording")
@@ -62,7 +54,10 @@ class ScoreCalculationNode:
         self.crossed_solid_line = []
 
     def _odometry_updated(self, odo: Odometry):
-
+        """
+        Odometry update callback
+        :param odo: data
+        """
         current_speed = np.sqrt(
             odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
         )
@@ -73,21 +68,19 @@ class ScoreCalculationNode:
         self._last_odo_update = cur_time
 
     def _stop(self, _: Empty = None):
+        """
+        Stop run and print and publish results to log and tensorboard
+        :param _:
+        """
         if not self._running:
             return
         rospy.logerr("[score calculation] stop recording")
-        value, t = self._update_score(True)
+        self._update_score(True)
         self._running = False
-
-        # if self.MIN_RUN_TIME <= t <= self.MAX_RUN_TIME :
-        #     msg = PafLogScalar()
-        #     msg.section = "PENALTY standard loop"
-        #     msg.value = value
-        #     self._score_total_pub.publish(msg)
 
     def _update_score(self, verbose=False):
         """
-        Calculates the current score with the multipliers
+        Calculates the current score with the multipliers. Logs score/km
         """
 
         if not self._running:
@@ -128,14 +121,20 @@ class ScoreCalculationNode:
                 msg = PafLogScalar()
                 msg.section = "PENALTY total (time per km)"
                 msg.value = penalty_total / self._driven_distance * 1000
-                self._score_total_pub.publish(msg)
+                self._score_pub.publish(msg)
             except ZeroDivisionError:
                 pass
 
         return penalty_total, score_time
 
     @staticmethod
-    def _sec_format(secs, distance=None):
+    def _sec_format(secs: float, distance: float = None):
+        """
+        Format seconds to readable string
+        :param secs: number
+        :param distance: distance taken (optional)
+        :return: String
+        """
         if distance is None:
             s = int(secs) % 60
             m_int = int(secs // 60)
@@ -171,15 +170,26 @@ class ScoreCalculationNode:
 
     def _print(
         self,
-        score_time,
-        penalty_total,
-        score_collision_actor,
-        score_collision_other,
-        score_red_traffic_light,
-        score_wrong_side_of_road,
-        score_speed_limit,
-        score_crossed_line,
+        score_time: float,
+        penalty_total: float,
+        score_collision_actor: float,
+        score_collision_other: float,
+        score_red_traffic_light: float,
+        score_wrong_side_of_road: float,
+        score_speed_limit: float,
+        score_crossed_line: float,
     ):
+        """
+        Create a print statement (result)
+        :param score_time:
+        :param penalty_total:
+        :param score_collision_actor:
+        :param score_collision_other:
+        :param score_red_traffic_light:
+        :param score_wrong_side_of_road:
+        :param score_speed_limit:
+        :param score_crossed_line:
+        """
         score_time = self._sec_format(score_time, self._driven_distance)
         penalty_total = self._sec_format(penalty_total, self._driven_distance)
         rospy.logwarn(
@@ -191,13 +201,16 @@ class ScoreCalculationNode:
 
     @staticmethod
     def _cur_time():
+        """
+        Get current time stamp in seconds
+        :return:
+        """
         return rospy.get_time()
-        # self._world.wait_for_tick(1).timestamp.elapsed_seconds  # todo wait for tick retrieves a carla snapshot
 
     def _process_collision(self, msg: CarlaCollisionEvent):
         """
         Processes a CarlaCollisionEvent. Repeated events are ignored if within the threshold time.
-        :param msg:
+        :param msg: event
         """
 
         if not self._running:
@@ -229,7 +242,7 @@ class ScoreCalculationNode:
                 try:
                     msgout.value = len(self.other_collisions) / self._driven_distance * 1000
                     msgout.section += "environment collision (count per km)"
-                    self._score_other_collisions_pub.publish(msgout)
+                    self._score_pub.publish(msgout)
                 except ZeroDivisionError:
                     pass
             else:
@@ -238,7 +251,7 @@ class ScoreCalculationNode:
                 try:
                     msgout.value = len(self.actor_collisions) / self._driven_distance * 1000
                     msgout.section += "actor collision (count per km)"
-                    self._score_actor_collisions_pub.publish(msgout)
+                    self._score_pub.publish(msgout)
                 except ZeroDivisionError:
                     pass
             self._update_score()
@@ -247,7 +260,7 @@ class ScoreCalculationNode:
         """
         Processes a CarlaLaneInvasionEvent. Repeated events are ignored if within the threshold time.
         Other line types than solid lines will be discarded
-        :param msg:
+        :param msg: event
         """
 
         if not self._running:
@@ -270,13 +283,16 @@ class ScoreCalculationNode:
         msg.section = "PENALTY line crossed (count per km)"
         try:
             msg.value = len(self.crossed_solid_line) / self._driven_distance * 1000
-            self._score_crossed_solid_line_pub.publish(msg)
+            self._score_pub.publish(msg)
         except ZeroDivisionError:
             pass
         rospy.logerr(f"[score calculation] Crossed solid line ({self._driven_distance:.1f}m)")
 
     @staticmethod
     def start():
+        """
+        Start node
+        """
         rospy.spin()
 
 
