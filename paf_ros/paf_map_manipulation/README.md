@@ -11,8 +11,6 @@ Das Python-Skript `map_manipulation.py` aus diesem Package dient der (automatisi
 3. Anpassen der `_generate_cr_file`-Methode, sodass die Karte mit gewünschtem Dateinamen abgespeichert wird.
 4. In Methode `main()`: MapManipulator-Objekt generieren, Szenario laden, Methoden zur Anpassung aufrufen, Szenario abspeichern.
 5. Skript ausführen.
-6. ...
-7. Profit.
 
 ## Bereits implementierte Funktionalität:
 
