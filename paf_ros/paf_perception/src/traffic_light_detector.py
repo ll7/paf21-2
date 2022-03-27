@@ -116,8 +116,6 @@ class TrafficLightDetector:
             except ConnectionRefusedError:
                 self.map_name = "Town03"
 
-        role_name = rospy.get_param("~role_name", "ego_vehicle")
-
         self.traffic_light_publisher: rospy.Publisher = rospy.Publisher(
             "/paf/paf_perception/detected_traffic_lights", PafDetectedTrafficLights, queue_size=1
         )
@@ -180,7 +178,7 @@ class TrafficLightDetector:
         rospy.Subscriber(activation_topic, Bool, self._activation_toggled, queue_size=1)
 
         # init image source = combination of segmentation, rgb and depth camera
-        self.combinedCamera = FusionCamera(role_name=role_name, visible_tags={SegmentationTag.TrafficLight})
+        self.combinedCamera = FusionCamera(visible_tags={SegmentationTag.TrafficLight})
         self.combinedCamera.set_on_image_listener(self.__on_new_image_data)
 
         rospy.loginfo("[traffic light detector] initialization successful")

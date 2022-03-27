@@ -1,6 +1,7 @@
 from time import perf_counter
 from typing import List, Tuple, Optional, Union
 
+from commonroad.scenario.traffic_sign import TrafficSignIDGermany
 
 import rospy
 from paf_messages.msg import (
@@ -12,8 +13,10 @@ from paf_messages.msg import (
     PafObstacleFollowInfo,
 )
 from paf_messages.srv import PafLaneInfoService, PafLaneInfoServiceResponse
+
+from geometry_msgs.msg import Point as Point3D, Point
 from .GlobalPath import GlobalPath
-from .HelperFunctions import dist, closest_index_of_point_list, expand_sparse_list, pts_to_xy
+from .HelperFunctions import dist, closest_index_of_point_list, expand_sparse_list, pts_to_xy, on_bridge
 
 import numpy as np
 
@@ -27,25 +30,30 @@ from .Spline import (
 
 
 class LocalPath:
-    STEP_SIZE = 5
+    """All not ROS-related path calculations are happening in this class"""
+
     DENSE_POINT_DISTANCE = 0.25
     TRANSMIT_FRONT_MIN_M = 300
     TRANSMIT_FRONT_SEC = 10
     LANE_CHANGE_SECS = 5
-    STRAIGHT_TO_TARGET_DIST = 10
-    END_OF_ROUTE_SPEED = 5
+    STRAIGHT_TO_TARGET_DIST = 5
+    END_OF_ROUTE_SPEED = 10
     SPLINE_IN_CURVE_RADIUS = 15
     OFFSET_LIGHTS_EU_M = 9
-    CLEARING_SIGN_DIST_LIGHT = 0  # war 5
+    CLEARING_SIGN_DIST_LIGHT = 0  # zuvor: 5
     CLEARING_SIGN_DIST = 5
     RESUME_COURSE_COLORS = ["green", "yellow"]
     PREFER_TARGET_LANES_DIST = 200
 
     def __init__(self, global_path: GlobalPath, rules_enabled: bool = None, plan_maximum_distance=False):
+        """
+        A local path (LP) is calculated based on the global path.
+        :param global_path: global path object
+        :param rules_enabled: game mode
+        :param plan_maximum_distance: set to true to calculate local path to the end of the route (rerouting very slow)
+        """
         self._local_path_signals = []  # this stores lane change signals
-        self._local_path_start_section = 0
         self._sparse_local_path_speeds = []
-        self._sparse_traffic_signals = []
         self.sparse_local_path = []
         self._lane_change_end_indices = []
         self._lane_change_start_indices = []
@@ -61,8 +69,16 @@ class LocalPath:
 
     @staticmethod
     def _lane_info_service_call(pts: List[Point2D]) -> Optional[PafObstacleFollowInfo]:
+        """
+        Call the lane info service to ask for obstacles on a given path (used for lane change options)
+        :param pts: path points
+        :return: follow information (velocity + distance of next actor on path)
+        """
         service_name = "/paf/paf_obstacle_planner/lane_info_service"
-        rospy.loginfo_throttle(3, f"[local planner] requesting obstacle info for {len(pts)} points")
+        try:
+            rospy.loginfo_throttle(3, f"[local planner] requesting obstacle info for {len(pts)} points")
+        except rospy.exceptions.ROSInitException:
+            return PafObstacleFollowInfo()
         send = PafLocalPath()
         send.points = pts
         # try:
@@ -70,17 +86,28 @@ class LocalPath:
         call_service = rospy.ServiceProxy(service_name, PafLaneInfoService)
         response: PafLaneInfoServiceResponse = call_service(send)
         return response.follow_info
-        # except Exception as e:
-        #     rospy.logerr_throttle(1, f"[local planner] {e}")
-        #     return None
 
-    def current_indices(self, position: Point2D) -> Tuple[int, int]:
+    def lane_change_at(self, sparse_index: int) -> bool:
+        """
+        Test if the car is between two lanes at this index
+        :param sparse_index: index of sparse local path
+        :return: truth value
+        """
+        if sparse_index < 0:
+            return False
+        for start, end in zip(self._lane_change_start_indices, self._lane_change_end_indices):
+            if start - 1 <= sparse_index <= end + 1:
+                return True
+        return False
+
+    def current_indices(self, position: Point, min_section=None) -> Tuple[int, int]:
         """
         get indices in current global path of a position
+        :param min_section: start index for section search
         :param position: search point
         :return: section, lane
         """
-        return self.global_path.get_section_and_lane_indices(position)
+        return self.global_path.get_section_and_lane_indices(position, min_section=min_section)
 
     def _next_lanechange_index(self, from_index: int = 0) -> Tuple[int, int]:
         """
@@ -97,9 +124,21 @@ class LocalPath:
         return from_index, from_index
 
     def get_all_traffic_signals(self) -> List[PafTrafficSignal]:
+        """
+        Retrieve a list of traffic signals on the global path
+        :return: list of signs, lights, etc.
+        """
         return [x for x in self.global_path.signals_on_path + self._local_path_signals]
 
-    def get_signal_indices(self, max_dist=5, return_negative=False):
+    def get_signal_indices(
+        self, max_dist: float = 5, return_negative: bool = False
+    ) -> List[Tuple[PafTrafficSignal, int, float, Point2D]]:
+        """
+        Retrieve information about all signals (lights,signs,etc.) on the GP within a given distance from the LP.
+        :param max_dist: maximum distance from local path allowed
+        :param return_negative: return all signs not only matching ones (index=-1)
+        :return: List of tuples: (signal, index, distance, position_on_global_path)
+        """
         accuracy = int(1 / self.DENSE_POINT_DISTANCE)  # 1m accuracy
         last_idx = 0
         continued_times = 0
@@ -109,8 +148,12 @@ class LocalPath:
                 break
             idx0, distance = closest_index_of_point_list(self.message.points[last_idx:], p.point, accuracy)
             idx = idx0 + last_idx
-            match = self.message.points[idx]
-            if "LC" in p.type:
+            try:
+                match = self.message.points[idx]
+            except IndexError:
+                rospy.logerr("[local planner] index error fetching sign information")
+                match = None
+            if "LC" in p.type:  # lane changes
                 out.append((p, idx, distance, match))
                 continue
             last_idx = max(0, idx // 2)
@@ -125,6 +168,8 @@ class LocalPath:
         if len(out) < 2:
             return out
         out2 = [out[0]]
+
+        # test for neighbouring signs being the same (example: multiple lights for multiple lanes -> one light)
         for x1, x2 in zip(out, out[1:]):
             delta = x2[1] - x1[1]
             if delta > accuracy:
@@ -136,8 +181,10 @@ class LocalPath:
                     out2[-1] = x2
                     continue
                 elif x1[0].type in SpeedCalculator.MUST_STOP_EVENTS:
+                    # lights override stop signs if on the same position
                     continue
                 elif x2[0].type in SpeedCalculator.MUST_STOP_EVENTS:
+                    # lights override stop signs if on the same position
                     out2[-1] = x2
                     continue
                 else:
@@ -148,7 +195,13 @@ class LocalPath:
         return out2
 
     @staticmethod
-    def signs_equal(sig1: PafTrafficSignal, sig2: PafTrafficSignal):
+    def signs_equal(sig1: PafTrafficSignal, sig2: PafTrafficSignal) -> bool:
+        """
+        Compare two signals for equality
+        :param sig1: signal 1
+        :param sig2: signal 2
+        :return: truth
+        """
         if sig1 is None or sig2 is None:
             return False
         if sig1.type != sig2.type:
@@ -158,6 +211,16 @@ class LocalPath:
     def get_next_traffic_signal(
         self, from_index: int = 0, ignore_sign: PafTrafficSignal = None, to_index: int = None
     ) -> Tuple[int, Optional[PafTrafficSignal], str, bool]:
+        """
+        Get next relevant signal for the ego vehicle
+        :param from_index: current index of vehicle on LP (dense path)
+        :param ignore_sign: optional sign to skip if found (e.g. green light, stop sign once stopped)
+        :param to_index: search up to this index
+        :return: tuple(4): index of found sign, sign object found,
+        priority group of sign ("MUST_STOP" (stop sign), "CAN_STOP" (lights, yield) or "NONE")
+        and true/false if the sign to ignore has been found
+
+        """
         sign_group = "NONE"
         found_ignored = False
 
@@ -180,11 +243,20 @@ class LocalPath:
         return -1, None, sign_group, found_ignored
 
     def reset_alternate_speed(self):
+        """
+        Reset the alt speed
+        """
         self.alternate_speeds = None
 
     def set_alternate_speed(
         self, index_start_dense: int = 0, speed: Union[np.ndarray, List[float]] = None, reset=False
     ):
+        """
+        Set the alt speed with given target speed array (or reset if not given)
+        :param index_start_dense: start index (dense path) for alt speed
+        :param speed: speed to add to path
+        :param reset: true/false reset before adding the speed
+        """
         if len(self) is None:
             return
         if reset or self.alternate_speeds is None:
@@ -195,19 +267,24 @@ class LocalPath:
         self.alternate_speeds[index_start_dense:index_end] = speed
         if speed[-1] < 1e-3:
             self.alternate_speeds[index_end:] *= 0
-        # self.debug_pts = self.message.points[index_start_dense:index_end]
-        # self._draw_path_pts(self.debug_pts, "lanechnge", (200, 24, 0))
 
     def set_alternate_speed_next_sign(
-        self, current_dense_index: int, ignore_sign: PafTrafficSignal = None, traffic_sign_color: str = None
+        self, current_dense_index: int, ignore_sign: PafTrafficSignal = None, traffic_light_color: str = None
     ):
+        """
+        Set alt speed for the upcoming sign, skip if no sign found.
+        :param current_dense_index: current position on LP
+        :param ignore_sign: optional: sign to ignore
+        :param traffic_light_color: last detected color of the traffic light detector (or None if no lights in sight)
+        :return: (chosen_sign, found_ignored_sign)
+        """
         if current_dense_index < 0:
             return None, None
         index_dense, chosen_sign, sign_group, found_ignored_sign = self.get_next_traffic_signal(
             current_dense_index, ignore_sign
         )
 
-        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_sign_color in self.RESUME_COURSE_COLORS:
+        if chosen_sign is not None and chosen_sign.type == "LIGHT" and traffic_light_color in self.RESUME_COURSE_COLORS:
             return chosen_sign, found_ignored_sign
 
         if found_ignored_sign:
@@ -225,14 +302,6 @@ class LocalPath:
         n = round(1 / LocalPath.DENSE_POINT_DISTANCE)
         i1 = max(index_dense - 1, 0)
 
-        # if chosen_sign is not None and chosen_sign.type == "LIGHT":
-        #     chosen_sign_copy = PafTrafficSignal()
-        #     chosen_sign_copy.type = chosen_sign.type
-        #     chosen_sign_copy.value = chosen_sign.value
-        #     chosen_sign_copy.point = self.message.points[index_dense]
-        # else:
-        #     chosen_sign_copy = chosen_sign
-
         self.set_alternate_speed()
 
         try:
@@ -249,15 +318,6 @@ class LocalPath:
         self._draw_path_pts(self.debug_pts, "lanechnge", (200, 24, 0))
 
         return chosen_sign, found_ignored_sign
-
-    def sparse_to_dense_index(self, index, start_pos=0):
-        if index is None or start_pos < 0:
-            return -1
-        i, _ = closest_index_of_point_list(self.message.points[start_pos:], self.sparse_local_path[index])
-        rospy.logwarn_throttle(3, (index, start_pos, i + start_pos, _))
-        if i < 0:
-            return i
-        return i + start_pos
 
     def _calculate_lane_options(
         self,
@@ -402,7 +462,16 @@ class LocalPath:
         publisher = rospy.Publisher("/paf/paf_local_planner/path", PafLocalPath, queue_size=1)
         publisher.publish(msg)
 
-    def _get_previous_local_path(self, sparse_idx, current_speed, num_points_previous_plan=5):
+    def _get_relevant_previous_local_path(
+        self, sparse_idx: int, num_points_previous_plan: int = 5
+    ) -> Tuple[int, int, List[Point2D], List[float], int, int]:
+        """
+        Trace back last planned local path and add it backwards (num_points) and
+        forwards (to lanechange end) from current position to increase driving smoothness
+        :param sparse_idx: index position on previous sparse plan
+        :param num_points_previous_plan: number of points to include backwards from here
+        :return: distance_planned, sparse idx previous, sparse path, sparse speeds, end section index, end_lane
+        """
         distance_planned = 0
         current_idx = sparse_idx
         sparse_idx = max(0, sparse_idx - num_points_previous_plan)
@@ -412,20 +481,16 @@ class LocalPath:
 
         currently_changing = (last_lanechange_start < current_idx < last_lanechange_end) or sparse_idx == 0
 
-        _end_section, _end_lane = self.global_path.get_section_and_lane_indices(self.sparse_local_path[end_index - 1])
-        # if current_speed < 30 / 3.6 and currently_changing:
-        #     _end_section, _ = self.global_path.get_section_and_lane_indices(self.sparse_local_path[current_idx])
-        #     sparse_idx = current_idx
-        #     sparse_local_path = []
-        #     sparse_local_path_speeds = []
-        #     rospy.logerr("reset1")
-        # el
+        search_pt = self.sparse_local_path[end_index - 1]
+        search_pt = Point3D(search_pt.x, search_pt.y, 0)
+        _end_section, _end_lane = self.current_indices(search_pt)
         if not currently_changing:
-            _end_section, _end_lane = self.global_path.get_section_and_lane_indices(self.sparse_local_path[current_idx])
+            search_pt = self.sparse_local_path[current_idx]
+            search_pt = Point3D(search_pt.x, search_pt.y, 0)
+            _end_section, _end_lane = self.current_indices(search_pt)
             sparse_idx = current_idx
             sparse_local_path = []
             sparse_local_path_speeds = []
-            rospy.logerr("reset2")
         else:
             sparse_local_path = self.sparse_local_path[sparse_idx:end_index]
             sparse_local_path_speeds = self._sparse_local_path_speeds[sparse_idx:end_index]
@@ -433,12 +498,11 @@ class LocalPath:
                 self.sparse_local_path[current_idx:end_index], self.sparse_local_path[current_idx + 1 : end_index]
             ):
                 distance_planned += dist(p1, p2)
-            rospy.logerr("no reset")
         return distance_planned, sparse_idx, sparse_local_path, sparse_local_path_speeds, _end_section, _end_lane
 
     def calculate_new_local_path(
         self,
-        from_position: Point2D,
+        from_position: Union[Point2D, Point3D],
         current_speed: float = 0,
         ignore_previous: bool = False,
         min_section: int = 0,
@@ -454,9 +518,8 @@ class LocalPath:
         """
         t0 = perf_counter()
         local_path = PafLocalPath()
-        section_target, target_lane = self.global_path.get_section_and_lane_indices(
-            self.global_path.route.target, min_section=min_section
-        )
+        target_pt = self.global_path.target
+        section_target, target_lane = self.current_indices(target_pt, min_section=min_section)
         if section_target < 0:
             section_target = len(self.global_path)
         sparse_local_path, sparse_local_path_speeds = [], []
@@ -465,7 +528,6 @@ class LocalPath:
             prev_idx, _ = closest_index_of_point_list(self.sparse_local_path, from_position)
         else:
             self.sparse_local_path = []
-            self._sparse_traffic_signals = []
             self._sparse_local_path_speeds = []
             prev_idx = -1
 
@@ -482,7 +544,8 @@ class LocalPath:
 
         end_of_route = False
 
-        if prev_idx > 0:
+        # use previous calculation as basis (smoothness) if not on any bridge and previous index available
+        if not on_bridge(from_position, self.global_path.lanelet_network) and prev_idx > 0:
             (
                 distance_planned,
                 prev_idx,
@@ -490,12 +553,12 @@ class LocalPath:
                 sparse_local_path_speeds,
                 section_from,
                 current_lane,
-            ) = self._get_previous_local_path(prev_idx, current_speed)
+            ) = self._get_relevant_previous_local_path(prev_idx)
 
         self._lane_change_end_indices = []
         self._lane_change_start_indices = []
         if prev_idx < 0 or section_from < 0:
-            section_from, current_lane = self.global_path.get_section_and_lane_indices(from_position)
+            section_from, current_lane = self.current_indices(from_position)
             if section_from > 0:
                 section_from = max(0, section_from - 3)
                 point, current_speed, signals = self.global_path.get_local_path_values(section_from, current_lane)
@@ -505,37 +568,29 @@ class LocalPath:
                     sparse_local_path = [point]
                     sparse_local_path_speeds = [current_speed]
                     section_from += 2
-            # prev_idx = 0
 
         if section_from < 0 or section_target < 0:
-            rospy.logerr_throttle(
-                1,
+            msg = (
                 f"unable to calculate local path (index=={section_from},{section_target}) "
-                f"{self.global_path.route.target}, {len(self.global_path)}",
+                f"{self.global_path.target}, {len(self.global_path)}"
             )
+            try:
+                rospy.logerr_throttle(1, msg)
+            except rospy.exceptions.ROSInitException:
+                print(msg)
             self.message = local_path
             return local_path, 0, 0
 
-        self._local_path_start_section = section_from
         end_idx_lane_change = 0
         idx1 = section_from + 1
 
         s: PafRouteSection
         for i, s in enumerate(self.global_path.route.sections[idx1:]):
             i += idx1
-            # rospy.logwarn(
-            #     f"{s.target_lanes_index_distance} ({i}): {current_lane} {s.target_lanes}, {s.target_lanes_distance}, "
-            #     f"{list(range(len(s.points)))}"
-            # )
 
             s_prev = None if i == 0 else self.global_path.route.sections[i - 1]
             if s_prev is not None and s_prev.target_lanes_distance == 0:
                 future_lane = current_lane - s_prev.target_lanes[0] + s_prev.target_lanes_left_shift
-                # self.debug_pts += s.points
-                # rospy.logerr(
-                #     f"end of segment ({i})! current_lane={current_lane}, target_lanes={list(s_prev.target_lanes)},"
-                #     f" shift={s_prev.target_lanes_left_shift} => {future_lane}"
-                # )
                 current_lane = future_lane
 
             # test if current lane exists on this section
@@ -555,15 +610,10 @@ class LocalPath:
                     current_lane = len(s.points) - 1
 
                 self._draw_path_pts(self.debug_pts, "lanechnge", (200, 24, 0))
-                # from paf_ros.paf_planning.src.classes.MapManager import MapManager
-                # MapManager.visualize_pts_list(sparse_local_path)
-                # raise RuntimeError()
 
             if not self.plan_maximum_distance and distance_planned > target_distance:
-                # rospy.logerr(f"break! distance_planned > target_distance: {distance_planned} > {target_distance}")
                 break
             if i <= end_idx_lane_change:
-                # rospy.logerr("continue1")
                 continue
 
             # end of route handling
@@ -600,12 +650,7 @@ class LocalPath:
                 number_of_lanes_off = current_lane - s.target_lanes[0]  # eg. 0 - 3 = -3 (go left)
             else:
                 number_of_lanes_off = 0
-            # rospy.loginfo(
-            #     f"{s.target_lanes_index_distance}: {current_lane}, "
-            #     f"{list(s.target_lanes)}, {number_of_lanes_off} {current_lane in s.target_lanes}")
 
-            # assert (current_lane in s.target_lanes and number_of_lanes_off == 0) or (
-            #         current_lane not in s.target_lanes and number_of_lanes_off != 0)
             speed = current_speed if len(self._lane_change_start_indices) < 2 else target_speed
             distance_for_one_lane_change = speed * lane_change_secs - buffer
 
@@ -615,13 +660,6 @@ class LocalPath:
             l_limit, r_limit = 0, len(s.points) - 1
             l_change_allowed, r_change_allowed = current_lane > l_limit, current_lane < r_limit
             l_change, r_change = False, False
-
-            # rospy.loginfo(f"A ({number_of_lanes_off}): {s.target_lanes_distance} <= "
-            #   f"{distance_to_off_lanes_change} -> {s.target_lanes_distance <= distance_to_off_lanes_change}")
-            # rospy.loginfo(f"B ({l_change_allowed}|{r_change_allowed}): {s.target_lanes_distance} <= "
-            #               f"{distance_to_off_plus_1_lanes_change} -> "
-            #               f"{s.target_lanes_distance <= distance_to_off_plus_1_lanes_change}")
-
             if s.target_lanes_distance <= distance_to_off_lanes_change:
                 # need to lane change here (the latest possibility)
                 l_change = number_of_lanes_off > 0
@@ -663,14 +701,6 @@ class LocalPath:
             ) = self._calculate_lane_options(
                 i, lane_change_distance, current_lane, left_lane, right_lane, not (l_change or r_change)
             )
-            # avail = [str(x) for x in [left_lane, current_lane, right_lane] if x is not None]
-            # cur = [int(x.x) for x in s.points]
-            # print(
-            #     f"{s.target_lanes_index_distance} ({cur}): "
-            #     f"lane={current_lane}/{len(s.points)}->{list(s.target_lanes)}, avail:|"
-            #     f"{'|'.join(avail)}|, must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
-            #     f"result={left is not None}/{straight is not None}/{right is not None}, {l_limit, r_limit}"
-            # )
             try:
                 if straight is not None:
                     straight = straight[0]
@@ -681,12 +711,6 @@ class LocalPath:
                 choice = "straight"
 
             if choice == "left" or choice == "right":
-                # rospy.logerr(
-                #     f"lanes={list(range(len(s.points)))}, target_lanes={list(s.target_lanes)}, "
-                #     f"lanes {left_lane}|{current_lane}|{right_lane} ({choice}), "
-                #     f"must:{l_change}/{r_change}, opt: {l_change_allowed}/{r_change_allowed}, "
-                #     f"dist: {distance_changed}, {lane_change_distance}"
-                # )
                 pts, speeds = left if choice == "left" else right
                 future_lane = left_lane if choice == "left" else right_lane
                 sig1, sig2 = PafTrafficSignal(), PafTrafficSignal()
@@ -695,7 +719,6 @@ class LocalPath:
                 sig1.type = "LC_START"
                 sig2.type = "LC_END"
                 sig1.point = sparse_local_path[-1]
-                # rospy.logerr(f"changing lanes: {current_lane}->{future_lane} ({distance_changed:.1f}m)")
                 current_lane = future_lane
                 self._lane_change_start_indices.append(len(sparse_local_path) - 1)
                 for pt, sp in zip(pts, speeds):
@@ -727,13 +750,9 @@ class LocalPath:
         msg = (
             f"[local planner] planned local path from ({from_position.x:.1f}, {from_position.y:.1f}) "
             f"with length={distance_planned:.1f}m "
-            f"over {len(sparse_local_path)} sections local_points: {len(local_path.points)} "
-            f"(sparse={t1}, smooth={t3})"
+            f"over {len(sparse_local_path)} sections. actor points count: {len(local_path.points)} "
+            f"(time: sparse={t1}, smooth={t3})"
         )
-
-        # self.debug_pts += sparse_local_path
-        # for s in self.global_path.route.sections:
-        #     self.debug_pts += s.points
         self._draw_path_pts(self.debug_pts, "lanechnge", (200, 24, 0))
         # self._draw_path_pts(points, "lanechnge2", (200, 24, 200))
         self.message = local_path
@@ -809,7 +828,7 @@ class LocalPath:
         :return: list of speeds
         """
         speed = self.speed_calc.get_curve_speed(local_path)
-        if self.rules_enabled:  # todo speed limit logic for no rules
+        if self.rules_enabled:
             speed = np.clip(speed, 0, speed_limit)
         if end_of_route and speed[-1] > self.END_OF_ROUTE_SPEED:
             n = int(10 / 0.25)
@@ -845,7 +864,7 @@ class LocalPath:
     @staticmethod
     def _draw_path_line(points: List[Point2D], lbl: str = "lp_line", color=(0, 45, 123)):
         """
-        Draw line on the topdown view
+        Draw/Update a line on the top-down-view map (debugging)
         :param points: pts to draw
         :param lbl: label in tdv
         :param color: color of points
@@ -857,13 +876,14 @@ class LocalPath:
         left: Optional[List[Point2D]],
         straight: Optional[List[Point2D]],
         right: Optional[List[Point2D]],
-        target_lane_offset: int = 0,  # >0=left, <0=right
+        target_lane_offset: int = 0,  #
     ) -> str:
         """
-        Chose lane from lane change options
+        Chose lane from given lane change options (left, straight, right)
         :param left: left option (or None)
         :param straight: straight option (or None)
         :param right: right option (or None)
+        :param target_lane_offset: current lane is this number of lanes off the target lane (>0=left, <0=right)
         :return: keyword "left", "straight" or "right"
         """
         if left is None and straight is None and right is None:
@@ -903,11 +923,14 @@ class LocalPath:
             left_free = _left_free if _left_free is not None else get_distance(left)
             right_free = _right_free if _right_free is not None else get_distance(right)
             straight_free = _straight_free if _straight_free is not None else get_distance(straight) + 20
-            rospy.logerr_throttle(
-                1,
-                f"[local planner] lane free distance for change: "
-                f"{left_free:.1f}/{straight_free:.1f}/{right_free:.1f}",
-            )
+            try:
+                rospy.logerr_throttle(
+                    1,
+                    f"[local planner] lane free distance for change: "
+                    f"{left_free:.1f}/{straight_free:.1f}/{right_free:.1f}",
+                )
+            except rospy.exceptions.ROSInitException:
+                pass
         _sum = left_free + right_free + straight_free
 
         if _sum == 0:
@@ -917,6 +940,142 @@ class LocalPath:
         choice = np.random.choice(["left", "straight", "right"], p=probabilities)
 
         return choice
+
+    @staticmethod
+    def visualize(
+        town: str,
+        rules: bool,
+        position: Tuple[float, float],
+        target: Union[Tuple[float, float], Point2D, Point3D],
+        lanelet_ids: List[int],
+        bounds: Tuple[Optional[float], Optional[float], Optional[float], Optional[float]] = None,
+        show_lp: bool = True,
+        show_gp: bool = True,
+        show_other: bool = True,
+    ):
+        """
+        Visualize a path based on logging information with matplotlib
+        (debugging without ros, CAN NOT be called within ROS!)
+        :param town: name of the town to load
+        :param rules: rules or no rules
+        :param position: starting point
+        :param target: target point
+        :param lanelet_ids: list of lanelet ids in the given network (global route)
+        :param bounds: canvas bounds with format (xmin, xmax, ymin, ymax),
+                        None means outermost point is selected in this dimension
+        :param show_gp: show global path
+        :param show_lp: show local path
+        :param show_other: show sign positions and LocalPath.debug_pts
+        """
+
+        def visualize_lp_and_gp(
+            local_path_obj,
+            cur_pt: Point,
+            xmin: float = None,
+            xmax: float = None,
+            ymin: float = None,
+            ymax: float = None,
+        ):
+            """
+            Visualize local and global path with matplotlib (for debugging planners).
+            :param xmin: Optional graph axis limit
+            :param xmax: Optional graph axis limit
+            :param ymin: Optional graph axis limit
+            :param ymax: Optional graph axis limit
+            :param local_path_obj: LocalPath object
+            :param cur_pt: location to start local plan on (x,y,z)
+            """
+            from matplotlib import pyplot as plt
+
+            def pts_to_x_y(_pts):
+                if len(_pts) == 0:
+                    return ([], []), (99999, 99999, -99999, -99999)
+                _x = [p.x for p in _pts]
+                _y = [p.y for p in _pts]
+                return (_x, _y), (np.min(_x), np.min(_y), np.max(_x), np.max(_y))
+
+            pts_gl_1 = []
+            pts_gl_2 = []
+
+            local_path_obj.global_path.as_msg()
+
+            for s in local_path_obj.global_path.route.sections:
+                pts_gl_1 += [p for i, p in enumerate(s.points) if i not in s.target_lanes]
+                pts_gl_2 += [p for i, p in enumerate(s.points) if i in s.target_lanes]
+
+            pts_loc_2 = local_path_obj.calculate_new_local_path(cur_pt)[0].points
+            pts_loc_1 = local_path_obj.sparse_local_path
+            sign_positions = [x[0].point for x in local_path_obj.traffic_signals]
+            local_path_obj.set_alternate_speed_next_sign(0)
+            minima1, minima2, minima3, minima4, minima5, minima6, minima7 = [None for _ in range(7)]
+            if show_gp:
+                xy1, minima1 = pts_to_x_y(pts_gl_1)
+                xy2, minima2 = pts_to_x_y(pts_gl_2)
+                plt.scatter(*xy2, label="Global Path (target)", s=1)
+                plt.scatter(*xy1, label="Global Path (other)", s=1)
+            if show_lp:
+                xy3, minima3 = pts_to_x_y(pts_loc_1)
+                xy4, minima4 = pts_to_x_y(pts_loc_2)
+                plt.plot(*xy3, label="Local Path (sparse)")
+                plt.plot(*xy4, label="Local Path (dense)")
+            if show_other:
+                xy5, minima5 = pts_to_x_y(sign_positions)
+                xy6, minima6 = pts_to_x_y(local_path_obj.debug_pts)
+                plt.scatter(*xy5, label="Traffic Signals (GP)", s=10)
+                if len(xy6[0]) > 0:
+                    plt.scatter(*xy6, label="Local Path (debug pts)", s=6)
+
+            if show_other:
+                pts = []
+                for i, (signal, index, distance, match) in enumerate(local_path_obj.get_signal_indices()):
+                    distance = np.round(distance, 1)
+                    try:
+                        name = TrafficSignIDGermany(signal.type).name
+                    except ValueError:
+                        name = signal.type
+                    if index < 0:
+                        plt.annotate(f"NOT{i}:{name}@{distance}m", (match.x, match.y))
+                        plt.annotate(f"NOT{i}:{name}@{distance}m", (signal.point.x, signal.point.y))
+                        continue
+                    pts.append(match)
+                    plt.annotate(f"{index}:{name}@{distance}m", (match.x, match.y))
+
+                xy7, minima7 = pts_to_x_y(pts)
+                plt.scatter(*xy7, label="Traffic Signals (LP)", s=10)
+
+            minima = [x for x in [minima1, minima2, minima3, minima4, minima5, minima6, minima7] if x is not None]
+
+            if len(minima) == 0:
+                raise RuntimeError("Unable to draw any paths")
+
+            _, _, x_max, y_max = np.max(minima, axis=0)
+            x_min, y_min, _, _ = np.min(minima, axis=0)
+
+            if xmin is not None:
+                x_min = xmin
+            if ymin is not None:
+                y_min = ymin
+            if xmax is not None:
+                x_max = xmax
+            if ymax is not None:
+                y_max = ymax
+
+            plt.xlim([x_min - 10, x_max + 10])
+            plt.ylim([y_min - 10, y_max + 10])
+            plt.legend()
+            plt.show()
+
+        if not hasattr(target, "x"):
+            target = Point2D(*target)
+        sc = MapManager.get_current_scenario(rules, town)
+        route_paf = GlobalPath(sc.lanelet_network, lanelet_ids, target)
+        local = LocalPath(route_paf, rules)  # , plan_maximum_distance=True)
+        if len(position) == 2:
+            position = list(position) + [0]
+        if bounds is not None:
+            visualize_lp_and_gp(local, Point3D(*position), *bounds)
+        else:
+            visualize_lp_and_gp(local, Point3D(*position))
 
     def __len__(self) -> int:
         """

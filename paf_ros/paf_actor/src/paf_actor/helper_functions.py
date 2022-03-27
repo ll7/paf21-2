@@ -1,3 +1,8 @@
+"""
+Helper functions for calculations
+inspired by: PSAF 2 WS 20/21 (Acting package)
+"""
+
 import math
 import numpy as np
 from geometry_msgs.msg import PoseStamped
