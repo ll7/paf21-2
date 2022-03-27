@@ -77,10 +77,27 @@ Dieses Modul dient zum einfachen Starten des Projekts. Dabei werden alle notwend
 Das Validation Modul dient dazu, beim Abfahren einer Route automatisch Fehler beim Verhalten des Fahrzeugs zu notieren und das Endergebnis nach dem Abfahren einer Route zu berwerten. 
 
 ## Installation des Projekts 
-[TODO]
+Zum Installieren des Projekts inklusive gesamter Simulationsumgebung:
+
+```
+bash scripts/setup.sh
+```
+
+Dadurch werden Carla, ROS und alle notwendigen Dependencies installiert.\
+\
+Um alle Komponenten einzeln zu installieren, folgende Scrips ausführen:
+
+```
+bash scripts/subscripts/_setup_carla.sh      # carla install
+bash scripts/subscripts/_setup_ros.sh        # ros install
+bash scripts/subscripts/_setup_paf.sh        # dependency install
+bash scripts/subscripts/_setup_commonroad.sh # commonroad extended install
+```
 ## Ausführen des Projekts 
-Ausführen des von scrips/runscripts.sh \
-``` bash /paf21-2/scripts/runscripts.sh ```
+Ausführen des von scrips/runscripts.sh 
+``` 
+bash /paf21-2/scripts/runscripts.sh
+ ```
 
 Argumente:
 ```
