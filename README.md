@@ -9,15 +9,15 @@
     - [Aufgabenstellung](#aufgabenstellung)
     - [Architekturbeschreibung](#architekturbeschreibung)
     - [Module](#module)
-      - [Acting](#acting)
-      - [Map Manipulation](#map-manipulation)
-      - [Perception](#perception)
-      - [Planning](#planning)
+      - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_actor#readme">  Acting </a>](#--acting-)
+      - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_perception#readme">  Perception </a>](#--perception-)
+      - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_planning#readme">  Planning </a>](#--planning-)
           - [Global Planner](#global-planner)
           - [Local Planner](#local-planner)
           - [Obstacle Planner](#obstacle-planner)
       - [Starter](#starter)
-      - [Validation (optional)](#validation-optional)
+          - [Competition Manager](#competition-manager)
+      - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_validation#readme">  Validation </a>](#--validation-)
   - [Installation des Projekts](#installation-des-projekts)
   - [Ausführen des Projekts](#ausführen-des-projekts)
 
@@ -46,20 +46,24 @@ Teil 2: Modus mit Regeln. Ziel dabei ist es unter Beachtung aller Verkehrsregeln
 
 ###  Module
 
-####  Acting
+#### <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_actor#readme">  Acting </a>
+
 Dieses Modul dient dazu dass das Ego Vehicle einem vorgegenen Pfad folgen kann. Dabei wird ein Regler zu Regelung der Geschwindigkeit verwendet und ein Stanley-Controller zur Regelung des Lenkwinkels. Zustätzlich dient diese Modul noch dazu, selbstständig aus kritischen Situationen freizukommen
 
-####  Map Manipulation
+<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_map_manipulation#readme">  Map Manipulation </a>
+
 Diese Modul dient der Verwaltung von Kartendaten. Diese werden als Commonroad-Kartendaten abgespeichert und enthalten Informationen über alle befahrbaren Wege einer Stadt. Zusätzlich sind in den Karten alle Schilder und Amplen als auch deren zugeordneten Haltelinien eingetragen. 
 
 
-#### Perception 
+#### <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_perception#readme">  Perception </a>
+
 Diese Modul dient dazu die Umgebung um das Ego Vehicle wahrzunehmen. Dazu wird sowohl ein Semantic-Lidar-Sensor wie auch die Segmentation-Camera verwendet. 
 Dabei wird der Semantic-Lidar-Sensor dazu verwendet andere Verkehrsteilnehmer zu erkennen und zu identifizieren. Die Segmentation-Kamera dient hier zur Ampelerkennung
 die unter Verwendung des Systems YOLO v3 funktioniert. 
 
 
-#### Planning
+#### <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_planning#readme">  Planning </a>
+
 Dieses Modul ist für die Planung der Route des Ego Vehicles zuständig. Dafür wurde es in folgende Teimodule gegliedert:
 ###### Global Planner
 Der Global Planner ist für die Berechnung der kürzesten Route zwischen Start- und Zielpunkt zuständig. Dafür wird der CommonRoad Route Planner verwendet. 
@@ -101,7 +105,8 @@ rosrun paf_competition_manager set_position_client.py
 rosrun paf_competition_manager simple_competition_manager.py
 ```
 
-#### Validation (optional) 
+#### <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_validation#readme">  Validation </a>
+
 Das Validation Modul dient dazu, beim Abfahren einer Route automatisch Fehler beim Verhalten des Fahrzeugs zu notieren und das Endergebnis nach dem Abfahren einer Route zu berwerten. 
 
 ## Installation des Projekts 
