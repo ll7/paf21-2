@@ -10,6 +10,7 @@
     - [Architekturbeschreibung](#architekturbeschreibung)
     - [Module](#module)
       - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_actor#readme">  Acting </a>](#--acting-)
+      - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_map_manipulation#readme">  Map Manipulation </a>](#--mapmanipulation-)
       - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_perception#readme">  Perception </a>](#--perception-)
       - [<a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_planning#readme">  Planning </a>](#--planning-)
           - [Global Planner](#global-planner)
@@ -24,18 +25,18 @@
 
 
 ###  Aufgabenstellung
-Im Rahmen des Praktikums "Praktikum Autonomes Fahren" sollte ein autonomes Fahrzeug entwickelt werden, dass autonom von einem Startpunkt zu einem Zielpunkt fahren kann. Dafür wurde als Simulationsumgebung Carla verwendet. Das Fahrzeug an sich soll in ROS implementiert werden. 
+Im Rahmen des Praktikums "Praktikum Autonomes Fahren" sollte ein autonomes Fahrzeug entwickelt werden, welches autonom von einem Startpunkt zu einem Zielpunkt fahren kann. Dafür wurde als Simulationsumgebung Carla verwendet. Das Fahrzeug an sich soll in ROS implementiert werden. 
 
 Die Aufgabenstellung umfasst 2 Teile.\
 Allgemeine Anforderungen:
-1. Das Fahrzeug muss autonom einen Weg vom Startpunkt zum Zielpunkt planen 
-2. Das Fahrzeug muss diesen Weg autonom abfahren 
+1. Das Fahrzeug muss einen Weg vom Startpunkt zum Zielpunkt planen.
+2. Das Fahrzeug muss diesen Weg autonom abfahren.
 3. Folgenden CARLA Karten müssen unterstützt werden: Town01, Town02, Town03, Town04, Town05, Town06, Town07, Town10HD
-4. Das Fahrzeug befindet sich in einer Welt mit anderen Verkehrsteilnehmer (andere Autos, Motorradfahrer, Fußgänger) 
+4. Das Fahrzeug befindet sich in einer Welt mit anderen Verkehrsteilnehmern (andere Autos, Motorradfahrer, Fußgänger).
 
-Teil 1: Modus ohne Regeln. Ziel dabei ist es ohne Beachtung aller Verkehrsregeln möglichst schnell ans Ziel zu kommen 
+Teil 1: Modus ohne Regeln. Ziel dabei ist es, ohne Beachtung jeglicher Verkehrsregeln möglichst schnell ans Ziel zu kommen.
 
-Teil 2: Modus mit Regeln. Ziel dabei ist es unter Beachtung aller Verkehrsregeln möglichst schnell ans Ziel zu kommen. Für Verstöße gegen die Verkehrsregeln werden Strafzeiten vergeben.
+Teil 2: Modus mit Regeln. Ziel dabei ist es, unter Beachtung aller Verkehrsregeln möglichst schnell ans Ziel zu kommen. Für Verstöße gegen die Verkehrsregeln werden Strafzeiten vergeben.
 
 ###  Architekturbeschreibung 
 
@@ -48,19 +49,16 @@ Teil 2: Modus mit Regeln. Ziel dabei ist es unter Beachtung aller Verkehrsregeln
 
 #### <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_actor#readme">  Acting </a>
 
-Dieses Modul dient dazu dass das Ego Vehicle einem vorgegenen Pfad folgen kann. Dabei wird ein Regler zu Regelung der Geschwindigkeit verwendet und ein Stanley-Controller zur Regelung des Lenkwinkels. Zustätzlich dient diese Modul noch dazu, selbstständig aus kritischen Situationen freizukommen
+Dieses Modul dient dazu, dass das Ego Vehicle einem vorgegenen Pfad folgen kann. Dabei wird ein Regler zu Regelung der Geschwindigkeit verwendet und ein Stanley-Controller zur Regelung des Lenkwinkels. Zustätzlich dient dieses Modul noch dazu, selbstständig aus kritischen Situationen freizukommen
 
 <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_map_manipulation#readme">  Map Manipulation </a>
 
-Diese Modul dient der Verwaltung von Kartendaten. Diese werden als Commonroad-Kartendaten abgespeichert und enthalten Informationen über alle befahrbaren Wege einer Stadt. Zusätzlich sind in den Karten alle Schilder und Amplen als auch deren zugeordneten Haltelinien eingetragen. 
+Dieses Modul dient der automatisierten Bearbeitung von Kartendaten. Commonroad-Szenarien können mithilfe der MapManipulator-Klasse geladen, modifiziert und abgespeichert werden.
 
 
 #### <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_perception#readme">  Perception </a>
 
-Diese Modul dient dazu die Umgebung um das Ego Vehicle wahrzunehmen. Dazu wird sowohl ein Semantic-Lidar-Sensor wie auch die Segmentation-Camera verwendet. 
-Dabei wird der Semantic-Lidar-Sensor dazu verwendet andere Verkehrsteilnehmer zu erkennen und zu identifizieren. Die Segmentation-Kamera dient hier zur Ampelerkennung
-die unter Verwendung des Systems YOLO v3 funktioniert. 
-
+Dieses Modul dient dazu, die Umgebung um das Ego Vehicle und Ampelzustände wahrzunehmen. Dazu werden als Sensoren zum einen ein Semantic-Lidar-Sensor, zum anderen eine Depth-, Segmentation- und RGBCamera verwendet. Der Semantic-Lidar-Sensor ermöglicht die Erkennung und Identifikation anderer Verkehrsteilnehmer. Die unterschiedlichen Kameras werden synchronisiert und liefern die Informationen, anhand derer die TrafficLightDetection Ampeln mittels Deep-Learning klassifiziert.
 
 #### <a href = "https://github.com/ll7/paf21-2/tree/development/paf_ros/paf_planning#readme">  Planning </a>
 
