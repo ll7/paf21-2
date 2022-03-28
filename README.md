@@ -73,6 +73,34 @@ Funktionen diese Moduls sind das Folgen anderer Verkehrsteilnhemer unter Beachtu
 #### Starter 
 Dieses Modul dient zum einfachen Starten des Projekts. Dabei werden alle notwendigen oben genannten Module gestartet, die dazu benötigt werden autonom von einem Startpunkt zu einem Zielpunkt zu gelangen. 
 
+###### Competition Manager
+Das Starter-Modul bietet außerdem die Möglichkeit, den Competition Manager zu verwenden. Hierzu müssen folgende Schritte ausgeführt werden:
+
+ 1. Starte Carla und unsere Module:
+```
+cd paf21-2/scripts
+./runscript.sh -mc <town>
+```
+ 2. Platziere NPC's (optional auch später möglich):
+```
+cd carla_0.9.10.1/PythonAPI/examples/
+python spawn_npc.py -n 50 -w 50 -s 256
+```
+3. Lade die Konfiguration des Competition Managers. Das Starter-Modul liest daraus `traffic_rules` und die Zielposition zur Planung aus und wartet anschließend, bis der Competition Manager gestartet wird.
+```
+cd paf_competition_manager
+rosparam load config/<town_directory>/<yaml_file_name>.yaml
+```
+4. Teleportiere das Fahrzeug an die Startposition (`set_position_server.py` muss ggf. zweimal ausgeführt werden, damit es funktioniert):
+```
+rosrun paf_competition_manager set_position_server.py
+rosrun paf_competition_manager set_position_client.py
+```
+5. Starte den Competition Manager:
+```
+rosrun paf_competition_manager simple_competition_manager.py
+```
+
 #### Validation (optional) 
 Das Validation Modul dient dazu, beim Abfahren einer Route automatisch Fehler beim Verhalten des Fahrzeugs zu notieren und das Endergebnis nach dem Abfahren einer Route zu berwerten. 
 
