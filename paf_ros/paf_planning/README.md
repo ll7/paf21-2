@@ -255,3 +255,13 @@ zugelassen. Fußgänger werden zudem nur dann beachtet, wenn sie sich auf einer 
 Im Anschluss werden alle so gesammelten Informationen nach Distanz zum Fahrzeug gefiltert und das mit dem geringsten
 Abstand veröffentlicht. Falls keine relevanten Hindernisse erkannt wurden, kann dies ebenfalls in der Nachricht vermerkt
 werden.
+
+## Bekannte Probleme und Bugs
+
+- Beim Spurwechsel werden nur benachbarte Spuren hinzugezogen
+- Beim Spurwechsel wird nur geprüft, ob Hindernisse bis zur Beendigung des Spurwechsels vorliegen
+- Als beste Wahl wird immer die kürzeste Route zum Ziel angesehen
+- Aufgrund von Problemen im Zusammenspiel mit der Ampelerkennung ist die regelmäßige lokale Neuplanung (suchen nach
+  besseren Spuren, etc.) nur im No-Rules Modus aktiv.
+- Alle Hindernisse werden als mit einer konstanten Geschwindigkeit tangential zum Lanelet angenommen, anstatt mit der
+  vom Semantic Lidar gemessenen Geschwindigkeit, um blockierte Wegstücke zu markieren (experimentell bessere Ergebnisse)
