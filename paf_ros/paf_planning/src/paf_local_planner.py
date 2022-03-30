@@ -92,7 +92,12 @@ class LocalPlanner:
         self._traffic_light_detector_toggle_pub = rospy.Publisher(
             "/paf/paf_local_planner/activate_traffic_light_detection", Bool, queue_size=1
         )
-        self._emergency_break_pub.publish(Bool(True))
+        self._emergency_break_pub.publish(Bool(False))
+        if rospy.get_param("/validation"):
+            if self.USE_GLOBAL_STANDARD_LOOP:
+                self._send_standard_loop_request(do_throttle=False)
+            else:
+                self._send_random_global_path_request(do_throttle=False)
 
     def _routing_service_call(self, service_name: str):
         """
@@ -531,24 +536,26 @@ class LocalPlanner:
             rospy.loginfo("[local planner] requesting new global route")
             self._routing_service_call(self._srv_global_reroute)
 
-    def _send_standard_loop_request(self):
+    def _send_standard_loop_request(self, do_throttle=True):
         """
         Call standard loop service (get next waypoint)
+        :param do_throttle: throttle the requests
         """
         t = time.perf_counter()
         delta_t = t - self._last_replan_request_glob
-        if self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:
+        if not do_throttle or self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:
             self._last_replan_request_glob = t
             rospy.loginfo("[local planner] requesting new standard loop route")
             self._routing_service_call(self._srv_global_standard_loop)
 
-    def _send_random_global_path_request(self):
+    def _send_random_global_path_request(self, do_throttle=True):
         """
         Call random global path service
+        :param do_throttle: throttle the requests
         """
         t = time.perf_counter()
         delta_t = t - self._last_replan_request_glob
-        if self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:
+        if not do_throttle or self.REPLAN_THROTTLE_SEC_GLOBAL < delta_t:
             self._last_replan_request_glob = t
             rospy.loginfo("[local planner] requesting new random global route")
             self._routing_service_call(self._srv_global_random)

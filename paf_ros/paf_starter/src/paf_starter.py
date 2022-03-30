@@ -17,6 +17,10 @@ def main():
     rospy.init_node("paf_starter_node", anonymous=True)
     rospy.loginfo("[paf_starter] PAF_START RUNNING")
 
+    if rospy.get_param("/validation"):
+        rospy.loginfo_throttle(2, "[paf_starter] activating validation mode (automatic debug and routing)")
+        return
+
     # Wait until config yaml is loaded
     while not rospy.has_param("competition/traffic_rules"):
         rospy.sleep(1)

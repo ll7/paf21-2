@@ -60,6 +60,18 @@ class GlobalPath:
             if not hasattr(target, "x"):
                 target = Point(*target) if len(target) == 3 else Point2D(*target)
             self.target = target if hasattr(target, "z") else Point(target.x, target.y, self.TARGET_Z)
+            let = self.lanelet_network.find_lanelet_by_id(self.lanelet_ids[-1])
+            target_index, d = closest_index_of_point_list(list(let.center_vertices), self.target)
+            if target_index >= 0 and d < 5:
+                prev = target_index
+                target_index = min(target_index + 4, len(let.center_vertices) - 1)
+                rospy.logerr(
+                    f"[global planner] correcting target forward on lanelet "
+                    f"{np.round(dist(let.center_vertices[target_index], let.center_vertices[prev]), 1)}m "
+                    f"(for competition manager)..."
+                )
+                x, y = let.center_vertices[target_index]
+                self.target = Point(x, y, self.target.z)
 
             if len(self.lanelet_ids) == 1:  # if target is on current lanelet, continue randomly forward, replan later
                 while len(self.lanelet_ids) <= 2:
