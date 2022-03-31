@@ -11,7 +11,12 @@ import numpy as np
 
 
 class TensorBoardNode:
+    """Publishes text/scalar/image information to a tensorboard instance"""
+
     def __init__(self):
+        """
+        Init of subscribers and Tensorboard
+        """
         self.path = f"tensorboard/{datetime.now()}"
         self.writer = tf.summary.create_file_writer(self.path)
         self.writer.init()
@@ -30,21 +35,31 @@ class TensorBoardNode:
         rospy.Subscriber("/paf/paf_validation/tensorboard/scalar", PafLogScalar, self._log_scalar)
         rospy.Subscriber("/paf/paf_validation/tensorboard/text", PafLogText, self._log_text)
         rospy.Subscriber("/paf/paf_validation/tensorboard/image", PafLogImage, self._log_image)
-        self._odometry_subscriber: rospy.Subscriber = rospy.Subscriber(
-            "/carla/ego_vehicle/odometry", Odometry, self._odometry_updated
-        )
+        rospy.Subscriber("/carla/ego_vehicle/odometry", Odometry, self._odometry_updated)
 
         rospy.logwarn(f"tensorboard files saved in ~/.ros/{self.path}")
 
     def _cur_time(self):
+        """
+        Get current simulation time
+        :return:
+        """
         return self._world.wait_for_tick().timestamp.elapsed_seconds
 
     def _get_step_from_cur_time(self):
+        """
+        Get elapsed time from t0 in 0.1 second steps
+        :return:
+        """
         t1 = self._cur_time()
         n = int((t1 - self.t0) * 10)
         return n
 
     def _odometry_updated(self, odo: Odometry):
+        """
+        Odometry update callback
+        :param odo: data
+        """
         current_speed = np.sqrt(
             odo.twist.twist.linear.x ** 2 + odo.twist.twist.linear.y ** 2 + odo.twist.twist.linear.z ** 2
         )
@@ -57,6 +72,10 @@ class TensorBoardNode:
         # self._current_pose = odo.pose.pose
 
     def _log_scalar(self, msg: PafLogScalar):
+        """
+        Log a scalar y value to time or distance x value
+        :param msg: data
+        """
         if self._last_odo_update is None:
             return
         step = self._distance_step if msg.step_as_distance else self._time_step
@@ -66,6 +85,11 @@ class TensorBoardNode:
         self.writer.flush()
 
     def _log_text(self, msg: PafLogText):
+        """
+        Log a text to time or distance step value
+        :param msg: data
+        """
+
         if self._last_odo_update is None:
             return
         step = self._distance_step if msg.step_as_distance else self._time_step
@@ -75,6 +99,10 @@ class TensorBoardNode:
         self.writer.flush()
 
     def _log_image(self, msg: PafLogImage):
+        """
+        Log an ROS-image to time or distance x value (warning: DO NOT DO THIS EVERY FRAME)
+        :param msg: data
+        """
         if self._last_odo_update is None:
             return
         step = self._distance_step if msg.step_as_distance else self._time_step
@@ -91,9 +119,15 @@ class TensorBoardNode:
 
     @staticmethod
     def start():
+        """
+        start ros node
+        """
         rospy.spin()
 
     def __del__(self):
+        """
+        destructor: flush and close opened file streams
+        """
         self.writer.flush()
         self.writer.close()
 

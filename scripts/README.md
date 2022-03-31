@@ -2,10 +2,22 @@
 
 ### Run Script
 
-Starts CARLA and the main launcher.
+Starts CARLA and the main launcher in two new terminals.
+```
+bash scripts/runscript.sh TownXX [--build/-b] [--skip-carla-restart/-scr] [--npcs/-n] [--low-quality/-lq] [--manual-control/-mc] [--no-rules/-nr] [--validation/-val]
+```
+
+Tensorboard kann mit `tensorboard.sh` gestartet werden.
 
 ```
-bash scripts/runscript.sh [--build] [--skip-carla-restart]
+Argumente:
+--skip-carla-restart/-scr : die Carla Simulation wird nicht neugestartet
+--build/-b		  : erneutes builden des Projekts, wenn man Änderungen im Code vorgenommen hat
+--npcs/-n		  : Starten mit npcs
+--low-quality/-lq	  : Starten in niedrigerer Qualität für leistungsschwächere Geräte
+--manual-control/-mc	  : Starten mit Öffnen eines manual-control Fensters
+--no-rules/-nr (rules enabled by default): Unterscheidung ob man mit oder ohne Regeln Fahren möchte
+TownXX                    : Town auf der gefahren werden soll, Town01-07 oder Town10HD
 ```
 
 ### Build Script
@@ -30,10 +42,10 @@ To install different parts separately, run one of the following commands:
 bash scripts/subscripts/_setup_carla.sh      # carla install
 bash scripts/subscripts/_setup_ros.sh        # ros install
 bash scripts/subscripts/_setup_paf.sh        # dependency install
-bash scripts/subscripts/_setup_commonroad.sh     # commonroad extended install
+bash scripts/subscripts/_setup_commonroad.sh # commonroad extended install
 ```
 
-To install or run the (optional) CommonRoad-Designer, execute the following command (this may take more than 30mins the first time):
+To install or run the (optional) Commonroad-Designer, execute the following command (this may take more than 30 minutes the first time):
 
 ```
 bash scripts/commonroad_designer.sh

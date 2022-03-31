@@ -6,6 +6,10 @@ from commonroad.scenario.lanelet import LaneletNetwork
 
 from paf_messages.msg import Point2D
 
+from .MapManager import MapManager
+
+from geometry_msgs.msg import Point
+
 
 def dist(
     a: Union[Point2D, np.ndarray, Tuple[float, float]], b: Union[Point2D, np.ndarray, Tuple[float, float]] = None
@@ -32,7 +36,7 @@ def dist(
     return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
 
-def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray]) -> List[Point2D]:
+def xy_to_pts(xy_list: Union[List[Tuple[float, float]], np.ndarray, List[np.ndarray]]) -> List[Point2D]:
     """
     Convert list of point tuples to list of point objects
     :param xy_list: list of tuples
@@ -192,7 +196,7 @@ def sparse_list_from_dense_pts(pts: np.ndarray, num_pts: int, distances: List[fl
     return path
 
 
-def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Union[Point2D, Tuple[float, float]]) -> List[int]:
+def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Union[Point2D, Tuple[float, float], Any]) -> List[int]:
     """
     find closest lanelets in network to a point (many possible on intersections)
     :param lanelet_network: current commonroad network
@@ -205,7 +209,7 @@ def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Union[Point2D, Tupl
     lanelets = lanelet_network.find_lanelet_by_position([p])[0]
     if len(lanelets) > 0:
         return lanelets
-    for radius in range(1, 1000, 5):
+    for radius in range(3, 1000, 5):
         shape = Circle(radius=radius / 10, center=p)
         lanelets = lanelet_network.find_lanelet_by_shape(shape)
         if len(lanelets) > 0:
@@ -213,32 +217,55 @@ def find_closest_lanelet(lanelet_network: LaneletNetwork, p: Union[Point2D, Tupl
     return lanelets
 
 
-def find_lanelet_yaw(lanelet_network: LaneletNetwork, target_pt: Point2D) -> float:
+def on_bridge(pos: Point, lanelet_network: LaneletNetwork):
+    """
+    Calculates, if a 3D-Point is on a bridge based on height and position on the Commonroad Lanelet Network
+    :param pos: search point (x,y,z)
+    :param lanelet_network: current cr-network
+    :return: true if car is on a bridge or False
+    """
+    if -2 < pos.z < 2:
+        return False
+    closest_lanelets = find_closest_lanelet(lanelet_network, pos)
+    for let in closest_lanelets:
+        if MapManager.lanelet_on_bridge(let):
+            return True
+    return False
+
+
+def find_lanelet_yaw(lanelet_network: LaneletNetwork, target_pt: Point2D, lanelet_id=None) -> float:
     """
     Calculates orientation of the lanelet closest to the target point specified
     :param lanelet_network: current commonroad network
     :param target_pt: point to search for
+    :param lanelet_id: give lanelet id to skip searching for them
     :return: angle in rad
     """
-    lanelet = find_closest_lanelet(lanelet_network, target_pt)
-    if len(lanelet) == 0:
-        return 0
 
-    lanelet = lanelet_network.find_lanelet_by_id(lanelet[0])
-    i, _ = closest_index_of_point_list([Point2D(p[0], p[1]) for p in lanelet.center_vertices], target_pt)
+    if lanelet_id is None:
+        lanelet_ids = find_closest_lanelet(lanelet_network, target_pt)
+        if len(lanelet_ids) == 0:
+            return 0
+        lanelet_id = lanelet_ids[0]
+
+    lanelet_id = lanelet_network.find_lanelet_by_id(lanelet_id)
+    i, _ = closest_index_of_point_list([Point2D(p[0], p[1]) for p in lanelet_id.center_vertices], target_pt)
 
     if i == -1:
         return 0
 
-    if i < len(lanelet.center_vertices) - 1:
-        p_i = lanelet.center_vertices[i]
-        p_j = lanelet.center_vertices[i + 1]
+    if i < len(lanelet_id.center_vertices) - 1:
+        p_i = lanelet_id.center_vertices[i]
+        p_j = lanelet_id.center_vertices[i + 1]
     else:
-        p_i = lanelet.center_vertices[i - 1]
-        p_j = lanelet.center_vertices[i]
+        p_i = lanelet_id.center_vertices[i - 1]
+        p_j = lanelet_id.center_vertices[i]
 
     dx, dy = p_j[0] - p_i[0], p_j[1] - p_i[1]
-    return np.arcsin(dy / dist((dx, dy), (0, 0)))
+    angle = np.arcsin(dy / dist((dx, dy), (0, 0)))
+    if angle < 0:
+        angle += np.pi * 2
+    return angle
 
 
 def get_angle_between_vectors(

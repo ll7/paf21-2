@@ -2,8 +2,6 @@
 
 main_launch_package="paf_starter"
 main_launch_script="paf_starter.launch"
-#ros_launch_args="spawn_point:=15,70,0,0,0,90 validation:=true"
-ros_launch_args="validation:=true"
 npc_launch_args="-n 50 -w 50" # n=vehicles, w=pedestrians
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
@@ -22,7 +20,7 @@ blue=$'\e[1;34m'
 magenta=$'\e[1;35m'
 cyan=$'\e[1;36m'
 
-function echoc(){
+function echoc() {
   NC='\033[0m'
   # shellcheck disable=SC2059
   printf "${2}${1}${NC}\n"
@@ -75,7 +73,7 @@ function carla_start() {
   gnome-terminal --title="CarlaUE4" -- ~/carla_0.9.10.1/CarlaUE4.sh "$1"
   ./subscripts/wait_for_window.sh CarlaUE4 close >/dev/null # wait for window to open
   sleep 10
-#  python3 ~/carla_0.9.10.1/PythonAPI/util/config.py --delta-seconds 0.02
+  #  python3 ~/carla_0.9.10.1/PythonAPI/util/config.py --delta-seconds 0.02
 }
 function start_terminal() { # opt:name, cmd
   if (($# == 2)); then
@@ -112,6 +110,7 @@ arguments:
 --low-quality/-lq
 --manual-control/-mc
 --no-rules/-nr (rules enabled by default)
+--validation/-val
 TownXX
 
 Allowed towns are Town01, Town02, Town03, Town04, Town05, Town06, Town07 and Town10HD
@@ -125,6 +124,8 @@ NPCS=0
 CARLA_ARGS=""
 TOWN_ARGS="town:=Town03"
 RULES_ARGS="rules_enabled:=true"
+VALIDATION_ARGS="validation:=false"
+MANUAL_CTRL_ARGS=""
 for VAR in "$@"; do
   if [ "$VAR" = "-h" ]; then
     exit
@@ -145,10 +146,10 @@ for VAR in "$@"; do
     RULES_ARGS="rules_enabled:=false"
   fi
   if [ "$VAR" = "--manual-control" ]; then
-    ros_launch_args="$ros_launch_args manual_control:=true"
+    MANUAL_CTRL_ARGS="manual_control:=true"
   fi
   if [ "$VAR" = "-mc" ]; then
-    ros_launch_args="$ros_launch_args manual_control:=true"
+    MANUAL_CTRL_ARGS="manual_control:=true"
   fi
   if [ "$VAR" = "--build" ]; then
     BUILD_ROS=1
@@ -161,6 +162,12 @@ for VAR in "$@"; do
   fi
   if [ "$VAR" = "-n" ]; then
     NPCS=1
+  fi
+  if [ "$VAR" = "--validation" ]; then
+    VALIDATION_ARGS="validation:=true"
+  fi
+  if [ "$VAR" = "-val" ]; then
+    VALIDATION_ARGS="validation:=true"
   fi
   if [ "$VAR" = "--low-quality" ]; then
     CARLA_ARGS="-quality-level=Low"
@@ -198,7 +205,10 @@ fi
 eval "$(cat ~/.bashrc | tail -n +10)"
 close_ros 2>/dev/null
 echoc "starting main launcher..." "$yellow"
-start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $TOWN_ARGS $RULES_ARGS $ros_launch_args" "$main_launch_script"
+echoc "\nWARNING: $VALIDATION_ARGS" "$red"
+echo "the car will only start driving during validation mode (-val) or with the competition manager enabled!"
+echo ""
+start_terminal_wait_until_it_stays_open "roslaunch $main_launch_package $main_launch_script $TOWN_ARGS $RULES_ARGS $MANUAL_CTRL_ARGS $VALIDATION_ARGS" "$main_launch_script"
 reduce_ros_log_noise
 if ((NPCS)); then
   echo "spawning npcs..."

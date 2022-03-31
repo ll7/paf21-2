@@ -1,3 +1,0 @@
-#!/bin/bash
-rosnode kill paf_actor 2>/dev/null
-roslaunch paf_actor paf_actor.launch

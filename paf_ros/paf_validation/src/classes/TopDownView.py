@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 
 import cv2
 import carla
@@ -22,6 +22,8 @@ from paf_messages.msg import PafObstacleList, PafObstacle, PafTopDownViewPointSe
 
 
 class MaskPriority(IntEnum):
+    """Mask layer order. Must be continuous, the highest value is drawn last"""
+
     VEH_OBSTACLES = 12
     PED_OBSTACLES = 11
     PEDESTRIANS = 10
@@ -38,13 +40,19 @@ class MaskPriority(IntEnum):
 
     @staticmethod
     def top_to_bottom():
+        """
+        Get list
+        :return:
+        """
         return list(MaskPriority)
 
     @staticmethod
     def bottom_to_top():
+        """Get reversed list"""
         return list(reversed(MaskPriority.top_to_bottom()))
 
 
+# COLORS DISPLAYED
 RGB_BY_MASK = {  # (red, green, blue)
     MaskPriority.PEDESTRIANS: RGB.VIOLET,
     MaskPriority.RED_LIGHTS: RGB.RED,
@@ -63,6 +71,8 @@ RGB_BY_MASK = {  # (red, green, blue)
 
 
 class TopDownView(BirdViewProducer):
+    """Extension of the pip package 'carla bird view'"""
+
     def __init__(
         self,
         client: carla.Client,
@@ -84,9 +94,9 @@ class TopDownView(BirdViewProducer):
         self.north_is_up = north_is_up
         self.dark_mode = dark_mode
         self.center_on_agent = not show_whole_map
-        self.global_path, self.local_path = None, None
+        self.global_path_options, self.local_path = None, None
         self.obstacles_pedestrians, self.obstacles_vehicles = None, None
-        self.path_width_px = 4
+        self.path_width_px = 3
         self.pt_width_px = 4
         self.line_width_px = 4
         self.point_sets: Dict[str, PafTopDownViewPointSet] = {}
@@ -138,10 +148,10 @@ class TopDownView(BirdViewProducer):
         rendering_window = RenderingWindow(origin=agent_vehicle_loc, area=self.rendering_area)
         self.masks_generator.enable_local_rendering_mode(rendering_window)
         masks = self._render_actors_masks(agent_vehicle, segregated_actors, masks)
-        if self.global_path is not None:
-            masks[MaskPriority.GLOBAL_PATH] = self._create_path_mask(self.global_path)
+        if self.global_path_options is not None:
+            masks[MaskPriority.GLOBAL_PATH] = self._create_path_mask(self.global_path_options)
         if self.local_path is not None:
-            masks[MaskPriority.LOCAL_PATH] = self._create_path_mask(self.local_path)
+            masks[MaskPriority.LOCAL_PATH] = self._create_path_mask([self.local_path])
 
         mask_obstacles = None
         if self.obstacles_pedestrians is not None:
@@ -176,6 +186,10 @@ class TopDownView(BirdViewProducer):
             return cropped_masks[ordered_indices]
 
     def _get_line_sets_masks(self):
+        """
+        Calculate a black and white mask for all lines in dict and return it
+        :return:
+        """
         lines_masks = []
         vals = list(self.line_sets.values())
         for line_set in vals:
@@ -190,6 +204,10 @@ class TopDownView(BirdViewProducer):
         return lines_masks
 
     def _get_pts_sets_masks(self):
+        """
+        Calculate a black and white mask for all point-sets in dict and return it
+        :return:
+        """
         pts_masks = []
         vals = list(self.point_sets.values())
         for point_set in vals:
@@ -223,7 +241,7 @@ class TopDownView(BirdViewProducer):
 
         # same as super class below
         crop_with_car_in_the_center = masks
-        masks_n, h, w = crop_with_car_in_the_center.shape
+        _, h, w = crop_with_car_in_the_center.shape
         rotation_center = Coord(x=w // 2, y=h // 2)
         crop_with_centered_car = np.transpose(crop_with_car_in_the_center, axes=(1, 2, 0))
         rotated = rotate(crop_with_centered_car, angle, center=rotation_center)
@@ -243,7 +261,10 @@ class TopDownView(BirdViewProducer):
         return rotated[:, vslice, hslice]
 
     def set_path(
-        self, coordinate_list_global_path: list = None, coordinate_list_local_path: list = None, width_px: float = None
+        self,
+        coordinate_list_global_path: List[list] = None,
+        coordinate_list_local_path: list = None,
+        width_px: float = None,
     ):
         """
         Setter for global path, local path and path width
@@ -252,7 +273,7 @@ class TopDownView(BirdViewProducer):
         :param width_px: pixel width at resolution 10px/m (scaled to other resolutions)
         """
         if coordinate_list_global_path is not None:
-            self.global_path = coordinate_list_global_path
+            self.global_path_options = coordinate_list_global_path
         if coordinate_list_local_path is not None:
             self.local_path = coordinate_list_local_path
         if width_px is not None:
@@ -268,7 +289,7 @@ class TopDownView(BirdViewProducer):
         if clear_local_path:
             self.local_path = None
         if clear_global_path:
-            self.global_path = None
+            self.global_path_options = None
 
     def update_obstacles(self, msg: PafObstacleList):
         """
@@ -318,22 +339,24 @@ class TopDownView(BirdViewProducer):
             mask = cv2.polylines(mask, [np.array(corner_pixels).reshape((-1, 1, 2))], True, COLOR_ON, 1)
         return mask
 
-    def _create_path_mask(self, path: list = None) -> np.array:
+    def _create_path_mask(self, paths: List[list] = None) -> np.array:
         """
         Draws a path on a new mask
-        :param path: list of path points (x,y)
+        :param paths: list of paths list((x,y),(x,y),..)
         :return: updated mask
         """
         mask = self.masks_generator.make_empty_mask()
-        if path is None:
-            return mask
-        try:
-            points = [self.masks_generator.location_to_pixel(Namespace(**{"x": x, "y": y})) for x, y in path]
-        except ValueError:
-            points = []
-            rospy.logerr("[top down view] NaN / Invalid path!")
-        points = np.array([(p.x, p.y) for p in points])
-        mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
+
+        if paths is None:
+            paths = []
+
+        for path in paths:
+            try:
+                points = [self.masks_generator.location_to_pixel(Namespace(**{"x": x, "y": y})) for x, y in path]
+                points = np.array([(p.x, p.y) for p in points])
+                mask = cv2.polylines(mask, [points.reshape((-1, 1, 2))], False, COLOR_ON, self.path_width_px)
+            except ValueError:
+                rospy.logerr_throttle(3, "[top down view] NaN / Invalid path!")
         return mask
 
     def _render_actors_masks(
@@ -406,7 +429,7 @@ class TopDownView(BirdViewProducer):
         color2 = (255, 0, 0)
         thickness = 1
         y0, dy = 50, 20
-        text = ["current", "target", "limit"]
+        text = ["current", "target"]  # , "limit"] # speed limit is not updated in this version
         current, target, limit, (x, y) = self.info_text
         text = [f"{lbl}: {speed} kmh" for speed, lbl in zip(self.info_text, text)] + [f"x={x},y={y}"]
         for i, text in enumerate(text):
