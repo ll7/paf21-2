@@ -1,12 +1,10 @@
 # Perception
 
-## Credits:
-
-PSAF 2: WS 20/21 (perception package)
-
 ## Semantic Lidar (Hinderniserkennung)
 
 Erfasst Hindernisse um das Auto herum, wie z.B. andere Verkehrsteilnehmer, als Datenpunkte mit Hilfe eines Semantic-Lidar-Sensors "Lidar1" und sendet die Information über das Topic /paf/paf_perception/obstacles. Diese enthält Informationen aus drei Positionskoordinaten, bestehend aus jeweils einer x- und y-Koordinate, sowie einem Distanzwert zwischen dem Hindernis und dem Auto. Genauer handelt es sich bei den Positionspunkte um die beiden weit entferntesten Punkte plus der Punkt mit der kürzesten Distanz. Darüber hinaus enthält eine gesendete Nachricht Informationen über die berechnete Geschwindigkeit über Positionsänderungen innerhalb zweier Zeitpunkte und über den Hindernistyp, der entweder den Wert "Vehicles" oder "Pedestrians" annehmen kann.
+
+Credits: PSAF 2, WS 20/21 (perception package)
 
 ```
 Subscribed Topics:
