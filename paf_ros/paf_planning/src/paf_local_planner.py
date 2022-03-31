@@ -94,6 +94,7 @@ class LocalPlanner:
         )
         self._emergency_break_pub.publish(Bool(False))
         if rospy.get_param("/validation"):
+            time.sleep(5)
             if self.USE_GLOBAL_STANDARD_LOOP:
                 self._send_standard_loop_request(do_throttle=False)
             else:

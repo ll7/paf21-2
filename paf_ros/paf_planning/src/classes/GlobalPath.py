@@ -62,7 +62,7 @@ class GlobalPath:
             self.target = target if hasattr(target, "z") else Point(target.x, target.y, self.TARGET_Z)
             let = self.lanelet_network.find_lanelet_by_id(self.lanelet_ids[-1])
             target_index, d = closest_index_of_point_list(list(let.center_vertices), self.target)
-            if target_index >= 0 and d < 5:
+            if False and target_index >= 0 and d < 5:
                 prev = target_index
                 target_index = min(target_index + 4, len(let.center_vertices) - 1)
                 rospy.logerr(
