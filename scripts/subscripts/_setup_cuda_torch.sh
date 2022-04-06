@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # This file is no longer used, but kept for information purposes.
+# Cuda should be installed individually, depending on the local hardware setup.
+# This process cannot be reliably automated.
 
 # install cuda 11.3
 if command -v nvcc &>/dev/null; then echo cuda is already installed; exit 0; fi
